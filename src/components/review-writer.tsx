@@ -118,6 +118,8 @@ export function ReviewWriter(props: Props) {
   const [notice, setNotice] = useState(initial.notice);
   // 화면에는 보이지 않고 화면 낭독기만 읽는 안내(장면 사진을 넣었을 때) — role="status"
   const [quietNotice, setQuietNotice] = useState("");
+  // quietNotice를 잠시 뒤 다시 채우는 타이머 번호(announceQuietly 참고)
+  const quietTimerRef = useRef<number | undefined>(undefined);
   // 칸과 상관없는 실패(연결 끊김, 그사이 바뀜 등) — role="alert"
   const [failure, setFailure] = useState(initial.failure);
   // 새로 고른 포스터: 파일, 미리보기 주소(브라우저 안에서만 쓰는 blob: 주소), 확장자. 고르지 않았으면 null
@@ -256,6 +258,20 @@ export function ReviewWriter(props: Props) {
     return () => URL.revokeObjectURL(url);
   }, [poster]);
 
+  /**
+   * 화면 낭독기에만 짧게 알려요(quietNotice).
+   * 같은 글(예: "사진 1장을 본문에 넣었습니다.")을 연달아 넣으면 글자가 바뀌지 않아 화면 낭독기가 다시 읽지 않아요.
+   * 그래서 먼저 비우고, 잠시 뒤(0.1초) 다시 채워서 매번 새 안내로 읽히게 해요.
+   */
+  function announceQuietly(message: string) {
+    window.clearTimeout(quietTimerRef.current);
+    setQuietNotice("");
+    quietTimerRef.current = window.setTimeout(() => setQuietNotice(message), 100);
+  }
+
+  // 화면을 떠나면 아직 기다리는 안내 타이머를 치워요.
+  useEffect(() => () => window.clearTimeout(quietTimerRef.current), []);
+
   /** [포스터 빼기]: 포스터 없이 저장해요(화면에는 기본 포스터가 보여요). */
   function handlePosterRemove() {
     setPoster(null);
@@ -307,8 +323,8 @@ export function ReviewWriter(props: Props) {
       setField("body", `${before}${insert}${values.body.slice(end).replace(/^\s*/, "")}`);
       // 커서는 첫 사진의 ![ 바로 뒤(설명을 적을 자리)에 둬요.
       caretRef.current = before.length + (before ? 2 : 0) + 2;
-      // 화면에는 안내 글을 띄우지 않아요. 본문에 넣은 줄이 바로 보이니까요. 화면 낭독기에만 짧게 알려요(quietNotice).
-      setQuietNotice(`사진 ${lines.length}장을 본문에 넣었습니다.`);
+      // 화면에는 안내 글을 띄우지 않아요. 본문에 넣은 줄이 바로 보이니까요. 화면 낭독기에만 짧게 알려요.
+      announceQuietly(`사진 ${lines.length}장을 본문에 넣었습니다.`);
     }
     if (problems.length > 0) setErrors((current) => ({ ...current, body: problems.join(" ") }));
   }

@@ -11,7 +11,7 @@
  * 서버 대신 fetch를 가짜로 바꿔 답을 정해요. jsdom에는 사진 미리보기 주소(URL.createObjectURL)가 없어서 흉내 내요.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -113,8 +113,32 @@ describe("ReviewWriter(리뷰 추가)", () => {
     await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
     expect(screen.getByLabelText(/^본문/)).toHaveValue("첫 문단\n\n![](/images/winter-stop/scene-1.png)\n\n");
     // 사진을 넣었다는 안내는 화면에는 띄우지 않고(sr-only) 화면 낭독기에만 짧게 알려요. 괄호·캡션 설명 글도 없어요.
-    expect(screen.getByText("사진 1장을 본문에 넣었습니다.")).toHaveClass("sr-only");
+    // 안내는 비웠다가 잠시 뒤(0.1초) 채워서 findByText로 기다려요.
+    expect(await screen.findByText("사진 1장을 본문에 넣었습니다.")).toHaveClass("sr-only");
     expect(screen.queryByText(/괄호 안에 사진 설명/)).not.toBeInTheDocument();
+  });
+
+  it("같은 장수의 사진을 연달아 넣어도 안내를 비웠다가 다시 채워, 화면 낭독기가 매번 읽게 한다", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWriter mode="create" />);
+    const picture = new File(["png"], "scene.png", { type: "image/png" });
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
+    const region = await screen.findByText("사진 1장을 본문에 넣었습니다.");
+
+    // 안내 영역의 글자가 바뀔 때마다 기록해요(MutationObserver: 화면 요소가 바뀌면 알려 주는 브라우저 기능).
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(region.textContent ?? ""));
+    observer.observe(region, { childList: true, characterData: true, subtree: true });
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
+    await waitFor(() => expect(seen.at(-1)).toBe("사진 1장을 본문에 넣었습니다."));
+    observer.disconnect();
+
+    // 글이 같아도 한 번 비워졌다가("") 다시 채워져요. 글자가 바뀌어야 화면 낭독기가 새 안내로 읽어요.
+    expect(seen[0]).toBe("");
+    // 두 번째 사진은 다음 번호(scene-2)로 들어가요.
+    expect((screen.getByLabelText(/^본문/) as HTMLTextAreaElement).value).toContain("![](/images/winter-stop/scene-2.png)");
   });
 
   it("넓은 화면에서는 [포스터 | 영화 정보(2열)] 3칸이고, 포스터 설명 칸과 본문 도움말은 없다", () => {

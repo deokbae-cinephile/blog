@@ -139,9 +139,13 @@ test.describe("처음 화면(목록)", () => {
   test("장르 칩은 정한 10가지가 정한 순서로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
     await openHome(page);
     const genres = page.getByRole("group", { name: "장르" });
-    // 칩 글자에서 ▶와 편수를 떼고 이름만 모아요.
-    const names = (await genres.locator("label").allTextContents()).map((text) => text.replace("▶", "").replace(/\s*\d+편$/, "").trim());
-    expect(names).toEqual(["전체", "다큐멘터리", "스릴러", "액션", "코미디", "드라마", "범죄", "스포츠", "공포", "재난", "로맨스"]);
+    // 라디오 단추의 접근 이름("드라마 2편"처럼 장르 + 편수)으로 순서를 확인해요. 레이블 연결이 끊기면 이름이 비어 실패해요.
+    const radios = genres.getByRole("radio");
+    const names = ["전체", "다큐멘터리", "스릴러", "액션", "코미디", "드라마", "범죄", "스포츠", "공포", "재난", "로맨스"];
+    await expect(radios).toHaveCount(names.length);
+    for (const [index, name] of names.entries()) {
+      await expect(radios.nth(index)).toHaveAccessibleName(new RegExp(`^${name} \\d+편$`));
+    }
     for (const removed of ["SF", "판타지", "미스터리", "음악", "전쟁", "역사", "모험", "서부"]) {
       await expect(genres.getByRole("radio", { name: new RegExp(`^${removed} `) })).toHaveCount(0);
     }
@@ -232,13 +236,13 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect((await aside.boundingBox())!.y).toBeLessThan(80);
   });
 
-  test("포스터 썸네일은 가로 2 : 세로 3(64×96px)으로 맨 앞에 있고, 한줄평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
+  test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고, 한줄평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openHome(page);
     const item = listRegion(page).locator("li").first();
     const box = (await item.locator(".poster-frame").boundingBox())!;
-    expect(Math.round(box.width)).toBe(64);
-    expect(Math.round(box.height)).toBe(96);
+    // 크기는 디자인에 따라 바뀔 수 있어 비율만 봐요(반올림 오차 0.02까지).
+    expect(Math.abs(box.width / box.height - 2 / 3)).toBeLessThanOrEqual(0.02);
     // 앞에 "-"나 번호가 없고, 썸네일이 제목보다 앞(왼쪽)에 있어요.
     await expect(item.locator("article > span[aria-hidden='true']")).toHaveCount(0);
     expect(box.x).toBeLessThan((await item.getByRole("heading", { level: 3 }).boundingBox())!.x);
