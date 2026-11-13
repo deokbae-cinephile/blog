@@ -127,7 +127,7 @@ function toRepoPaths(images: BodyImage[]): string[] {
  * 파일 이름이나 폴더가 "이 리뷰 것"이어도, 다른 리뷰 원고가 같은 사진을 가져다 쓸 수 있어요.
  * 그래서 다른 리뷰 원고를 한 번에 읽어(readTextFiles), 파일 주소가 원고 어딘가에 적혀 있으면 지우지 않아요.
  *   - 포스터는 원고에 파일 이름으로 적혀요(poster: winter-stop.jpg).
- *   - 본문 사진은 /images/... 주소로 적혀요. 한글 이름은 %EA... 모양으로 적힐 수 있어 둘 다 찾아봐요.
+ *   - 본문 사진은 /images/... 주소로 적혀요. %EA...나 %6F처럼 인코딩해 적을 수도 있어서, 원고의 인코딩을 풀고 찾아봐요.
  * 원고를 읽지 못하면 아무것도 지우지 않아요. 남은 파일은 저장소를 조금 무겁게 할 뿐 블로그를 깨뜨리지 않거든요.
  *
  * @param candidates 지울 후보 파일 경로들
@@ -142,12 +142,14 @@ async function withoutReferenced(candidates: string[], commitSha: string, slug: 
   } catch {
     return [];
   }
-  const others = [...texts].filter(([path]) => path !== reviewPath(slug)).map(([, text]) => text);
+  // 다른 원고들. %XX 덩어리는 풀어 둬요(풀 수 없는 덩어리는 그대로). 저장소 경로는 풀린 이름이라 같은 모양으로 비교할 수 있어요.
+  const others = [...texts]
+    .filter(([path]) => path !== reviewPath(slug))
+    .map(([, text]) => text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => safeDecode(run)));
   return candidates.filter((path) => {
     // 원고에 적히는 모양: 포스터는 파일 이름, 본문 사진은 public을 뗀 주소
     const written = path.startsWith("public/posters/") ? path.slice("public/posters/".length) : path.slice("public".length);
-    const encoded = encodeURI(written);
-    return !others.some((text) => text.includes(written) || text.includes(encoded));
+    return !others.some((text) => text.includes(written));
   });
 }
 

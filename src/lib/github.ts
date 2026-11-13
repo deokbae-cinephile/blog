@@ -131,18 +131,25 @@ async function send<T>(url: (config: NonNullable<ReturnType<typeof readConfig>>)
   return (await response.json()) as T;
 }
 
-/** GraphQL로 폴더 안 파일들의 글자를 한꺼번에 받는 질의. 그림 같은 파일은 text가 null로 와요. */
+/**
+ * GraphQL로 폴더 안 파일들의 글자를 한꺼번에 받는 질의. 그림 같은 파일은 text가 null로 와요.
+ * isTruncated: 파일이 너무 커서 글자의 일부만 왔는지. 일부만 온 원고는 믿을 수 없어서 함께 받아요.
+ */
 const TREE_TEXTS_QUERY = `query($owner: String!, $name: String!, $expression: String!) {
   repository(owner: $owner, name: $name) {
     object(expression: $expression) {
-      ... on Tree { entries { name type object { ... on Blob { text } } } }
+      ... on Tree { entries { name type object { ... on Blob { text isTruncated } } } }
     }
   }
 }`;
 
 /** TREE_TEXTS_QUERY의 답 모양 */
 type TreeTextsAnswer = {
-  data?: { repository?: { object?: { entries?: { name: string; type: string; object?: { text?: string | null } | null }[] } | null } | null };
+  data?: {
+    repository?: {
+      object?: { entries?: { name: string; type: string; object?: { text?: string | null; isTruncated?: boolean } | null }[] } | null;
+    } | null;
+  };
   errors?: unknown[];
 };
 
@@ -167,8 +174,14 @@ export async function readTextFiles(commitSha: string, dir: string): Promise<Map
   });
   // GraphQL은 실패해도 200으로 답하고 errors에 이유를 담아요.
   if (answer.errors?.length) throw new GitHubError(502, "GitHub가 원고 목록을 돌려주지 않았습니다. 잠시 뒤 다시 시도해 주세요.");
+  const entries = answer.data?.repository?.object?.entries ?? [];
+  // 글자의 일부만 온 원고가 하나라도 있으면 실패로 알려요. 잘린 부분에 적힌 내용을 놓치면
+  // 다른 리뷰가 쓰는 사진을 지울 수도 있어서, 부르는 쪽이 "아무것도 지우지 않는" 안전한 길로 가게 해요.
+  if (entries.some((entry) => entry.object?.isTruncated)) {
+    throw new GitHubError(502, "원고가 너무 길어 GitHub가 일부만 돌려줬습니다. 잠시 뒤 다시 시도해 주세요.");
+  }
   const files = new Map<string, string>();
-  for (const entry of answer.data?.repository?.object?.entries ?? []) {
+  for (const entry of entries) {
     const text = entry.object?.text;
     if (entry.type === "blob" && typeof text === "string") files.set(`${dir}/${entry.name}`, text);
   }

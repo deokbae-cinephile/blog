@@ -142,7 +142,7 @@ const server = createServer(async (request, response) => {
     if (!commit) return send(response, 200, { data: { repository: { object: null } } });
     const entries = [...trees.get(commit.tree)]
       .filter(([file]) => file.startsWith(`${dir}/`) && !file.slice(dir.length + 1).includes("/"))
-      .map(([file, sha]) => ({ name: file.slice(dir.length + 1), type: "blob", object: { text: blobs.get(sha).toString("utf8") } }));
+      .map(([file, sha]) => ({ name: file.slice(dir.length + 1), type: "blob", object: { text: blobs.get(sha).toString("utf8"), isTruncated: false } }));
     return send(response, 200, { data: { repository: { object: { entries } } } });
   }
   if (!route.startsWith(`${REPO}/git/`)) return send(response, 404, { message: "Not Found" });

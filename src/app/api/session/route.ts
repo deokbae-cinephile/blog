@@ -21,7 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkCredentials, cookieOptions, isSameOrigin } from "@/lib/admin-auth";
 import { readJson } from "@/lib/api-response";
 import { ADMIN_HINT_COOKIE, SESSION_COOKIE } from "@/lib/auth-cookies";
-import { checkLoginAllowed, clearLoginFailures, clientKey, recordLoginFailure } from "@/lib/login-limit";
+import { clearLoginFailures, clientKey, reserveLoginAttempt } from "@/lib/login-limit";
 import { createSessionToken, readSessionConfig } from "@/lib/session";
 
 /** 다른 사이트에서 보낸 요청에 돌려줄 답 */
@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
   const password = typeof record.password === "string" ? record.password : "";
 
   // 같은 곳에서 너무 많이 틀렸으면, 비밀번호를 확인(계산)하기 전에 바로 막아요(lib/login-limit.ts).
+  // 허용되면 이 시도를 먼저 실패 한 번으로 세어 둬요. 동시에 보낸 요청도 하나씩 세어지게요.
   const key = clientKey(request.headers);
-  const allowed = checkLoginAllowed(key);
+  const allowed = reserveLoginAttempt(key);
   if (!allowed.ok) {
     const minutes = Math.ceil(allowed.retryAfter / 60);
     return NextResponse.json(
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
   }
   if (result === "wrong") {
-    recordLoginFailure(key);
+    // 이 실패는 위에서 이미 세어 뒀어요.
     await wait(400);
     return NextResponse.json({ message: "아이디나 비밀번호가 맞지 않습니다. 다시 확인해 입력하세요." }, { status: 401 });
   }

@@ -43,12 +43,15 @@ export function safeNext(next: string | null): string {
   //    브라우저의 주소 해석기는 탭·줄바꿈을 지우고 역슬래시를 "/"로 바꿔서,
   //    "/\t/evil.example" 같은 주소가 다른 사이트 주소("//evil.example")로 바뀔 수 있어요.
   // 3) 끝으로 진짜 주소 해석기로 풀어 본 뒤, 출처(origin)가 우리 사이트 그대로인지 확인해요.
+  // 4) 풀어 낸 경로가 "//"로 시작하면 받지 않아요. "/a/..//evil.example"은 "..//"가 정리되면서
+  //    "//evil.example"(다른 사이트)이 되거든요. 돌려줄 값을 다시 주소로 읽어도 안전해야 해요.
   if (!next || !next.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(next)) return "/";
   try {
     // 기준 주소는 아무 값이나 괜찮아요. 풀어 낸 주소의 출처가 기준과 같으면 사이트 안 주소예요.
     const base = "http://same.origin";
     const url = new URL(next, base);
-    return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : "/";
+    if (url.origin !== base || url.pathname.startsWith("//")) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return "/";
   }

@@ -167,6 +167,15 @@ describe("saveReview(고치기)", () => {
     expect(lastChanges).toEqual([{ path: "content/reviews/winter-stop.md", sha: expect.stringMatching(/^blob-/) }]);
   });
 
+  it("다른 리뷰 원고가 %6F처럼 인코딩해 적은 사진 주소도 알아보고 지우지 않는다", async () => {
+    const sha = seedReview("winter-stop", OLD);
+    repo.files.set("public/images/winter-stop/old.jpg", "i1");
+    seedReview("other", "---\ntitle: 다른 리뷰\n---\n\n![빌린 장면](/images/winter-stop/%6Fld.jpg)\n");
+
+    await saveReview("update", "winter-stop", { ...payload({ poster: "", body: "새 본문" }), baseSha: sha });
+    expect(lastChanges).toEqual([{ path: "content/reviews/winter-stop.md", sha: expect.stringMatching(/^blob-/) }]);
+  });
+
   it("다른 리뷰 원고를 읽지 못하면 안전하게 아무 파일도 지우지 않는다", async () => {
     const sha = seedReview("winter-stop", OLD);
     repo.files.set("public/images/winter-stop/old.jpg", "i1");

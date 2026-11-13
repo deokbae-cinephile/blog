@@ -10,7 +10,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_FAILURES, recordLoginFailure } from "@/lib/login-limit";
+import { MAX_FAILURES, reserveLoginAttempt } from "@/lib/login-limit";
 import { hashPassword } from "@/lib/password-hash";
 
 import { DELETE, POST } from "./route";
@@ -73,7 +73,7 @@ describe("POST /api/session (로그인)", () => {
 
   it(`같은 곳에서 ${MAX_FAILURES}번 틀린 뒤에는 맞는 비밀번호라도 확인하지 않고 429와 기다릴 시간을 알려 준다`, async () => {
     const ip = "192.0.2.50";
-    for (let index = 0; index < MAX_FAILURES; index += 1) recordLoginFailure(ip);
+    for (let index = 0; index < MAX_FAILURES; index += 1) reserveLoginAttempt(ip);
     const response = await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip));
     expect(response.status).toBe(429);
     expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(0);
@@ -83,12 +83,20 @@ describe("POST /api/session (로그인)", () => {
     expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, "192.0.2.51"))).status).toBe(200);
   });
 
+  it("같은 곳에서 동시에 보낸 요청도 하나씩 세어, 제한을 넘는 요청은 비밀번호를 확인하지 않고 막는다", async () => {
+    const ip = "192.0.2.70";
+    const requests = Array.from({ length: MAX_FAILURES + 2 }, () => POST(loginRequest({ id: "deokbae", password: "wrong" }, undefined, ip)));
+    const statuses = (await Promise.all(requests)).map((response) => response.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(MAX_FAILURES);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(2);
+  });
+
   it("로그인에 성공하면 그곳의 실패 기록을 지운다", async () => {
     const ip = "192.0.2.60";
-    for (let index = 0; index < MAX_FAILURES - 1; index += 1) recordLoginFailure(ip);
+    for (let index = 0; index < MAX_FAILURES - 1; index += 1) reserveLoginAttempt(ip);
     expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip))).status).toBe(200);
     // 기록이 지워져서, 다시 MAX_FAILURES - 1번 틀려도 막히지 않아요.
-    for (let index = 0; index < MAX_FAILURES - 1; index += 1) recordLoginFailure(ip);
+    for (let index = 0; index < MAX_FAILURES - 1; index += 1) reserveLoginAttempt(ip);
     expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip))).status).toBe(200);
   });
 });

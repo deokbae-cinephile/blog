@@ -107,6 +107,12 @@ describe("safeNext", () => {
     expect(safeNext("/%2F/evil.example")).toBe("/%2F/evil.example");
   });
 
+  it("../ 정리 뒤 //로 시작하게 되는 주소(다른 사이트)도 처음 화면으로 바꾼다", () => {
+    // "/a/..//evil.example"은 정리하면 "//evil.example"이 돼요.
+    expect(safeNext("/a/..//evil.example")).toBe("/");
+    expect(safeNext("/./x")).toBe("/x");
+  });
+
   it("사이트 안 주소의 검색 조건과 # 부분은 그대로 둔다", () => {
     expect(safeNext("/write?draft=1#body")).toBe("/write?draft=1#body");
   });

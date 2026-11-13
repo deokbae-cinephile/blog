@@ -153,6 +153,12 @@ describe("github", () => {
     expect(body).toMatchObject({ variables: { owner: "deokbae-cinephile", name: "blog", expression: "c1:content/reviews" } });
   });
 
+  it("글자의 일부만 온(잘린) 원고가 있으면 믿지 않고 502로 알린다", async () => {
+    const entries = [{ name: "long.md", type: "blob", object: { text: "앞부분만", isTruncated: true } }];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: { repository: { object: { entries } } } }), { status: 200 })));
+    await expect(readTextFiles("c1", "content/reviews")).rejects.toMatchObject({ status: 502 });
+  });
+
   it("GraphQL이 오류를 담아 답하면 502로 알린다", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ errors: [{ message: "x" }] }), { status: 200 })));
     await expect(readTextFiles("c1", "content/reviews")).rejects.toMatchObject({ status: 502 });
