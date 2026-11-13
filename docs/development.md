@@ -133,8 +133,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | Cloudflare 계정 | 영역(zone) `deokbae.blog`(Free). 예전 GitHub Pages 기록은 가져오지 않았어요 |
 | `wrangler.jsonc`의 `routes` | `deokbae.blog`, `www.deokbae.blog`를 Custom Domain으로. 배포할 때 DNS 기록과 HTTPS 인증서가 자동으로 만들어져요 |
 
-- 처음 주소 `https://blog.deokbae.workers.dev`는 닫았어요(`wrangler.jsonc`의 `"workers_dev": false`). 블로그 주소는 `https://deokbae.blog` 하나예요. `www.deokbae.blog`도 같은 블로그를 보여 주고, 화면마다 대표 주소를 `https://deokbae.blog/...`로 알려요.
-- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. workers.dev 주소를 닫아서 모든 요청이 이 규칙을 지나요.
+- 처음 주소 `https://blog.deokbae.workers.dev`와 버전 미리보기 주소는 닫았어요(`wrangler.jsonc`의 `"workers_dev": false`, `"preview_urls": false`). 블로그 주소는 `https://deokbae.blog` 하나예요. `www.deokbae.blog`도 같은 블로그를 보여 주고, 화면마다 대표 주소를 `https://deokbae.blog/...`로 알려요.
+- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. workers.dev 주소를 모두 닫아서 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 

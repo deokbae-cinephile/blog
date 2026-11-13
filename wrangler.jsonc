@@ -47,6 +47,9 @@
   // workers.dev 주소(blog.deokbae.workers.dev)는 쓰지 않아요. 블로그 주소를 deokbae.blog 하나로 모아요.
   //   (routes가 있으면 wrangler가 기본으로 끄지만, 헷갈리지 않게 분명히 적어 둬요.)
   "workers_dev": false,
+  // 버전마다 생기는 미리보기 주소(<버전>-blog.deokbae.workers.dev)도 쓰지 않아요.
+  //   켜 두면 deokbae.blog에 건 속도 제한 규칙을 거치지 않는 길이 생겨요. 이 줄을 빼면 wrangler가 예전 설정을 그대로 둬요.
+  "preview_urls": false,
   // 대시보드에서 넣은 일반 변수를 배포할 때 지우지 않아요. (기본으로는 이 파일에 없는 변수를 지워요.)
   "keep_vars": true,
   // 요청마다 걸린 CPU 시간과 오류를 대시보드(Observability)에서 볼 수 있게 기록해요(무료 플랜은 하루 20만 건까지).
