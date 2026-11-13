@@ -77,7 +77,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **로그인 표:** `내용.서명` 모양의 토큰을 `SESSION_SECRET`으로 HMAC 서명해 httpOnly 쿠키에 담아요(7일). 웹 표준 Web Crypto만 써서 어느 호스팅에서나 돌아요.
 - **이중 잠금:** `src/proxy.ts`가 쓰기 화면·API 앞에서 먼저 막고, API와 글쓰기 화면이 `lib/admin-auth.ts`로 한 번 더 확인해요. Next.js 문서도 proxy만 믿지 말라고 권해요.
 - **CSRF:** 쿠키는 `SameSite=Lax`이고, 쓰기 API는 `Origin`이 우리 주소일 때만 받아요.
-- **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, Cloudflare 속도 제한 규칙도 함께 걸어요(아래 "도메인 연결"의 권장 항목).
+- **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, Cloudflare 속도 제한 규칙도 함께 걸어 두었어요(아래 "도메인 연결"의 속도 제한 규칙).
 - **로그인 뒤 이동:** `?next=` 주소는 우리 사이트 안 주소만 받아요. 탭·줄바꿈을 섞어 다른 사이트로 보내는 주소도 막아요.
 - **본문 링크:** `javascript:` 같은 위험한 방식의 링크는 HTML로 바꿀 때 주소를 지워요(`isSafeHref`).
 - **화면의 단추:** 목록·상세는 정적 HTML이라, 비밀이 없는 표시 쿠키(`blog_admin=1`)로 [새 리뷰]·[고치기]·[지우기]를 보일지만 정해요. 실제 권한은 늘 서버가 확인해요.
@@ -134,7 +134,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | `wrangler.jsonc`의 `routes` | `deokbae.blog`, `www.deokbae.blog`를 Custom Domain으로. 배포할 때 DNS 기록과 HTTPS 인증서가 자동으로 만들어져요 |
 
 - 처음 주소 `https://blog.deokbae.workers.dev`와 버전 미리보기 주소는 닫았어요(`wrangler.jsonc`의 `"workers_dev": false`, `"preview_urls": false`). 블로그 주소는 `https://deokbae.blog` 하나예요. `www.deokbae.blog`도 같은 블로그를 보여 주고, 화면마다 대표 주소를 `https://deokbae.blog/...`로 알려요.
-- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. workers.dev 주소를 모두 닫아서 모든 요청이 이 규칙을 지나요.
+- **속도 제한 규칙(2026-11-14 설정):** Cloudflare 대시보드 → deokbae.blog → Security → WAF → Rate limiting rules의 `로그인 시도 제한`. URI Path가 `/api/session`인 요청이 IP마다 10초에 5번을 넘으면 10초 동안 막아요(429, error code 1015). 무료 플랜은 규칙 1개, 조건은 경로만, 시간은 10초로 정해져 있어요. 세는 데 약간의 지연이 있어서 짧게 몰아친 요청 몇 개는 통과할 수 있고, 그 뒤는 서버의 실패 횟수 제한이 함께 막아요. workers.dev 주소를 모두 닫아서 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 
