@@ -1,17 +1,17 @@
 /**
  * @file review-writer.tsx 테스트
  *
- * 리뷰 라이터(글쓰기·고치기 폼)를 사용자처럼 써 보며 확인해요.
+ * 리뷰 라이터(추가·수정 폼)를 사용자처럼 써 보며 확인해요.
  *   - 틀린 칸이 있으면 "고칠 곳" 목록으로 알리고 초점을 옮기는지
  *   - Markdown 파일을 불러오면 칸이 바로 채워지는지
  *   - 장면 사진을 넣으면 본문에 Markdown 사진 줄이 들어가는지
  *   - 저장: 사진을 먼저 올리고, 그 번호와 함께 리뷰를 저장하는지(두 번 눌러도 한 번만)
- *   - 고치기: 처음 원고 sha와 함께 PUT으로 저장하는지
+ *   - 수정: 처음 원고 sha와 함께 PUT으로 저장하는지
  *
  * 서버 대신 fetch를 가짜로 바꿔 답을 정해요. jsdom에는 사진 미리보기 주소(URL.createObjectURL)가 없어서 흉내 내요.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,7 +52,7 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^한줄평/), "기다림은 끝내 도착한다.");
 }
 
-describe("ReviewWriter(새 리뷰)", () => {
+describe("ReviewWriter(리뷰 추가)", () => {
   beforeEach(() => {
     fakeServer();
     URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -112,7 +112,48 @@ describe("ReviewWriter(새 리뷰)", () => {
     await user.type(screen.getByLabelText(/^본문/), "첫 문단");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
     expect(screen.getByLabelText(/^본문/)).toHaveValue("첫 문단\n\n![](/images/winter-stop/scene-1.png)\n\n");
-    expect(screen.getByText(/사진 1장을 본문에 넣었습니다/)).toBeInTheDocument();
+    // 사진을 넣었다는 안내는 화면에는 띄우지 않고(sr-only) 화면 낭독기에만 짧게 알려요. 괄호·캡션 설명 글도 없어요.
+    // 안내는 비웠다가 잠시 뒤(0.1초) 채워서 findByText로 기다려요.
+    expect(await screen.findByText("사진 1장을 본문에 넣었습니다.")).toHaveClass("sr-only");
+    expect(screen.queryByText(/괄호 안에 사진 설명/)).not.toBeInTheDocument();
+  });
+
+  it("같은 장수의 사진을 연달아 넣어도 안내를 비웠다가 다시 채워, 화면 낭독기가 매번 읽게 한다", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWriter mode="create" />);
+    const picture = new File(["png"], "scene.png", { type: "image/png" });
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
+    const region = await screen.findByText("사진 1장을 본문에 넣었습니다.");
+
+    // 안내 영역의 글자가 바뀔 때마다 기록해요(MutationObserver: 화면 요소가 바뀌면 알려 주는 브라우저 기능).
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(region.textContent ?? ""));
+    observer.observe(region, { childList: true, characterData: true, subtree: true });
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
+    await waitFor(() => expect(seen.at(-1)).toBe("사진 1장을 본문에 넣었습니다."));
+    observer.disconnect();
+
+    // 글이 같아도 한 번 비워졌다가("") 다시 채워져요. 글자가 바뀌어야 화면 낭독기가 새 안내로 읽어요.
+    expect(seen[0]).toBe("");
+    // 두 번째 사진은 다음 번호(scene-2)로 들어가요.
+    expect((screen.getByLabelText(/^본문/) as HTMLTextAreaElement).value).toContain("![](/images/winter-stop/scene-2.png)");
+  });
+
+  it("넓은 화면에서는 [포스터 | 영화 정보(2열)] 3칸이고, 포스터 설명 칸과 본문 도움말은 없다", () => {
+    const { container } = render(<ReviewWriter mode="create" />);
+    const posterGroup = screen.getByRole("group", { name: "포스터" });
+    const infoGroup = screen.getByRole("group", { name: "영화 정보" });
+    // 포스터가 영화 정보보다 앞(왼쪽)에 놓여요. 읽는 순서도 같아요.
+    expect(posterGroup.compareDocumentPosition(infoGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(posterGroup.parentElement).toHaveClass("lg:grid-cols-3");
+    expect(infoGroup).toHaveClass("lg:col-span-2", "lg:grid-cols-2");
+    // 주소(영문)~한줄평 10칸이 영화 정보 안에 있어요(2열 × 5행).
+    expect(infoGroup.querySelectorAll(":scope > div, :scope > p").length).toBe(10);
+    expect(screen.queryByLabelText(/포스터 설명/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^본문/)).not.toHaveAccessibleDescription(expect.stringContaining("빈 줄로 문단"));
+    expect(container.textContent).not.toContain("빈 줄로 문단을 나눕니다");
   });
 
   it("주소를 바꾸면 이미 넣은 사진 주소도 따라 바뀐다", async () => {
@@ -130,8 +171,11 @@ describe("ReviewWriter(새 리뷰)", () => {
     fakeServer(undefined, new Promise<void>((resolve) => (open = resolve)));
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await fillRequired(user);
+    // 주소(영문)를 적기 전에 포스터를 먼저 골라도 돼요. 막거나 주소부터 적으라고 하지 않아요.
     await user.upload(screen.getByLabelText("포스터 고르기"), new File(["jpg"], "poster.jpeg", { type: "image/jpeg" }));
+    expect(screen.getByLabelText(/^주소\(영문\)/)).not.toHaveAccessibleDescription(expect.stringContaining("먼저"));
+    // 주소를 적으면 포스터 파일 이름이 <주소>.jpg로 맞춰져요(아래 저장 요청에서 확인).
+    await fillRequired(user);
 
     const save = screen.getByRole("button", { name: "리뷰 저장" });
     await user.dblClick(save);
@@ -161,7 +205,7 @@ describe("ReviewWriter(새 리뷰)", () => {
   });
 });
 
-describe("ReviewWriter(고치기)", () => {
+describe("ReviewWriter(리뷰 수정)", () => {
   beforeEach(() => fakeServer({ status: 200, body: { slug: "winter-stop", commitSha: "c" } }));
   afterEach(() => vi.unstubAllGlobals());
 
@@ -171,15 +215,15 @@ describe("ReviewWriter(고치기)", () => {
     render(<ReviewWriter mode="edit" slug="winter-stop" source={SOURCE} baseSha="base" />);
     expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장");
     expect(screen.queryByLabelText(/^주소\(영문\)/)).not.toBeInTheDocument();
-    expect(screen.getByText(/고치기에서는 바꿀 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/수정할 때는 바꿀 수 없습니다/)).toBeInTheDocument();
   });
 
-  it("고친 내용을 처음 원고 sha와 함께 PUT으로 저장한다(글 쓴 날은 그대로)", async () => {
+  it("수정한 내용을 처음 원고 sha와 함께 PUT으로 저장한다(글 쓴 날은 그대로)", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="edit" slug="winter-stop" source={SOURCE} baseSha="base" />);
     await user.clear(screen.getByLabelText(/^한줄평/));
     await user.type(screen.getByLabelText(/^한줄평/), "고친 한줄평");
-    await user.click(screen.getByRole("button", { name: "고친 내용 저장" }));
+    await user.click(screen.getByRole("button", { name: "수정한 내용 저장" }));
 
     await screen.findByRole("heading", { name: "저장했습니다" });
     const [url, init] = callsTo("/api/reviews/winter-stop")[0]!;

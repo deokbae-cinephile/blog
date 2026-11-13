@@ -15,7 +15,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-/** 탭 제목 "오프라인 — 덕배의 영화 블로그", 그리고 검색엔진에 올리지 않기 */
+/** 탭 제목 "오프라인 — DMB", 그리고 검색엔진에 올리지 않기 */
 export const metadata: Metadata = {
   title: "오프라인",
   robots: { index: false },

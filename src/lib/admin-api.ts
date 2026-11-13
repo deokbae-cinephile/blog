@@ -98,17 +98,17 @@ export type SaveRequest = {
   baseSha?: string;
 };
 
-/** 새 리뷰 저장 */
+/** 리뷰 추가 */
 export function createReview(request: SaveRequest) {
   return send<{ slug: string; commitSha: string }>("/api/reviews", json("POST", request));
 }
 
-/** 리뷰 고치기 */
+/** 리뷰 수정 */
 export function updateReview(slug: string, request: SaveRequest) {
   return send<{ slug: string; commitSha: string }>(`/api/reviews/${encodeURIComponent(slug)}`, json("PUT", request));
 }
 
-/** 리뷰 지우기 */
+/** 리뷰 삭제 */
 export function deleteReview(slug: string) {
   return send<{ title: string; commitSha: string }>(`/api/reviews/${encodeURIComponent(slug)}`, json("DELETE"));
 }

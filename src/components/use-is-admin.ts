@@ -9,8 +9,8 @@
  * 브라우저에서 화면이 준비되면 쿠키를 보고 맞춰요. 그래서 처음 HTML은 누구에게나 같아요.
  *
  * 누가 쓰나요?
- *   components/site-header.tsx([새 리뷰]), components/session-controls.tsx(로그인·로그아웃),
- *   components/admin-review-actions.tsx([고치기]·[지우기])
+ *   components/floating-buttons.tsx([+] 리뷰 추가), components/session-controls.tsx(로그인·로그아웃),
+ *   components/admin-review-actions.tsx([수정]·[삭제])
  */
 
 import { useSyncExternalStore } from "react";

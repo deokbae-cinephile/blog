@@ -106,7 +106,7 @@ function toFrontmatterInput(values: ReviewFormValues, publishedAt: string): Reco
  * 글쓰기 칸을 모두 검사해요.
  *
  * @param values 칸 값
- * @param options.checkSlug 주소(영문)도 검사할지. 새 글이면 true(고치기 화면은 주소를 바꾸지 않아요)
+ * @param options.checkSlug 주소(영문)도 검사할지. 새 글이면 true(수정 화면은 주소를 바꾸지 않아요)
  * @param options.today "글 쓴 날"이 비어 있을 때 넣을 날짜. 기본은 오늘(한국 시간)
  * @returns 통과하면 { ok: true, frontmatter }, 아니면 { ok: false, errors }
  * @example

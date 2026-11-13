@@ -16,7 +16,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-/** 탭 제목: "찾는 화면이 없습니다 — 덕배의 영화 블로그" */
+/** 탭 제목: "찾는 화면이 없습니다 — DMB" */
 export const metadata: Metadata = {
   title: "찾는 화면이 없습니다",
 };
@@ -49,7 +49,7 @@ export default function NotFoundPage() {
       </h1>
       {/* (2) 왜 그런지, (3) 어떻게 하면 되는지 */}
       <p className="text-crt-dim">
-        주소가 바뀌었거나 지워진 리뷰일 수 있습니다.
+        주소가 바뀌었거나 삭제된 리뷰일 수 있습니다.
         <br />
         주소를 다시 확인하거나 목록에서 찾아 주세요.
       </p>

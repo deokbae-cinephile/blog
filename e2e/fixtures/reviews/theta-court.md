@@ -4,7 +4,7 @@ title: 세타 궁정
 originalTitle: Theta Court
 year: 2013
 director: 시험감독3
-genres: [역사]
+genres: [범죄]
 rating: 1
 oneLiner: 시험용 세타 궁정 한줄평
 publishedAt: 2025-09-01

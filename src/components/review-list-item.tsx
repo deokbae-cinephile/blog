@@ -4,18 +4,19 @@
  * 이 파일이 하는 일
  *   처음 화면 목록에서 리뷰 한 편을 한 덩어리로 보여 줍니다.
  *
- *     -  ┌────┐ 겨울 정류장 ································ 4.5   ← 첫째 줄: 제목 · 평점
- *        │포스│ Winter Stop · 2024 · 감독 한서윤                  ← 둘째 줄: 원제 · 연도 · 감독
- *        │ 터 │ “버스는 오지 않아도, 기다림은 끝내 도착한다.”     ← 셋째 줄: 한줄평
- *        │2:3 │ [드라마]                                          ← 넷째 줄: 장르
- *        └────┘
+ *     ┌────┐ 겨울 정류장 ································ 4.5   ← 첫째 줄: 제목 · 평점
+ *     │포스│ Winter Stop · 2024 · 감독 한서윤 [드라마]          ← 둘째 줄: 원제 · 연도 · 감독 · 장르
+ *     │ 터 │
+ *     │2:3 │ “버스는 오지 않아도, 기다림은 끝내 도착한다.”     ← 한줄평: 썸네일 아래 끝에 맞춰요
+ *     └────┘
  *   글 쓴 날은 화면에 보이지 않아요. 목록의 "최신순" 정렬에만 써요.
  *
  * 맡은 기능
- *   - 포스터 썸네일(2:3)을 보여 줘요. 없으면 기본 포스터예요. 형광 초록으로 바뀌어 보여요(components/poster.tsx).
+ *   - 포스터 썸네일(2:3)을 맨 앞에 보여 줘요. 없으면 기본 포스터예요. 형광 초록으로 바뀌어 보여요(components/poster.tsx).
+ *   - 글자 칸은 썸네일과 같은 높이로 늘어나고, 한줄평은 그 아래 끝(썸네일 아래 끝과 같은 높이)에 붙어요.
+ *     글이 길어 썸네일보다 높아지면(좁은 화면 등) 한줄평은 자연스럽게 이어서 놓여요.
  *   - 제목을 누르면 상세 화면(/reviews/<slug>)으로 가요. 항목 어디를 눌러도 갈 수 있게 누르는 영역을 넓혔어요.
  *   - 마우스를 올리거나 키보드 초점이 오면 항목 전체가 반전돼요(단말기에서 고른 줄처럼).
- *   - 맨 앞의 "-"는 목록 표시예요(번호 대신). 목록(<ul>)이 이미 "항목"이라고 알려 주므로 화면 낭독기에서는 숨겨요.
  *
  * 링크 영역을 넓히는 방법(stretched-link)
  *   항목 전체를 <a>로 감싸면 화면 낭독기가 항목 속 글자를 몽땅 링크 이름으로 읽어 버려요.
@@ -56,44 +57,46 @@ export function ReviewListItem({ review }: Props) {
       <article
         aria-labelledby={titleId}
         // group-hover:inverse — 부모에 마우스가 올라가면 반전, group-has-[a:focus-visible]:inverse — 키보드 초점이 와도 반전
-        // grid-cols-[5rem_minmax(0,1fr)] — 휴대폰: 왼쪽 5rem 칸에 포스터, 오른쪽에 내용
-        // sm:grid-cols-[1rem_6rem_minmax(0,1fr)] — 넓은 화면: "-" · 포스터 · 내용 세 칸
+        // grid-cols-[3.5rem_minmax(0,1fr)] — 휴대폰: 왼쪽 3.5rem 칸에 썸네일, 오른쪽에 글자
+        // sm:grid-cols-[4rem_minmax(0,1fr)] — 넓은 화면: 썸네일 4rem
+        // items-stretch: 글자 칸이 썸네일과 같은 높이로 늘어나요(한줄평을 아래 끝에 붙이려고).
         // minmax(0,1fr): 남는 너비를 모두 쓰되, 긴 글자 때문에 칸이 넘치지 않게 최소 0까지 줄어들 수 있게 해요.
-        className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-4 px-3 py-4 group-hover:inverse group-has-[a:focus-visible]:inverse sm:grid-cols-[1rem_6rem_minmax(0,1fr)]"
+        className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-stretch gap-x-4 px-3 py-3 group-hover:inverse group-has-[a:focus-visible]:inverse sm:grid-cols-[4rem_minmax(0,1fr)]"
       >
-        {/* 목록 표시 "-". <ul>이 이미 목록이라고 알려 주니 화면 낭독기에서는 숨겨요. 휴대폰에서는 자리를 아끼려고 숨겨요. */}
-        <span aria-hidden="true" className="hidden text-crt-dim sm:block">
-          -
-        </span>
+        {/* 포스터 썸네일. 바로 옆에 제목이 있어 같은 말을 두 번 읽지 않도록 꾸밈(alt="")으로 둬요.
+            self-start: 글이 썸네일보다 길어도(좁은 화면) 썸네일은 늘어나지 않고 2:3 비율을 지켜요. */}
+        <Poster src={poster} alt="" size="thumb" className="self-start" />
 
-        {/* 포스터 썸네일. 바로 옆에 제목이 있어 같은 말을 두 번 읽지 않도록 꾸밈(alt="")으로 둬요. */}
-        <Poster src={poster} alt="" size="thumb" />
-
-        {/* min-w-0: 긴 제목이 칸을 밀어내지 않고 줄바꿈되게 하는 그리드·플렉스 요령이에요. */}
-        <div className="min-w-0">
+        {/* 글자 칸. flex-col: 줄을 위에서 아래로 쌓고, 한줄평은 mt-auto로 맨 아래에 붙여요.
+            min-w-0: 긴 제목이 칸을 밀어내지 않고 줄바꿈되게 하는 그리드·플렉스 요령이에요. */}
+        <div className="flex min-w-0 flex-col">
           {/* 첫째 줄: 제목 · 점선 · 평점 */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-3">
             <h3 id={titleId} className="glow">
               {/* stretched-link: 누르는 영역을 항목 전체로 넓혀요.
-                  focus-visible:outline-none: 링크 자체의 초점 테두리는 지우고, 대신 <li> 전체에 테두리와 반전을 보여 줘요. */}
+                  focus-visible:outline-none: 링크 자체의 초점 테두리는 없애고, 대신 <li> 전체에 테두리와 반전을 보여 줘요. */}
               <Link href={`/reviews/${slug}`} className="stretched-link no-underline focus-visible:outline-none">
                 {title}
               </Link>
             </h3>
             <span aria-hidden="true" className="leader hidden sm:block" />
-            <Rating value={rating} />
+            {/* ml-auto: 점선이 없는 휴대폰에서도 평점이 오른쪽 끝에 붙어요. */}
+            <Rating value={rating} className="ml-auto" />
           </div>
 
-          {/* 둘째 줄: 원제 · 연도 · 감독. 없는 값(원제가 없을 때)은 filter(Boolean)으로 빼고 " · "로 이어요. */}
-          <p className="text-crt-dim">{[originalTitle, year, `감독 ${director}`].filter(Boolean).join(" · ")}</p>
+          {/* 둘째 줄: 원제 · 연도 · 감독, 그리고 장르. 없는 값(원제가 없을 때)은 filter(Boolean)으로 빼고 " · "로 이어요.
+              장르는 목록(<ul>)이라 <p> 안에 넣을 수 없어서, 둘을 <div>로 감싸 한 줄에 이어 놓아요. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-crt-dim">
+            <p>{[originalTitle, year, `감독 ${director}`].filter(Boolean).join(" · ")}</p>
+            <GenreTags genres={genres} label="장르" />
+          </div>
 
-          {/* 셋째 줄: 한줄평(부제 자리). 화면 낭독기에는 앞에 "한줄평:"을 붙여 무슨 글인지 알려 줘요. */}
-          <p className="mt-1">
+          {/* 한줄평. mt-auto: 남는 높이를 위에 두어 글자 칸 맨 아래(썸네일 아래 끝)에 붙어요.
+              pt-2: 썸네일이 글보다 낮을 때(좁은 화면)에도 둘째 줄과 붙지 않게 조금 띄워요.
+              화면 낭독기에는 앞에 "한줄평:"을 붙여 무슨 글인지 알려 줘요. */}
+          <p className="mt-auto pt-2">
             <span className="sr-only">한줄평: </span>“{oneLiner}”
           </p>
-
-          {/* 넷째 줄: 장르 */}
-          <GenreTags genres={genres} label="장르" className="mt-2 text-crt-dim" />
         </div>
       </article>
     </li>

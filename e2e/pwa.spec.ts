@@ -23,7 +23,7 @@ test.describe("설치형 웹 앱(PWA)", () => {
     // request: 브라우저 탭 없이 파일만 받아 오는 도구예요.
     const manifestUrl = new URL(href!, page.url());
     const manifest = await (await request.get(manifestUrl.href)).json();
-    expect(manifest).toMatchObject({ name: "덕배의 영화 블로그", start_url: "./", scope: "./", display: "standalone" });
+    expect(manifest).toMatchObject({ name: "DMB", start_url: "./", scope: "./", display: "standalone" });
 
     // 매니페스트의 아이콘 주소는 상대 주소라 매니페스트 위치를 기준으로 풀어서 받아 봐요.
     for (const icon of manifest.icons as { src: string }[]) {

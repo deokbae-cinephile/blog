@@ -4,7 +4,7 @@ title: 카파 사건
 originalTitle: Kappa Case
 year: 2011
 director: 시험감독5
-genres: [미스터리]
+genres: [스릴러]
 rating: 4
 oneLiner: 시험용 카파 사건 한줄평
 publishedAt: 2025-07-01

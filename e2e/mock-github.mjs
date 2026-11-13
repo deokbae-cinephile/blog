@@ -2,7 +2,7 @@
  * @file E2E용 가짜 GitHub 서버 (e2e/mock-github.mjs)
  *
  * 이 파일이 하는 일
- *   E2E 테스트에서 글쓰기·고치기·지우기를 끝까지 시험하려면 GitHub 저장소가 필요해요.
+ *   E2E 테스트에서 추가·수정·삭제를 끝까지 시험하려면 GitHub 저장소가 필요해요.
  *   진짜 저장소에 시험 커밋을 올릴 수는 없으니, GitHub API처럼 답하는 작은 서버를 띄워요.
  *   블로그 서버는 환경 변수 GITHUB_API_URL로 이 서버를 가리켜요(playwright.config.ts).
  *

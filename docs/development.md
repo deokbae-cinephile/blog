@@ -23,22 +23,23 @@ src/
 │  ├─ page.tsx            "/"                   영화 목록(정적)
 │  ├─ reviews/[slug]/     "/reviews/<주소>"     리뷰 상세(정적, 빌드할 때 원고 수만큼)
 │  ├─ login/              "/login"              글쓴이 로그인
-│  ├─ write/              "/write", "/write/<주소>"  새 리뷰 쓰기·고치기(요청마다 서버에서)
+│  ├─ write/              "/write", "/write/<주소>"  리뷰 추가·수정(요청마다 서버에서)
 │  ├─ api/session/        로그인(POST)·로그아웃(DELETE)
 │  ├─ api/images/         사진 한 장 올리기(POST) → GitHub blob
-│  ├─ api/reviews/        새 리뷰 저장(POST), [slug]/ 고치기(PUT)·지우기(DELETE)
+│  ├─ api/reviews/        리뷰 추가(POST), [slug]/ 수정(PUT)·삭제(DELETE)
 │  ├─ offline/, not-found.tsx, manifest.ts, sitemap.ts, robots.ts
 │  └─ layout.tsx, globals.css, fonts/   공통 틀(포스터 SVG 필터 포함)·스타일·글꼴
 ├─ components/            화면 조각. 각 파일 옆에 *.test.tsx
 │  ├─ review-browser.tsx  검색·장르·정렬과 목록(10편씩 무한 스크롤)
 │  ├─ search-box.tsx      자동완성 검색창(콤보박스)
-│  ├─ review-writer.tsx   리뷰 라이터(글쓰기·고치기 폼, Markdown 불러오기, 사진 넣기)
+│  ├─ review-writer.tsx   리뷰 라이터(추가·수정 폼, Markdown 불러오기, 사진 넣기)
 │  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
+│  ├─ floating-buttons.tsx  오른쪽 아래에 떠 있는 [맨 위로]와 [+](리뷰 추가, 로그인했을 때만)
 │  └─ poster.tsx, rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
 │  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사·HTML 바꾸기
 │  ├─ review-form.ts, review-file.ts                   글쓰기 칸 검사, 원고 ↔ 칸 값 바꾸기
-│  ├─ review-store.ts, github.ts                       저장·고치기·지우기 → GitHub 커밋
+│  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
 │  └─ browse.ts, site.ts, genres.ts …                  검색·정렬 규칙, 블로그 정보, 장르 목록
 e2e/                      E2E 테스트, 시험용 원고(fixtures/), 가짜 GitHub 서버(mock-github.mjs)
@@ -68,7 +69,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 - 사진은 요청 하나가 하는 일(CPU·메모리)을 작게 나누려고 한 장씩(최대 4MB) 먼저 올리고, 리뷰를 저장할 때 원고와 함께 커밋 하나로 묶어요.
 - 저장하기 전에 서버가 빌드 때와 같은 규칙으로 다시 검사해요(칸, 주소 겹침, 포스터·사진 파일, 그사이 다른 곳에서 고쳤는지).
-- 고치기·지우기는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
+- 수정·삭제는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
 - 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
 
 ## 4. 로그인과 접근 막기
@@ -80,7 +81,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, Cloudflare 속도 제한 규칙도 함께 걸어 두었어요(아래 "도메인 연결"의 속도 제한 규칙).
 - **로그인 뒤 이동:** `?next=` 주소는 우리 사이트 안 주소만 받아요. 탭·줄바꿈을 섞어 다른 사이트로 보내는 주소도 막아요.
 - **본문 링크:** `javascript:` 같은 위험한 방식의 링크는 HTML로 바꿀 때 주소를 지워요(`isSafeHref`).
-- **화면의 단추:** 목록·상세는 정적 HTML이라, 비밀이 없는 표시 쿠키(`blog_admin=1`)로 [새 리뷰]·[고치기]·[지우기]를 보일지만 정해요. 실제 권한은 늘 서버가 확인해요.
+- **화면의 단추:** 목록·상세는 정적 HTML이라, 비밀이 없는 표시 쿠키(`blog_admin=1`)로 [+](리뷰 추가)·[수정]·[삭제]를 보일지만 정해요. 실제 권한은 늘 서버가 확인해요.
 
 ## 5. 환경 변수와 배포(Cloudflare Workers)
 
@@ -115,8 +116,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 |---|---|---|
 | 목록·상세·로그인 화면(미리 만든 화면) | 약 3ms | 약 10ms |
 | 로그인(비밀번호 확인, scrypt) | 약 30ms | 약 220ms |
-| 글쓰기·고치기 화면 | 약 9~13ms | 약 50~130ms |
-| 저장·고치기·지우기 / 사진 한 장(3.5MB) | 약 7~12ms / 약 20ms | 약 10~30ms |
+| 추가·수정 화면 | 약 9~13ms | 약 50~130ms |
+| 추가·수정·삭제 / 사진 한 장(3.5MB) | 약 7~12ms / 약 20ms | 약 10~30ms |
 
 - 방문자 화면은 한도 안이에요. `open-next.config.ts`의 캐시 가로채기 덕분에 첫 요청도 Next.js 서버를 불러오지 않아요.
 - 글쓴이 기능은 한도를 넘어요. Cloudflare는 가끔 넘는 요청은 봐주지만, 계속 넘으면 그 요청을 오류 1102로 끊어요. 혼자 가끔 쓰는 정도라 무료로 시작하고, 로그인·저장이 1102로 자주 막히면 **Workers Paid(월 5달러, 요청당 CPU 30초)**로 올리세요. 코드는 고치지 않아도 돼요.
@@ -141,7 +142,10 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **색:** `globals.css`의 변수(`--crt-*`)만 써요. 형광 초록 한 가지라, 오류·고른 것은 빨강 대신 **반전**(초록 바탕)과 모양(점선 테두리, ▶)으로 알려요.
 - **글자:** Neo둥근모 16px과 32px(`text-big`)만 써요. 굵게·기울임 대신 반전과 밑줄을 써요.
 - **포스터·사진:** 원본 파일은 그대로 두고, 화면에서만 SVG 필터(`#crt-phosphor`, `app/layout.tsx`)로 흑백 → 4단계 명암 → 형광 초록으로 바꾸고 주사선을 덮어요. 포스터 상자는 늘 2:3이고, 없으면 기본 포스터를 보여요.
-- **넓은 화면(1024px~):** 목록은 [검색 칸 16~18rem | 목록], 상세는 [포스터·정보표 | 본문(오른쪽 칸 전체)]. 검색 칸과 정보표는 키가 충분한 화면에서 스크롤해도 붙어 있어요.
+- **넓은 화면(1024px~):** 목록은 [검색 칸 16~18rem | 목록], 상세는 [포스터 | 본문(오른쪽 칸 전체)], 글쓰기는 [포스터 | 영화 정보 2열 × 5행] 3칸이에요. 검색 칸과 상세의 포스터는 키가 충분한 화면에서 스크롤해도 붙어 있어요.
+- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
+- **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독, 오른쪽에 큰 평점.
+- **떠 있는 단추:** 오른쪽 아래에 [맨 위로](내려 읽었을 때)와, 로그인했을 때 정사각형 [+](리뷰 추가)를 둬요. 글쓰기 화면에서는 [+]를 숨겨요.
 
 ## 7. 키보드와 접근성
 
@@ -149,14 +153,14 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 상세: ◀▶ 이전·다음 리뷰, Esc 목록으로. 한 글자 단축키는 쓰지 않아요(KWCAG 6.1.4).
 - 무한 스크롤은 [n편 더 보기] 단추와 함께 써요. 단추로 불러오면(또는 단추에 초점이 있을 때 저절로 불러오면) 새로 나온 첫 리뷰로 초점이 가요.
 - 폼: 칸마다 보이는 이름과 "(필수)", 틀린 칸에 `aria-invalid` + 오류 문구(`aria-describedby`·`aria-errormessage`), 저장할 때 "고칠 곳" 목록으로 초점 이동.
-- 지우기 확인은 네이티브 `<dialog>`(`role="alertdialog"`)이고, 처음 초점은 [취소]예요.
+- 삭제 확인은 네이티브 `<dialog>`(`role="alertdialog"`)이고, 처음 초점은 [취소]예요.
 
 ## 8. 테스트
 
 | 명령 | 내용 |
 |---|---|
 | `pnpm test` | 단위 테스트. 원고 형식(content.test.ts), 로그인 표·비밀번호, proxy, API, 저장 로직, 화면 조각 |
-| `pnpm e2e` | 시험용 원고로 빌드해 진짜 브라우저로 확인. 가짜 GitHub 서버(`e2e/mock-github.mjs`)를 함께 띄워 로그인 → 글쓰기 → 커밋 → 고치기 → 지우기까지 시험해요 |
+| `pnpm e2e` | 시험용 원고로 빌드해 진짜 브라우저로 확인. 가짜 GitHub 서버(`e2e/mock-github.mjs`)를 함께 띄워 로그인 → 추가 → 커밋 → 수정 → 삭제까지 시험해요 |
 
 내 컴퓨터에서 글쓰기 화면을 써 보고 싶으면, 가짜 GitHub 서버를 띄우고(`node e2e/mock-github.mjs`) `.env.local`에 `GITHUB_API_URL=http://127.0.0.1:3101`과 `GITHUB_CONTENT_TOKEN=e2e-token`을 넣으면 진짜 저장소를 건드리지 않고 저장해 볼 수 있어요. `pnpm dev`와 `pnpm cf:preview` 모두 같은 방법으로 돼요.
 

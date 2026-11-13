@@ -1,5 +1,5 @@
 /**
- * @file 새 리뷰 쓰기 화면 (app/write/page.tsx → 주소 "/write")
+ * @file 리뷰 추가 화면 (app/write/page.tsx → 주소 "/write")
  *
  * 이 파일이 하는 일
  *   글쓴이가 새 리뷰를 쓰는 화면이에요. 폼은 components/review-writer.tsx가 그려요.
@@ -22,11 +22,11 @@ import { isGitHubConfigured } from "@/lib/github";
 
 /** 탭 제목, 그리고 검색엔진에 올리지 않기(글쓴이만 쓰는 화면이에요) */
 export const metadata: Metadata = {
-  title: "새 리뷰 쓰기",
+  title: "리뷰 추가",
   robots: { index: false },
 };
 
-/** 새 리뷰 쓰기 화면 */
+/** 리뷰 추가 화면 */
 export default async function WritePage() {
   // 로그인하지 않았으면 로그인 화면으로. 로그인한 뒤 이 화면으로 돌아오게 next를 적어요.
   if (!(await isAdmin())) redirect("/login?next=/write");
@@ -34,7 +34,7 @@ export default async function WritePage() {
   return (
     <section aria-labelledby="write-title" className="grid gap-8">
       <h1 id="write-title" className="glow text-big">
-        새 리뷰 쓰기
+        리뷰 추가
       </h1>
       {isGitHubConfigured() ? <ReviewWriter mode="create" /> : <NotConfigured />}
     </section>

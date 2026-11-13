@@ -4,7 +4,7 @@ title: 제타의 노래
 originalTitle: Zeta Song
 year: 2015
 director: 시험감독1
-genres: [음악]
+genres: [로맨스]
 rating: 2
 oneLiner: 시험용 제타의 노래 한줄평
 publishedAt: 2025-11-01

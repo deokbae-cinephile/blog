@@ -3,7 +3,7 @@
 /**
  * @file review-store.ts 테스트
  *
- * 저장·고치기·지우기가 "어떤 파일을 더하고 지우는 커밋"을 만드는지 확인해요.
+ * 추가·수정·삭제가 "어떤 파일을 더하고 지우는 커밋"을 만드는지 확인해요.
  * GitHub와 이야기하는 부분(lib/github.ts)은 가짜로 바꿔, 저장소 모습(파일 목록)을 우리가 정해 줘요.
  */
 
@@ -88,7 +88,7 @@ describe("isUploadPathFor", () => {
   });
 });
 
-describe("saveReview(새 리뷰)", () => {
+describe("saveReview(추가)", () => {
   it("원고와 올린 포스터를 커밋 하나로 더한다", async () => {
     const result = await saveReview(
       "create",
@@ -138,7 +138,7 @@ describe("saveReview(새 리뷰)", () => {
   });
 });
 
-describe("saveReview(고치기)", () => {
+describe("saveReview(수정)", () => {
   const OLD = "---\ntitle: 겨울\nposter: winter-stop.jpg\n---\n\n![a](/images/winter-stop/old.jpg)\n";
 
   it("그사이 다른 곳에서 고쳤으면(처음 sha와 다르면) 덮어쓰지 않는다", async () => {

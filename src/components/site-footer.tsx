@@ -5,7 +5,7 @@
  *   모든 화면 맨 아래에 앱 설치 안내와 글쓴이 로그인(또는 로그아웃) 링크를 보여 줍니다.
  *   화면 구석에 떠 있는 두 단추도 여기에 둬요.
  *     - 왼쪽 아래: 키보드 조작 안내(keyboard-help.tsx)
- *     - 오른쪽 아래: 맨 위로(back-to-top.tsx)
+ *     - 오른쪽 아래: 맨 위로, 그리고 로그인했을 때 리뷰 추가(+) 단추(floating-buttons.tsx)
  *   떠 있는 단추는 화면 어디에 보이든 코드에서는 바닥글의 마지막이라, Tab으로 옮겨 다닐 때도 맨 끝에 와요.
  *
  * <footer> 태그
@@ -16,7 +16,7 @@
  *   app/layout.tsx가 모든 화면 아래에 놓습니다.
  */
 
-import { BackToTop } from "./back-to-top";
+import { FloatingButtons } from "./floating-buttons";
 import { InstallPrompt } from "./install-prompt";
 import { KeyboardHelp } from "./keyboard-help";
 import { SessionControls } from "./session-controls";
@@ -33,9 +33,10 @@ export function SiteFooter() {
       <div className="border-t-2 border-dotted border-crt-line pt-4">
         <SessionControls />
       </div>
-      {/* 화면 구석에 떠 있는 단추들(position: fixed). 바닥글 안에 있어도 화면 위치는 구석으로 고정돼요. */}
+      {/* 화면 구석에 떠 있는 단추들(position: fixed). 바닥글 안에 있어도 화면 위치는 구석으로 고정돼요.
+          왼쪽 아래: 키보드 조작 안내, 오른쪽 아래: 맨 위로와 리뷰 추가(+) */}
       <KeyboardHelp />
-      <BackToTop />
+      <FloatingButtons />
     </footer>
   );
 }

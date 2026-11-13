@@ -103,11 +103,11 @@ describe("browse", () => {
 describe("countGenres", () => {
   it("리뷰가 있는 장르만 장르 목록 순서로 센다", () => {
     expect(countGenres(reviewMocks)).toEqual([
-      { genre: "드라마", count: 2 },
-      { genre: "코미디", count: 1 },
       { genre: "액션", count: 1 },
-      { genre: "음악", count: 1 },
-      { genre: "모험", count: 1 },
+      { genre: "코미디", count: 1 },
+      { genre: "드라마", count: 2 },
+      { genre: "재난", count: 1 },
+      { genre: "로맨스", count: 1 },
     ]);
   });
 
@@ -125,7 +125,7 @@ describe("isFiltered / resultStatus", () => {
 
   it("결과 안내 문구를 만든다", () => {
     expect(resultStatus(8, 8, DEFAULT_PARAMS)).toBe("전체 8편");
-    expect(resultStatus(8, 1, { ...DEFAULT_PARAMS, genre: "음악" })).toBe("8편 중 1편");
+    expect(resultStatus(8, 1, { ...DEFAULT_PARAMS, genre: "로맨스" })).toBe("8편 중 1편");
     expect(resultStatus(8, 0, { ...DEFAULT_PARAMS, q: "없음" })).toBe("8편 중 0편");
   });
 });

@@ -7,7 +7,7 @@ year: 2020
 country: 한국
 director: 김시험
 runtime: 101
-genres: [드라마, 모험]
+genres: [드라마, 재난]
 rating: 4.5
 oneLiner: 시험용 첫 번째 한줄평
 publishedAt: 2026-03-01

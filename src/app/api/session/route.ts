@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ ok: true });
   // 세션 쿠키: 자바스크립트가 읽지 못하게(httpOnly)
   response.cookies.set(SESSION_COOKIE, token, cookieOptions(true));
-  // 로그인 표시 쿠키: 화면이 [새 리뷰]·[고치기] 단추를 보일지 정할 때 읽어요(비밀 없음).
+  // 로그인 표시 쿠키: 화면이 [+](리뷰 추가)·[수정]·[삭제] 단추를 보일지 정할 때 읽어요(비밀 없음).
   response.cookies.set(ADMIN_HINT_COOKIE, "1", cookieOptions(false));
   return response;
 }

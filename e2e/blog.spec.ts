@@ -4,7 +4,7 @@
  * 진짜 브라우저로 사이트를 열어 방문자처럼 써 보며 확인해요(글쓴이 기능은 admin.spec.ts).
  *   - 목록: 검색과 자동완성, 장르, 정렬, 결과 없음, 조건 지우기, 주소에 조건 남기기, 10편씩 무한 스크롤
  *   - 넓은 화면: 왼쪽 검색 칸(스크롤해도 붙어 있음) + 오른쪽 영화 목록
- *   - 상세: 포스터(초록 필터)·기본 포스터, 정보표(감독·장르·평점), 본문 Markdown·사진, 이전·다음 리뷰
+ *   - 상세: 포스터(초록 필터)·기본 포스터, 머리 안내판(장르·제목·정보 줄·큰 평점), 본문 Markdown·사진, 이전·다음 리뷰
  *   - 404 화면, 맨 위로 단추, 머리글의 GitHub 링크
  *   - 키보드: 본문 바로가기, DOS식 방향키 조작(▲ ▼ Home End Enter ◀ ▶ Esc), 키보드 조작 안내
  *   - 접근성: axe 자동 검사(WCAG 2.2 AA 규칙), 레이아웃: 좁은 화면에서 가로로 넘치지 않는지
@@ -53,9 +53,9 @@ async function openHome(page: Page, path = "/") {
 test.describe("처음 화면(목록)", () => {
   test("블로그 이름(h1)과 처음 10편을 최신순으로 보이고, 몇 편이 보이는지 알린다", async ({ page }) => {
     await openHome(page);
-    await expect(page).toHaveTitle("덕배의 영화 블로그");
+    await expect(page).toHaveTitle("DMB");
     // h1은 화면에서 숨겼지만(sr-only) 화면 낭독기가 찾을 수 있어요.
-    await expect(page.getByRole("heading", { level: 1, name: "덕배의 영화 블로그" })).toBeAttached();
+    await expect(page.getByRole("heading", { level: 1, name: "DMB" })).toBeAttached();
     await expect(listStatus(page)).toHaveText("전체 11편 · 10편 표시");
     expect(await listTitles(page)).toEqual(FIRST_TEN);
   });
@@ -136,10 +136,17 @@ test.describe("처음 화면(목록)", () => {
     await expect.poll(() => listTitles(page)).toEqual([LONG_TITLE, "알파 정거장"]);
   });
 
-  test("장르에서 뺀 장르(SF·판타지·애니메이션·가족·로맨스)는 칩에 없다", async ({ page }) => {
+  test("장르 칩은 정한 10가지가 정한 순서로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
     await openHome(page);
     const genres = page.getByRole("group", { name: "장르" });
-    for (const removed of ["SF", "판타지", "애니메이션", "가족", "로맨스"]) {
+    // 라디오 단추의 접근 이름("드라마 2편"처럼 장르 + 편수)으로 순서를 확인해요. 레이블 연결이 끊기면 이름이 비어 실패해요.
+    const radios = genres.getByRole("radio");
+    const names = ["전체", "다큐멘터리", "스릴러", "액션", "코미디", "드라마", "범죄", "스포츠", "공포", "재난", "로맨스"];
+    await expect(radios).toHaveCount(names.length);
+    for (const [index, name] of names.entries()) {
+      await expect(radios.nth(index)).toHaveAccessibleName(new RegExp(`^${name} \\d+편$`));
+    }
+    for (const removed of ["SF", "판타지", "미스터리", "음악", "전쟁", "역사", "모험", "서부"]) {
       await expect(genres.getByRole("radio", { name: new RegExp(`^${removed} `) })).toHaveCount(0);
     }
   });
@@ -229,25 +236,29 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect((await aside.boundingBox())!.y).toBeLessThan(80);
   });
 
-  test("포스터 썸네일은 가로 2 : 세로 3이고, 목록 번호 대신 크게(96px) 보인다", async ({ page }) => {
+  test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고, 한줄평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openHome(page);
-    const thumb = listRegion(page).locator(".poster-frame").first();
-    const box = (await thumb.boundingBox())!;
-    expect(Math.round(box.width)).toBe(96);
-    expect(Math.round(box.height)).toBe(144);
-    // 번호(01) 대신 "-"가 보여요(목록 표시라 화면 낭독기는 읽지 않아요).
-    await expect(listRegion(page).locator("li").first().locator("article > span[aria-hidden='true']")).toHaveText("-");
+    const item = listRegion(page).locator("li").first();
+    const box = (await item.locator(".poster-frame").boundingBox())!;
+    // 크기는 디자인에 따라 바뀔 수 있어 비율만 봐요(반올림 오차 0.02까지).
+    expect(Math.abs(box.width / box.height - 2 / 3)).toBeLessThanOrEqual(0.02);
+    // 앞에 "-"나 번호가 없고, 썸네일이 제목보다 앞(왼쪽)에 있어요.
+    await expect(item.locator("article > span[aria-hidden='true']")).toHaveCount(0);
+    expect(box.x).toBeLessThan((await item.getByRole("heading", { level: 3 }).boundingBox())!.x);
+    // 한줄평의 아래 끝이 썸네일의 아래 끝과 같은 높이예요(반올림 오차 2px까지).
+    const oneLiner = (await item.locator("p.mt-auto").boundingBox())!;
+    expect(Math.abs(oneLiner.y + oneLiner.height - (box.y + box.height))).toBeLessThanOrEqual(2);
   });
 });
 
 test.describe("리뷰 상세", () => {
-  test("목록에서 제목을 누르면 상세로 가고, 포스터·정보표·본문을 보인다(본 날·쓴 날은 없다)", async ({ page }) => {
+  test("목록에서 제목을 누르면 상세로 가고, 포스터·머리 안내판·본문을 보인다(본 날·쓴 날은 없다)", async ({ page }) => {
     await openHome(page);
     await page.getByRole("link", { name: "알파 정거장" }).click();
 
     await expect(page).toHaveURL(/\/reviews\/alpha-station$/);
-    await expect(page).toHaveTitle("알파 정거장 리뷰 — 덕배의 영화 블로그");
+    await expect(page).toHaveTitle("알파 정거장 리뷰 — DMB");
     await expect(page.getByRole("heading", { level: 1, name: "알파 정거장" })).toBeVisible();
 
     // 포스터: 원고에 적은 설명(posterAlt)이 대체 텍스트가 되고, 형광 초록 SVG 필터가 씌워져 있어요.
@@ -256,9 +267,12 @@ test.describe("리뷰 상세", () => {
     // evaluate: 브라우저 안에서 함수를 실행해요. getComputedStyle로 실제 적용된 CSS 값을 읽어요.
     expect(await poster.evaluate((img) => getComputedStyle(img).filter)).toContain("url(");
 
-    // 정보표의 이름 칸(dt)들: 본 날·쓴 날이 없어요.
-    await expect(page.getByRole("term")).toHaveText(["감독", "장르", "평점"]);
-    await expect(page.getByText("평점 5점 만점에 4.5점")).toBeAttached();
+    // 머리 안내판: 장르(제목 위), 감독까지 이어 쓴 정보 줄, 큰 평점. 예전 정보표(dl)와 본 날·쓴 날은 없어요.
+    const header = page.locator("article > header");
+    await expect(header.getByRole("list", { name: "장르" })).toHaveText("[드라마][재난]");
+    await expect(header.getByText(/· 감독 /)).toBeVisible();
+    await expect(header.getByText("평점 5점 만점에 4.5점")).toBeAttached();
+    await expect(page.getByRole("term")).toHaveCount(0);
     // 본문 제목과 사이트 안 링크
     await expect(page.getByRole("heading", { level: 2, name: "좋았던 점" })).toBeVisible();
     await expect(page.getByRole("link", { name: "델타 기록 리뷰" })).toHaveAttribute("href", "/reviews/delta-record");
@@ -284,8 +298,8 @@ test.describe("리뷰 상세", () => {
 
   test("장르를 누르면 그 장르로 거른 목록으로 간다", async ({ page }) => {
     await page.goto("/reviews/alpha-station");
-    await page.getByRole("link", { name: "모험", exact: true }).click();
-    await expect(page.getByRole("radio", { name: "모험 1편" })).toBeChecked();
+    await page.getByRole("link", { name: "재난", exact: true }).click();
+    await expect(page.getByRole("radio", { name: "재난 1편" })).toBeChecked();
     await expect.poll(() => listTitles(page)).toEqual(["알파 정거장"]);
   });
 
@@ -320,23 +334,23 @@ test.describe("리뷰 상세", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("넓은 화면에서는 정보표 칸이 본문 옆에 놓이고, 본문은 오른쪽 칸을 끝까지 쓴다", async ({ page, isMobile }) => {
+  test("넓은 화면에서는 포스터 칸이 본문 옆에 놓이고, 본문은 오른쪽 칸을 끝까지 쓴다", async ({ page, isMobile }) => {
     test.skip(isMobile, "넓은 화면 전용");
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/reviews/delta-record");
 
-    const facts = page.getByRole("term").first();
+    const poster = page.locator("article .poster-frame").first();
     const body = page.getByRole("heading", { level: 2, name: "큰 제목으로 쓴 소제목" });
-    // 두 칸: 정보표가 본문보다 왼쪽에 있어요.
-    expect((await facts.boundingBox())!.x).toBeLessThan((await body.boundingBox())!.x);
+    // 두 칸: 포스터가 본문보다 왼쪽에 있어요.
+    expect((await poster.boundingBox())!.x).toBeLessThan((await body.boundingBox())!.x);
 
     // 풀 페이지: 본문 문단이 46rem(736px)에 갇히지 않고 오른쪽 칸 너비를 다 써요.
     const paragraph = page.locator(".prose > p").first();
     expect((await paragraph.boundingBox())!.width).toBeGreaterThan(736);
 
-    // 아래로 많이 내려도 정보표는 화면 위쪽에 붙어 보여요(sticky).
+    // 아래로 많이 내려도 포스터 칸은 화면 위쪽에 붙어 보여요(sticky).
     await page.evaluate(() => window.scrollTo(0, 600));
-    await expect(facts).toBeInViewport();
+    await expect(poster).toBeInViewport();
   });
 
   test("접근성 규칙 위반이 없다", async ({ page }) => {
@@ -438,11 +452,13 @@ test.describe("키보드", () => {
     await page.keyboard.press("ArrowDown");
     await expect(searchBox(page)).toBeFocused();
 
-    // 라디오 단추에서 ▼는 다음 장르를 고르는 원래 기능 그대로예요.
+    // 라디오 단추에서 ▼는 다음 장르(다큐멘터리)를 고르는 원래 기능 그대로예요. 초점도 목록으로 끌려가지 않고 그 단추에 있어요.
     await page.getByRole("radio", { name: "전체 11편" }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("radio", { name: "전체 11편" })).not.toBeChecked();
-    await expect(page.getByRole("link", { name: "알파 정거장" })).not.toBeFocused();
+    const next = page.getByRole("radio", { name: "다큐멘터리 1편" });
+    await expect(next).toBeChecked();
+    await expect(next).toBeFocused();
   });
 
   test("상세에서 ◀ ▶로 이전·다음 리뷰를 넘기고, Esc로 목록에 돌아온다", async ({ page }) => {
@@ -470,7 +486,7 @@ test.describe("키보드", () => {
 
     await toggle.click();
     await expect(page.getByRole("heading", { name: "이 화면의 키" })).toBeVisible();
-    // 상세 화면에서는 상세 화면의 키를 안내해요. (안내는 바닥글 안에 있어요. 본문 정보표의 <dd>와 섞이지 않게 범위를 좁혀요.)
+    // 상세 화면에서는 상세 화면의 키를 안내해요. (안내는 바닥글 안에 있어요. 본문의 다른 목록과 섞이지 않게 범위를 좁혀요.)
     await expect(page.getByRole("contentinfo").getByRole("definition")).toHaveText(["이전·다음 리뷰", "목록으로", "다음 항목으로"]);
     await expectNoA11yViolations(page);
 

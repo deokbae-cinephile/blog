@@ -42,8 +42,8 @@ describe("Poster", () => {
     expect(container.querySelector("[aria-hidden='true']")).toBeInTheDocument();
   });
 
-  it("상자는 가로 2 : 세로 3 비율이고, 썸네일은 목록 번호 대신 크게(80~96px) 그린다", () => {
+  it("상자는 가로 2 : 세로 3 비율이고, 썸네일은 목록 글 세 줄 높이에 맞게(56~64px) 그린다", () => {
     const { container } = render(<Poster alt="" size="thumb" />);
-    expect(container.firstElementChild).toHaveClass("aspect-[2/3]", "w-20", "sm:w-24");
+    expect(container.firstElementChild).toHaveClass("aspect-[2/3]", "w-14", "sm:w-16");
   });
 });
