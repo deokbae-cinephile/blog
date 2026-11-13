@@ -125,14 +125,16 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 **내 컴퓨터에서 Workers처럼 띄워 보기** — `pnpm cf:preview`는 Workers용으로 빌드한 뒤 Cloudflare의 Workers 런타임으로 http://localhost:8787 에 띄워요. `.env.local`을 읽고, 아래 8장의 가짜 GitHub 서버와 함께 쓰면 저장까지 시험할 수 있어요.
 
-**도메인 연결(deokbae.blog)** — 도메인은 호스팅케이알(hosting.kr)에 등록돼 있고 네임서버도 호스팅케이알이에요(2026-11-13 기준, 지금은 GitHub Pages를 가리키는 기록만 있어요). 워커에 도메인을 붙이려면 DNS를 Cloudflare로 옮겨야 해요(무료 플랜은 네임서버를 통째로 옮기는 방식만 돼요).
+**도메인 연결(deokbae.blog)** — 2026-11-14에 연결했어요. 도메인은 호스팅케이알(hosting.kr)에 등록돼 있고, DNS는 Cloudflare가 맡아요(무료 플랜은 네임서버를 통째로 옮기는 방식만 돼요).
 
-1. Cloudflare 대시보드 → **Add a domain**에 `deokbae.blog`를 넣고 Free 플랜을 고릅니다. 기존 DNS 기록을 읽어 와요.
-2. 읽어 온 기록 가운데 GitHub Pages를 가리키는 것(`A 185.199.108~111.153`, `www CNAME deokbae-cinephile.github.io`)을 지워요. 그 자리에 워커용 기록이 새로 만들어져요(CNAME이 남아 있는 이름에는 워커를 붙일 수 없어요).
-3. Cloudflare가 알려 준 네임서버 두 개를 호스팅케이알 관리 화면의 네임서버 변경에 넣어요. Cloudflare에서 도메인이 Active가 되면 끝이에요(몇 분~하루).
-4. `wrangler.jsonc`의 `"routes"` 줄 앞 `//`를 지우고 main에 올려요. 다음 배포 때 Cloudflare가 DNS 기록과 HTTPS 인증서를 알아서 만들어요.
-5. (선택) www 주소도 받으려면 `www`에 프록시(주황 구름) DNS 기록을 하나 두고, Rules → Redirect Rules의 "Redirect from WWW to root" 템플릿으로 `deokbae.blog`에 넘겨요.
-6. (권장) Security → WAF → Rate limiting rules에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. 그리고 `wrangler.jsonc`에 `"workers_dev": false`를 넣어 `workers.dev` 주소를 닫으면, 모든 요청이 이 규칙을 지나요.
+| 어디에 | 무엇을 |
+|---|---|
+| 호스팅케이알 → 도메인 관리 → deokbae.blog → 네임서버 주소변경 | 1차 `damiete.ns.cloudflare.com`, 2차 `lovisa.ns.cloudflare.com` |
+| Cloudflare 계정 | 영역(zone) `deokbae.blog`(Free). 예전 GitHub Pages 기록은 가져오지 않았어요 |
+| `wrangler.jsonc`의 `routes` | `deokbae.blog`, `www.deokbae.blog`를 Custom Domain으로. 배포할 때 DNS 기록과 HTTPS 인증서가 자동으로 만들어져요 |
+
+- 처음 주소 `https://blog.deokbae.workers.dev`도 그대로 열려요. 대표 주소는 늘 `https://deokbae.blog`라 검색엔진에는 한 주소만 알려요.
+- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. 그다음 `wrangler.jsonc`에 `"workers_dev": false`를 넣어 `workers.dev` 주소를 닫으면, 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 
