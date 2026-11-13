@@ -1,0 +1,28 @@
+# Git에 올리지 않을 파일 (.gitignore)
+# 다시 만들 수 있는 파일(설치·빌드·테스트 결과)과 비밀 값은 올리지 않아요.
+
+# 설치한 라이브러리 (pnpm install로 다시 받을 수 있어요)
+node_modules
+
+# 빌드 결과 (pnpm build로 다시 만들 수 있어요)
+.next
+*.tsbuildinfo
+next-env.d.ts
+
+# Cloudflare Workers용 빌드 결과와 로컬 실행 기록 (pnpm cf:preview로 다시 만들 수 있어요)
+.open-next
+.wrangler
+
+# 테스트 결과
+coverage
+test-results
+playwright-report
+
+# 비밀 값이 들어갈 수 있는 환경 변수 파일 (예시 파일만 올려요)
+.env*
+!.env.example
+# wrangler의 로컬 비밀 값 파일. 이 블로그는 .env.local을 쓰지만, 혹시 만들어도 올라가지 않게 막아 둬요.
+.dev.vars*
+
+# macOS가 폴더마다 만드는 파일
+.DS_Store
