@@ -1,11 +1,7 @@
-# 덕배의 영화 블로그 (미니판)
+# 덕배의 영화 블로그
 
 [![CI](https://github.com/deokbae-cinephile/blog/actions/workflows/ci.yml/badge.svg)](https://github.com/deokbae-cinephile/blog/actions/workflows/ci.yml)
 ![version](https://img.shields.io/badge/version-1.0.0-39ff14)
-
-본 영화마다 평점과 한줄평, 몇 줄의 감상을 남기는 가벼운 영화 리뷰 블로그입니다. 형광 초록 CRT 단말기 화면처럼 꾸몄고, 글쓴이 한 사람이 로그인해 리뷰를 쓰고 고치고 지웁니다.
-
-> **프로젝트 상태:** 1.0.0. 덕배의 영화 블로그 1.3.0 알파(비공개 저장소)를 바탕으로 꼭 필요한 기능만 남긴 미니판이고, Cloudflare Workers에 올립니다. 지금 올라 있는 리뷰 15편과 포스터는 가상의 영화로 만든 목업입니다.
 
 ## 주요 기능
 
@@ -73,5 +69,3 @@ e2e/               E2E 테스트, 시험용 원고, 가짜 GitHub 서버
 scripts/           아이콘 만들기, 로그인 비밀 값 만들기
 open-next.config.ts, wrangler.jsonc   Cloudflare Workers 배포 설정
 ```
-
-모든 코드 파일 맨 위에 그 파일이 하는 일을 적어 두었고, 줄마다 쉬운 주석을 달았습니다.
