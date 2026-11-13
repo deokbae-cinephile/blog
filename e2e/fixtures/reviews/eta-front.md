@@ -4,7 +4,7 @@ title: 에타 전선
 originalTitle: Eta Front
 year: 2014
 director: 시험감독2
-genres: [전쟁]
+genres: [액션]
 rating: 2.5
 oneLiner: 시험용 에타 전선 한줄평
 publishedAt: 2025-10-01

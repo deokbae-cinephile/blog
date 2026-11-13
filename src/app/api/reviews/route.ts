@@ -1,5 +1,5 @@
 /**
- * @file 새 리뷰 저장 API (app/api/reviews/route.ts → 주소 "/api/reviews")
+ * @file 리뷰 추가 API (app/api/reviews/route.ts → 주소 "/api/reviews")
  *
  * 이 파일이 하는 일
  *   POST /api/reviews : 글쓰기 화면이 보낸 새 리뷰(칸 값 + 올린 사진 목록)를 검사하고 저장소에 커밋해요.
@@ -18,7 +18,7 @@ import { guardAdminRequest } from "@/lib/admin-auth";
 import { errorResponse, readJson } from "@/lib/api-response";
 import { saveReview, savePayloadSchema } from "@/lib/review-store";
 
-/** 새 리뷰 저장 */
+/** 리뷰 추가 */
 export async function POST(request: NextRequest) {
   const denied = await guardAdminRequest(request);
   if (denied) return denied;

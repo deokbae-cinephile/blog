@@ -29,14 +29,14 @@ describe("ReviewListItem", () => {
     expect(screen.getByRole("article", { name: "겨울 정류장" })).toBeInTheDocument();
   });
 
-  it("원제·연도·감독, 숫자 평점, 셋째 줄 한줄평, 장르를 보이고, 쓴 날은 보이지 않는다", () => {
+  it("원제·연도·감독과 장르, 숫자 평점, 맨 아래 한줄평을 보이고, 쓴 날은 보이지 않는다", () => {
     renderItem();
     expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤")).toBeInTheDocument();
     // 평점은 별 그림 없이 숫자만 보이고, 화면 낭독기에는 무엇의 숫자인지 알려 줘요.
     expect(screen.getByText("4.5")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByText("평점 5점 만점에 4.5점")).toBeInTheDocument();
     expect(screen.getByText(/버스는 오지 않아도/)).toHaveTextContent("한줄평: “버스는 오지 않아도, 기다림은 끝내 도착한다.”");
-    expect(screen.getByRole("list", { name: "장르" })).toHaveTextContent("[드라마][음악]");
+    expect(screen.getByRole("list", { name: "장르" })).toHaveTextContent("[드라마][로맨스]");
     // 쓴 날(2026-11-08)은 최신순 정렬에만 쓰고 화면에는 보이지 않아요.
     expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
   });
@@ -58,9 +58,13 @@ describe("ReviewListItem", () => {
     expect(container.querySelector(".poster-frame svg")).toBeInTheDocument();
   });
 
-  it("번호 대신 '-' 표시를 보이되 읽지 않는다(목록이 이미 항목이라고 알려 주므로)", () => {
-    renderItem();
-    expect(screen.getByText("-")).toHaveAttribute("aria-hidden", "true");
+  it("앞에 '-'나 번호 없이 썸네일부터 시작하고, 한줄평은 글 칸 맨 아래에 붙는다", () => {
+    const { container } = renderItem();
+    expect(screen.queryByText("-")).not.toBeInTheDocument();
     expect(screen.queryByText("01")).not.toBeInTheDocument();
+    // article의 첫 자식이 썸네일(포스터 상자)이에요.
+    expect(container.querySelector("article")?.firstElementChild).toHaveClass("poster-frame");
+    // 한줄평은 mt-auto로 글 칸(세로로 쌓는 flex) 맨 아래에 붙어요.
+    expect(screen.getByText(/버스는 오지 않아도/).closest("p")).toHaveClass("mt-auto");
   });
 });

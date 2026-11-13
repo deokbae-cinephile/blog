@@ -71,8 +71,8 @@ export const metadata: Metadata = {
   // 대표 주소 같은 "상대 주소"를 "전체 주소"로 바꿀 때 기준이 되는 주소예요.
   metadataBase: new URL(`${siteUrl}/`),
   // 브라우저 탭 제목 규칙
-  //  - default: 페이지가 제목을 정하지 않으면 "덕배의 영화 블로그"
-  //  - template: 페이지가 "겨울 정류장 리뷰"라고 정하면 "겨울 정류장 리뷰 — 덕배의 영화 블로그" (%s 자리에 들어가요)
+  //  - default: 페이지가 제목을 정하지 않으면 "DMB"
+  //  - template: 페이지가 "겨울 정류장 리뷰"라고 정하면 "겨울 정류장 리뷰 — DMB" (%s 자리에 들어가요)
   title: { default: site.name, template: `%s — ${site.name}` },
   // 검색 결과에 보이는 설명
   description: site.description,

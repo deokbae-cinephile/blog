@@ -12,8 +12,8 @@ import manifest from "./manifest";
 describe("manifest", () => {
   it("이름, 시작 주소, 앱 창 방식, 색을 정한다", () => {
     expect(manifest()).toMatchObject({
-      name: "덕배의 영화 블로그",
-      short_name: "덕배의 영화",
+      name: "DMB",
+      short_name: "DMB",
       lang: "ko",
       start_url: "./",
       scope: "./",

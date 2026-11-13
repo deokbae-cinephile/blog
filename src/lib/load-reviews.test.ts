@@ -34,7 +34,7 @@ const base = {
   title: "겨울 정류장",
   year: "2024",
   director: "한서윤",
-  genres: "[드라마, 음악]",
+  genres: "[드라마, 로맨스]",
   rating: "4.5",
   oneLiner: "기다림은 끝내 도착한다",
   publishedAt: "2026-11-08",
@@ -68,7 +68,7 @@ describe("loadReviews", () => {
       slug: "winter-stop",
       title: "겨울 정류장",
       year: 2024,
-      genres: ["드라마", "음악"],
+      genres: ["드라마", "로맨스"],
       rating: 4.5,
       html: "<h2>좋았던 점</h2>\n<p>눈 내리는 소리</p>",
     });

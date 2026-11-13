@@ -1,5 +1,5 @@
 /**
- * @file 리뷰 고치기·지우기 API (app/api/reviews/[slug]/route.ts → 주소 "/api/reviews/<주소>")
+ * @file 리뷰 수정·삭제 API (app/api/reviews/[slug]/route.ts → 주소 "/api/reviews/<주소>")
  *
  * 이 파일이 하는 일
  *   - PUT    /api/reviews/winter-stop : 고친 내용(칸 값 + 올린 사진 + 처음 원고 sha)을 검사하고 커밋해요.
@@ -18,7 +18,7 @@ import { guardAdminRequest } from "@/lib/admin-auth";
 import { errorResponse, readJson } from "@/lib/api-response";
 import { deleteReview, saveReview, savePayloadSchema } from "@/lib/review-store";
 
-/** 리뷰 고치기 */
+/** 리뷰 수정 */
 export async function PUT(request: NextRequest, ctx: RouteContext<"/api/reviews/[slug]">) {
   const denied = await guardAdminRequest(request);
   if (denied) return denied;
@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest, ctx: RouteContext<"/api/reviews/
   }
 
   try {
-    // 고치기는 주소를 바꾸지 않아요. 칸 값의 slug 대신 화면 주소의 slug를 써요.
+    // 수정할 때는 주소를 바꾸지 않아요. 칸 값의 slug 대신 화면 주소의 slug를 써요.
     const { slug } = await ctx.params;
     return Response.json(await saveReview("update", slug, payload.data));
   } catch (error) {
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, ctx: RouteContext<"/api/reviews/
   }
 }
 
-/** 리뷰 지우기 */
+/** 리뷰 삭제 */
 export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/reviews/[slug]">) {
   const denied = await guardAdminRequest(request);
   if (denied) return denied;

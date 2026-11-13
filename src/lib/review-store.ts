@@ -1,24 +1,24 @@
 /**
- * @file 리뷰 저장·고치기·지우기 (review-store.ts)
+ * @file 리뷰 추가·수정·삭제 (review-store.ts)
  *
  * 이 파일이 하는 일
  *   저장 API(app/api/reviews/**)가 받은 글쓰기 내용을 검사하고, GitHub 저장소에 커밋으로 올려요.
  *
- *     쓰기(create)   : content/reviews/<주소>.md + 포스터 + 장면 사진을 커밋 하나로 더해요.
- *     고치기(update) : 원고를 바꾸고, 더 쓰지 않는 이 리뷰의 포스터·장면 사진은 지워요(저장소를 가볍게).
- *     지우기(delete) : 원고와 이 리뷰의 포스터·장면 사진 폴더를 지워요.
+ *     추가(create) : content/reviews/<주소>.md + 포스터 + 장면 사진을 커밋 하나로 더해요.
+ *     수정(update) : 원고를 바꾸고, 더 쓰지 않는 이 리뷰의 포스터·장면 사진은 지워요(저장소를 가볍게).
+ *     삭제(delete) : 원고와 이 리뷰의 포스터·장면 사진 폴더를 지워요.
  *     (단, 다른 리뷰 원고가 가져다 쓰는 파일은 지우지 않아요. withoutReferenced 참고)
  *
  * 저장 전에 하는 검사
  *   1. 칸 검사: 글쓰기 화면과 같은 규칙(lib/review-form.ts). 본문 사진은 빌드와 같은 도구로 한 번 더 봐요.
  *   2. 주소 겹침: 새 글의 주소가 이미 있으면 막아요.
  *   3. 고치는 사이 바뀜: 글쓰기 화면을 연 뒤 다른 곳(다른 탭 등)에서 먼저 고쳤으면 덮어쓰지 않고 알려요.
- *      고치기 요청에는 처음 불러온 원고의 번호(baseSha)가 꼭 있어야 해요.
+ *      수정 요청에는 처음 불러온 원고의 번호(baseSha)가 꼭 있어야 해요.
  *   4. 파일 확인: 포스터와 본문 사진이 저장소에 있거나 이번에 올린 파일인지(빌드할 때 원고 검사와 같은 확인)
  *   이 검사를 통과해야 커밋해요. 그래서 저장된 글 때문에 빌드가 실패하는 일이 없어요.
  *
  * 누가 쓰나요?
- *   app/api/reviews/route.ts(쓰기), app/api/reviews/[slug]/route.ts(고치기·지우기), app/write/[slug]/page.tsx(고칠 원고 읽기)
+ *   app/api/reviews/route.ts(추가), app/api/reviews/[slug]/route.ts(수정·삭제), app/write/[slug]/page.tsx(고칠 원고 읽기)
  */
 
 import "server-only";
@@ -68,7 +68,7 @@ export const savePayloadSchema = z.object({
   }),
   // 이번에 올린 사진 목록. 한 번에 50장까지 받아요.
   uploads: z.array(z.object({ path: z.string(), sha: z.string() })).max(50),
-  // 고치기 화면이 처음 불러온 원고의 sha. 그사이 바뀌었는지 확인하는 데 써요(새 글이면 없어요).
+  // 수정 화면이 처음 불러온 원고의 sha. 그사이 바뀌었는지 확인하는 데 써요(새 글이면 없어요).
   baseSha: z.string().optional(),
 });
 
@@ -154,7 +154,7 @@ async function withoutReferenced(candidates: string[], commitSha: string, slug: 
 }
 
 /**
- * 고치기 화면에 보여 줄 원고를 저장소에서 읽어요.
+ * 수정 화면에 보여 줄 원고를 저장소에서 읽어요.
  *
  * @param slug 리뷰 주소
  * @returns 원고 글자(source), 그 내용 번호(sha, 저장할 때 바뀌었는지 비교해요). 없는 리뷰면 null
@@ -170,8 +170,8 @@ export async function loadReviewSource(slug: string): Promise<{ source: string; 
 /**
  * 리뷰를 새로 쓰거나 고쳐서 저장소에 커밋해요.
  *
- * @param mode "create"(새 글) 또는 "update"(고치기)
- * @param slug 리뷰 주소(새 글이면 칸에 적은 주소, 고치기면 화면 주소의 것)
+ * @param mode "create"(추가) 또는 "update"(수정)
+ * @param slug 리뷰 주소(추가면 칸에 적은 주소, 수정이면 화면 주소의 것)
  * @param payload 화면이 보낸 칸 값·올린 사진·처음 원고 sha
  * @returns 새 커밋 번호와 저장한 주소
  * @throws {ReviewStoreError} 칸 오류(422), 주소 겹침·그사이 바뀜(409), 없는 리뷰(404), 올린 파일 경로 오류(400)
@@ -211,7 +211,7 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
   // 이 원고가 실제로 쓰는 파일들(포스터 + 본문 사진)
   const used = new Set([...images, ...(posterFile ? [posterPath(posterFile)] : [])]);
 
-  const message = mode === "create" ? `리뷰 쓰기: ${frontmatter.title}` : `리뷰 고치기: ${frontmatter.title}`;
+  const message = mode === "create" ? `리뷰 추가: ${frontmatter.title}` : `리뷰 수정: ${frontmatter.title}`;
   const commitSha = await commitChanges(message, async (snapshot) => {
     const currentSha = snapshot.files.get(reviewPath(slug));
 
@@ -220,13 +220,13 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
       throw new ReviewStoreError(409, "같은 주소의 리뷰가 이미 있습니다.", { slug: "이미 같은 주소의 리뷰가 있습니다. 다른 주소를 적어 주세요. 예: winter-stop-2" });
     }
     if (mode === "update" && !currentSha) {
-      throw new ReviewStoreError(404, "고치려는 리뷰가 저장소에 없습니다. 다른 곳에서 지웠을 수 있습니다. 목록에서 다시 확인해 주세요.");
+      throw new ReviewStoreError(404, "수정하려는 리뷰가 저장소에 없습니다. 다른 곳에서 삭제했을 수 있습니다. 목록에서 다시 확인해 주세요.");
     }
     if (mode === "update" && !payload.baseSha) {
-      throw new ReviewStoreError(400, "처음 불러온 원고 정보가 없어 저장하지 않았습니다. 화면을 새로 고친 뒤 다시 고쳐 주세요.");
+      throw new ReviewStoreError(400, "처음 불러온 원고 정보가 없어 저장하지 않았습니다. 화면을 새로 고친 뒤 다시 수정해 주세요.");
     }
     if (mode === "update" && currentSha !== payload.baseSha) {
-      throw new ReviewStoreError(409, "이 리뷰를 다른 곳에서 먼저 고쳤습니다. 내용을 따로 복사해 둔 뒤 화면을 새로 고쳐 최신 원고에서 다시 고쳐 주세요.");
+      throw new ReviewStoreError(409, "이 리뷰를 다른 곳에서 먼저 수정했습니다. 내용을 따로 복사해 둔 뒤 화면을 새로 고쳐 최신 원고에서 다시 수정해 주세요.");
     }
 
     // 5) 파일 확인: 저장소에 있거나 이번에 올린 파일이어야 해요.
@@ -276,13 +276,13 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
 export async function deleteReview(slug: string): Promise<{ commitSha: string; title: string }> {
   // 커밋 메시지에 제목을 넣으려고 먼저 원고를 읽어요.
   const current = await loadReviewSource(slug);
-  if (!current) throw new ReviewStoreError(404, "지우려는 리뷰가 저장소에 없습니다. 이미 지웠을 수 있습니다.");
+  if (!current) throw new ReviewStoreError(404, "삭제하려는 리뷰가 저장소에 없습니다. 이미 삭제했을 수 있습니다.");
   const parsed = parseReviewFile(current.source);
   const title = parsed.ok && parsed.values.title ? parsed.values.title : slug;
 
-  const commitSha = await commitChanges(`리뷰 지우기: ${title}`, async (snapshot) => {
+  const commitSha = await commitChanges(`리뷰 삭제: ${title}`, async (snapshot) => {
     const sha = snapshot.files.get(reviewPath(slug));
-    if (!sha) throw new ReviewStoreError(404, "지우려는 리뷰가 저장소에 없습니다. 이미 지웠을 수 있습니다.");
+    if (!sha) throw new ReviewStoreError(404, "삭제하려는 리뷰가 저장소에 없습니다. 이미 삭제했을 수 있습니다.");
     const changes: FileChange[] = [{ path: reviewPath(slug), sha: null }];
     const candidates: string[] = [];
     // 포스터: "이 리뷰 것"일 때만 지울 후보예요.

@@ -6,7 +6,7 @@
  *   설정 없이 폼을 보여 주면 다 쓰고 나서야 저장이 안 된다는 것을 알게 되니, 먼저 알려 주는 편이 친절해요.
  *
  * 누가 쓰나요?
- *   app/write/page.tsx(새 리뷰), app/write/[slug]/page.tsx(고치기)
+ *   app/write/page.tsx(리뷰 추가), app/write/[slug]/page.tsx(리뷰 수정)
  *   (page.tsx에서는 정해진 이름만 내보낼 수 있어서, 두 화면이 함께 쓰는 조각은 components에 둬요.)
  */
 

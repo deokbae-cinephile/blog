@@ -12,7 +12,7 @@
  *     본문 첫 문단...           ← 본문(Markdown)
  *
  *   이 파일은 원고 글자 ↔ 글쓰기 화면의 칸(제목, 평점, 본문 ...)을 서로 바꿔 줘요.
- *     - parseReviewFile: 원고 글자 → 칸 값. "Markdown 파일 불러오기"와 "고치기" 화면이 써요.
+ *     - parseReviewFile: 원고 글자 → 칸 값. "Markdown 파일 불러오기"와 "리뷰 수정" 화면이 써요.
  *     - serializeReviewFile: 검사를 통과한 칸 값 → 원고 글자. 저장할 때 서버가 써요.
  *
  * 화면(브라우저)과 서버가 함께 써요
@@ -20,7 +20,7 @@
  *   같은 파일을 쓰니 "불러온 원고"와 "저장한 원고"의 모양이 늘 같아요.
  *
  * 누가 쓰나요?
- *   components/review-writer.tsx(불러오기·고치기), lib/review-store.ts(저장)
+ *   components/review-writer.tsx(불러오기·수정), lib/review-store.ts(저장)
  */
 
 import { parse, stringify } from "yaml";

@@ -120,14 +120,14 @@ describe("github", () => {
   it("그사이 다른 커밋이 올라와 브랜치를 못 옮기면(422) 최신 모습으로 한 번 더 시도한다", async () => {
     refFailures = 1;
     const build = vi.fn(() => [{ path: "content/reviews/b.md", sha: "blob-b" }]);
-    expect(await commitChanges("고치기", build)).toBe("new-commit");
+    expect(await commitChanges("리뷰 수정", build)).toBe("new-commit");
     // 바꿀 파일 목록도 최신 모습으로 다시 만들어요.
     expect(build).toHaveBeenCalledTimes(2);
   });
 
   it("두 번 모두 못 옮기면 포기하고 알린다", async () => {
     refFailures = 2;
-    await expect(commitChanges("고치기", () => [])).rejects.toBeInstanceOf(GitHubError);
+    await expect(commitChanges("리뷰 수정", () => [])).rejects.toBeInstanceOf(GitHubError);
   });
 
   it.each([

@@ -19,7 +19,7 @@ year: 2024
 country: 한국
 director: 한서윤
 runtime: 112
-genres: [드라마, 음악]
+genres: [드라마, 로맨스]
 rating: 4.5
 oneLiner: 버스는 오지 않아도, 기다림은 끝내 도착한다.
 publishedAt: 2026-11-08
@@ -44,7 +44,7 @@ describe("parseReviewFile", () => {
         country: "한국",
         director: "한서윤",
         runtime: "112",
-        genres: ["드라마", "음악"],
+        genres: ["드라마", "로맨스"],
         rating: "4.5",
         oneLiner: "버스는 오지 않아도, 기다림은 끝내 도착한다.",
         poster: "winter-stop.jpg",
@@ -62,9 +62,9 @@ describe("parseReviewFile", () => {
   });
 
   it("장르를 하나만 적거나, 목록에 없는 장르(예전 장르)를 적어도 읽을 수 있는 것만 남긴다", () => {
-    const one = parseReviewFile(SOURCE.replace("genres: [드라마, 음악]", "genres: 드라마"));
+    const one = parseReviewFile(SOURCE.replace("genres: [드라마, 로맨스]", "genres: 드라마"));
     expect(one.ok && one.values.genres).toEqual(["드라마"]);
-    const old = parseReviewFile(SOURCE.replace("genres: [드라마, 음악]", "genres: [SF, 드라마, 로맨스]"));
+    const old = parseReviewFile(SOURCE.replace("genres: [드라마, 로맨스]", "genres: [SF, 드라마, 음악]"));
     expect(old.ok && old.values.genres).toEqual(["드라마"]);
   });
 
@@ -89,7 +89,7 @@ describe("serializeReviewFile", () => {
       title: "겨울 정류장",
       year: 2024,
       director: "한서윤",
-      genres: ["드라마", "음악"],
+      genres: ["드라마", "로맨스"],
       rating: 4.5,
       oneLiner: "버스는 오지 않아도, 기다림은 끝내 도착한다.",
       publishedAt: "2026-11-08",
@@ -100,7 +100,7 @@ describe("serializeReviewFile", () => {
         "title: 겨울 정류장",
         "year: 2024",
         "director: 한서윤",
-        "genres: [드라마, 음악]",
+        "genres: [드라마, 로맨스]",
         "rating: 4.5",
         "oneLiner: 버스는 오지 않아도, 기다림은 끝내 도착한다.",
         "publishedAt: 2026-11-08",

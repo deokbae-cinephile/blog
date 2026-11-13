@@ -1,26 +1,30 @@
 /**
- * @file 리뷰 라이터 = 글쓰기·고치기 화면 (review-writer.tsx)
+ * @file 리뷰 라이터 = 리뷰 추가·수정 화면 (review-writer.tsx)
  *
  * 이 파일이 하는 일
- *   글쓴이가 리뷰를 쓰고 고치는 폼이에요. 본문은 Markdown으로 써요.
+ *   글쓴이가 리뷰를 추가하고 수정하는 폼이에요. 본문은 Markdown으로 써요.
  *
  *     [Markdown 파일 불러오기]  ← .md 원고를 고르면 칸이 바로 채워져요(불러오면 바로 적용)
- *     ┌ 영화 정보 ─────────────────────────────┐
- *     │ 주소(영문) · 제목 · 원제 · 개봉 연도 · 제작 국가 · 감독 · 상영 시간 │
- *     │ 장르(여러 개) · 평점(0.5~5) · 한줄평     │
- *     ├ 포스터 ─────────────────────────────────┤
- *     │ [미리보기] [포스터 고르기] [포스터 빼기] · 포스터 설명 │
- *     ├ 본문(Markdown) ─────────────────────────┤
+ *     넓은 화면(1024px~)은 3칸: [포스터 | 영화 정보 2열 × 5행]
+ *     ┌ 포스터 ──────┐ ┌ 영화 정보 ─────────────────────────────┐
+ *     │ [미리보기]    │ │ 주소(영문)        │ 제목              │
+ *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도          │
+ *     │ [포스터 빼기] │ │ 제작 국가         │ 감독              │
+ *     │              │ │ 상영 시간         │ 장르(여러 개)      │
+ *     │              │ │ 평점(0.5~5)       │ 한줄평            │
+ *     └──────────────┘ └──────────────────────────────────────┘
+ *     ┌ 본문(Markdown) ──────────────────────────────────────┐
  *     │ [장면 사진 넣기] → 커서 자리에 ![](/images/...) 줄이 들어가요 │
- *     │ <textarea>                               │
- *     └─────────────────────────────────────────┘
+ *     │ <textarea>                                           │
+ *     └──────────────────────────────────────────────────────┘
  *     [저장] [취소]
+ *   좁은 화면에서는 한 칸으로, 포스터 → 영화 정보 → 본문 차례로 쌓여요(코드 순서도 같아서 읽는 순서가 같아요).
  *
  * 저장하는 순서
  *   1. 칸 검사(lib/review-form.ts) — 틀린 칸이 있으면 "고칠 곳" 목록을 보여 주고 거기로 초점을 옮겨요.
  *   2. 새로 고른 포스터·장면 사진을 한 장씩 올려요(app/api/images). 본문에서 지운 사진은 올리지 않아요.
  *   3. 칸 값과 올린 사진 목록을 저장 API(app/api/reviews)로 보내요. 서버가 검사한 뒤 저장소에 커밋해요.
- *   4. "저장했습니다" 안내. 호스팅이 다시 배포하면(보통 1~2분) 블로그에 보여요.
+ *   4. "저장했습니다" 안내. GitHub Actions가 검사한 뒤 다시 배포하면(몇 분 뒤) 블로그에 보여요.
  *
  * 사진 원본은 고치지 않아요
  *   고른 파일을 그대로 올려요. 화면에서만 형광 초록 4단계 명암과 주사선으로 바꿔 보여 줘요(SVG 필터).
@@ -30,7 +34,7 @@
  *   저장에 성공하면 폼을 떠나므로(저장 완료 안내로 바뀌어요) 잠금을 풀지 않고, 실패했을 때만 풀어요.
  *
  * 누가 쓰나요?
- *   app/write/page.tsx(새 리뷰), app/write/[slug]/page.tsx(고치기)
+ *   app/write/page.tsx(리뷰 추가), app/write/[slug]/page.tsx(리뷰 수정)
  */
 
 "use client";
@@ -52,12 +56,12 @@ import { Choice, ChoiceGroup } from "./choice-chips";
  * 1. 화면이 받는 값과 정해 둔 값
  * ────────────────────────────────────────────────────────────── */
 
-/** ReviewWriter가 받는 값. 새 리뷰면 mode만, 고치기면 원고와 그 내용 번호까지 받아요. */
+/** ReviewWriter가 받는 값. 리뷰 추가면 mode만, 수정이면 원고와 그 내용 번호까지 받아요. */
 type Props =
   | { mode: "create" }
   | {
       mode: "edit";
-      /** 고칠 리뷰 주소 */
+      /** 수정할 리뷰 주소 */
       slug: string;
       /** 저장소에서 읽은 원고 글자 */
       source: string;
@@ -70,6 +74,8 @@ const RATINGS = Array.from({ length: 10 }, (_, index) => ((index + 1) / 2).toFix
 
 /** 칸 이름(화면에 보이는 이름). 고칠 곳 목록에서 "제목: 제목을 입력하세요."처럼 써요. */
 const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
+  poster: "포스터",
+  posterAlt: "포스터 설명",
   slug: "주소(영문)",
   title: "제목",
   originalTitle: "원제",
@@ -80,13 +86,14 @@ const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
   genres: "장르",
   rating: "평점",
   oneLiner: "한줄평",
-  poster: "포스터",
-  posterAlt: "포스터 설명",
   body: "본문",
   publishedAt: "글 쓴 날",
 };
 
-/** 고칠 곳 목록을 보여 줄 순서(화면에 놓인 순서와 같아요) */
+/**
+ * 고칠 곳 목록을 보여 줄 순서(화면에 놓인 순서와 같아요).
+ * 포스터 설명(posterAlt)은 화면에 칸이 없어요. 원고에 적혀 있으면 그대로 두고, 없으면 상세 화면이 "영화 ‘제목’ 포스터"로 읽어요.
+ */
 const FIELD_ORDER = Object.keys(FIELD_LABELS) as (keyof ReviewFormValues)[];
 
 /** 원고 파일 이름에서 주소를 만들어요. "winter-stop.md" → "winter-stop". 규칙에 맞지 않으면 "" */
@@ -99,20 +106,23 @@ function slugFromFileName(name: string): string {
  * 2. 글쓰기 폼
  * ────────────────────────────────────────────────────────────── */
 
-/** 리뷰 쓰기·고치기 폼 */
+/** 리뷰 추가·수정 폼 */
 export function ReviewWriter(props: Props) {
   const { mode } = props;
-  // 고치기 화면이면 원고를 읽어 처음 칸 값을 만들어요(처음 한 번만 계산: useState(() => ...)).
+  // 수정 화면이면 원고를 읽어 처음 칸 값을 만들어요(처음 한 번만 계산: useState(() => ...)).
   const [initial] = useState(() => initialState(props));
   const [values, setValues] = useState<ReviewFormValues>(initial.values);
   // 칸별 오류 문구
   const [errors, setErrors] = useState<FieldErrors>({});
-  // 결과 안내(불러옴, 사진 넣음, 올리는 중) — role="status"
+  // 결과 안내(불러옴, 포스터 고름, 올리는 중) — role="status"
   const [notice, setNotice] = useState(initial.notice);
+  // 화면에는 보이지 않고 화면 낭독기만 읽는 안내(장면 사진을 넣었을 때) — role="status"
+  const [quietNotice, setQuietNotice] = useState("");
   // 칸과 상관없는 실패(연결 끊김, 그사이 바뀜 등) — role="alert"
   const [failure, setFailure] = useState(initial.failure);
-  // 새로 고른 포스터: 파일과 미리보기 주소(브라우저 안에서만 쓰는 blob: 주소). 고르지 않았으면 null
-  const [poster, setPoster] = useState<{ file: File; url: string } | null>(null);
+  // 새로 고른 포스터: 파일, 미리보기 주소(브라우저 안에서만 쓰는 blob: 주소), 확장자. 고르지 않았으면 null
+  // 확장자를 따로 기억하는 까닭: 포스터 파일 이름은 <주소>.<확장자>인데, 주소를 포스터보다 나중에 적어도 이름을 만들 수 있게요.
+  const [poster, setPoster] = useState<{ file: File; url: string; extension: string } | null>(null);
   // 새로 고른 포스터 파일(없으면 null). 아래 코드에서 자주 써서 이름을 붙여 둬요.
   const posterFile = poster?.file ?? null;
   // 본문에 넣은 장면 사진: 사이트 주소("/images/<주소>/scene-1.jpg") → 파일
@@ -137,7 +147,7 @@ export function ReviewWriter(props: Props) {
   const baseId = useId();
   const fieldId = (field: keyof ReviewFormValues) => `${baseId}-${field}`;
 
-  // 주소가 규칙에 맞는지(사진 파일 이름을 주소로 정해서, 사진을 넣기 전에 필요해요)
+  // 주소가 규칙에 맞는지(장면 사진은 주소 폴더에 저장해서, 사진을 넣기 전에 필요해요)
   const slugReady = SLUG.test(values.slug);
 
   /* ── 칸 값 바꾸기 ── */
@@ -149,7 +159,7 @@ export function ReviewWriter(props: Props) {
   }
 
   /**
-   * 주소를 바꿔요(새 리뷰만). 이미 넣은 사진의 주소도 함께 바꿔요.
+   * 주소를 바꿔요(리뷰 추가만). 이미 넣은 사진의 주소도 함께 바꿔요.
    * 사진은 public/images/<주소>/에 저장되고 포스터는 <주소>.jpg가 되어서, 주소가 바뀌면 경로도 따라 바뀌어야 해요.
    * 주소 칸을 비우는 동안에는 사진 주소를 그대로 두었다가, 다시 적으면 그 주소로 바꿔요.
    */
@@ -161,8 +171,8 @@ export function ReviewWriter(props: Props) {
       slug: next,
       // 본문의 "/images/예전주소/"를 "/images/새주소/"로 바꿔요.
       body: moveImages ? current.body.replaceAll(`/images/${imagesSlug}/`, `/images/${next}/`) : current.body,
-      // 새로 고른 포스터가 있으면 파일 이름도 새 주소로
-      poster: posterFile && current.poster ? `${next}.${extensionOf(current.poster)}` : current.poster,
+      // 새로 고른 포스터가 있으면 파일 이름도 새 주소로. 주소가 아직 규칙에 맞지 않으면 이름을 비워 두고 맞춰지면 채워요.
+      poster: poster ? (SLUG.test(next) ? `${next}.${poster.extension}` : "") : current.poster,
     }));
     if (moveImages) {
       setScenes(new Map([...scenes].map(([path, file]) => [path.replace(`/images/${imagesSlug}/`, `/images/${next}/`), file])));
@@ -201,9 +211,9 @@ export function ReviewWriter(props: Props) {
 
     setValues((current) => ({
       ...parsed.values,
-      // 주소: 고치기 화면은 바꾸지 않아요. 새 리뷰는 적어 둔 주소가 없으면 파일 이름으로 채워요.
+      // 주소: 수정 화면은 바꾸지 않아요. 새 리뷰는 적어 둔 주소가 없으면 파일 이름으로 채워요.
       slug: mode === "edit" ? current.slug : current.slug || slugFromFileName(file.name),
-      // 글 쓴 날: 원고에 없으면 지금 값을 그대로 둬요(고치기에서 날짜가 사라지지 않게).
+      // 글 쓴 날: 원고에 없으면 지금 값을 그대로 둬요(수정할 때 날짜가 사라지지 않게).
       publishedAt: parsed.values.publishedAt || current.publishedAt,
     }));
     // 새로 골라 둔 포스터는 불러온 원고의 포스터로 바뀌니 버려요.
@@ -216,16 +226,14 @@ export function ReviewWriter(props: Props) {
 
   /* ── 포스터 ── */
 
-  /** [포스터 고르기]로 그림을 고르면 미리보기를 보여 주고, 저장할 때 올려요. */
+  /**
+   * [포스터 고르기]로 그림을 고르면 미리보기를 보여 주고, 저장할 때 올려요.
+   * 주소(영문)보다 먼저 골라도 돼요. 파일 이름(<주소>.jpg)은 주소를 적는 대로 맞춰져요(changeSlug).
+   */
   function handlePosterChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!slugReady) {
-      setErrors((current) => ({ ...current, slug: "포스터를 넣기 전에 주소(영문)를 먼저 적어 주세요. 포스터 파일 이름이 주소로 정해집니다." }));
-      document.getElementById(fieldId("slug"))?.focus();
-      return;
-    }
     const problem = uploadProblem(file, "poster");
     if (problem) {
       setErrors((current) => ({ ...current, poster: problem }));
@@ -234,8 +242,9 @@ export function ReviewWriter(props: Props) {
     // 확장자는 jpeg도 jpg로 맞춰 파일 이름을 <주소>.jpg처럼 정해요.
     const extension = extensionOf(file.name).replace("jpeg", "jpg");
     // URL.createObjectURL: 고른 파일을 서버에 올리지 않고도 화면에 보여 줄 수 있는 임시 주소(blob:)를 만들어요.
-    setPoster({ file, url: URL.createObjectURL(file) });
-    setField("poster", `${values.slug}.${extension}`);
+    setPoster({ file, url: URL.createObjectURL(file), extension });
+    // 주소가 이미 있으면 파일 이름을 바로 정하고, 아직이면 비워 둬요(주소를 적으면 채워져요).
+    setField("poster", slugReady ? `${values.slug}.${extension}` : "");
     setNotice(`포스터로 ${file.name}을(를) 골랐습니다. 저장하면 함께 올라갑니다.`);
   }
 
@@ -298,7 +307,8 @@ export function ReviewWriter(props: Props) {
       setField("body", `${before}${insert}${values.body.slice(end).replace(/^\s*/, "")}`);
       // 커서는 첫 사진의 ![ 바로 뒤(설명을 적을 자리)에 둬요.
       caretRef.current = before.length + (before ? 2 : 0) + 2;
-      setNotice(`사진 ${lines.length}장을 본문에 넣었습니다. ![ ] 괄호 안에 사진 설명을 적어 주세요. 사진 아래 설명(캡션)은 주소 뒤에 "설명"처럼 적습니다.`);
+      // 화면에는 안내 글을 띄우지 않아요. 본문에 넣은 줄이 바로 보이니까요. 화면 낭독기에만 짧게 알려요(quietNotice).
+      setQuietNotice(`사진 ${lines.length}장을 본문에 넣었습니다.`);
     }
     if (problems.length > 0) setErrors((current) => ({ ...current, body: problems.join(" ") }));
   }
@@ -404,7 +414,7 @@ export function ReviewWriter(props: Props) {
         <h2 id={`${baseId}-saved`} ref={savedRef} tabIndex={-1} className="glow text-big outline-none">
           저장했습니다
         </h2>
-        <p>저장소에 올렸습니다. 블로그를 다시 배포하는 동안(보통 1~2분) 기다린 뒤 새로 고치면 보입니다.</p>
+        <p>저장소에 올렸습니다. 블로그를 다시 배포하는 동안(몇 분) 기다린 뒤 새로 고치면 보입니다.</p>
         <ul className="flex flex-wrap gap-2">
           <li>
             <Link href={`/reviews/${savedSlug}`} className="btn-line">
@@ -417,9 +427,9 @@ export function ReviewWriter(props: Props) {
             </Link>
           </li>
           <li>
-            {/* 새 글쓰기 화면을 처음 상태로 다시 열어요(같은 화면이라 페이지를 새로 받아요). */}
+            {/* 리뷰 추가 화면을 처음 상태로 다시 열어요(같은 화면이라 페이지를 새로 받아요). */}
             <a href="/write" className="btn-line">
-              새 리뷰 쓰기
+              리뷰 추가
             </a>
           </li>
         </ul>
@@ -444,10 +454,14 @@ export function ReviewWriter(props: Props) {
         </p>
       </div>
 
-      {/* 결과 안내(불러옴·사진 넣음·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
+      {/* 결과 안내(불러옴·포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
           영역은 처음부터 두고 글자만 바꿔야 읽어 줘요. 비어 있을 때는 empty:sr-only로 화면에서만 숨겨 빈 간격이 생기지 않게 해요. */}
       <p role="status" className="empty:sr-only">
         {notice}
+      </p>
+      {/* 화면 낭독기만 읽는 안내(장면 사진을 넣었을 때). 화면에는 보이지 않아요. */}
+      <p role="status" className="sr-only">
+        {quietNotice}
       </p>
       {/* 칸과 상관없는 실패. role="alert": 바로 읽어 줘요. */}
       <p role="alert" className="alert-text empty:sr-only">
@@ -478,166 +492,163 @@ export function ReviewWriter(props: Props) {
         </div>
       )}
 
-      {/* 영화 정보 */}
-      <fieldset className="grid gap-6" disabled={saving}>
-        <legend className="glow mb-4 text-big">영화 정보</legend>
-
-        {mode === "create" ? (
-          <TextField
-            id={fieldId("slug")}
-            label={FIELD_LABELS.slug}
-            required
-            hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: winter-stop → /reviews/winter-stop"
-            error={errors.slug}
-            value={values.slug}
-            onChange={changeSlug}
-            spellCheck={false}
-            autoCapitalize="none"
-          />
-        ) : (
-          <p>
-            <span className="text-crt-dim">주소(영문): </span>/reviews/{values.slug} <span className="text-crt-dim">(고치기에서는 바꿀 수 없습니다)</span>
-          </p>
-        )}
-
-        <TextField id={fieldId("title")} label={FIELD_LABELS.title} required error={errors.title} value={values.title} onChange={(value) => setField("title", value)} />
-        <TextField
-          id={fieldId("originalTitle")}
-          label={FIELD_LABELS.originalTitle}
-          error={errors.originalTitle}
-          value={values.originalTitle}
-          onChange={(value) => setField("originalTitle", value)}
-        />
-        {/* 숫자 칸: inputMode="numeric"이면 휴대폰에서 숫자 자판이 떠요(type="number"의 화살표·스크롤 문제는 피해요). */}
-        <TextField
-          id={fieldId("year")}
-          label={FIELD_LABELS.year}
-          required
-          hint="숫자 네 자리. 예: 2024"
-          error={errors.year}
-          value={values.year}
-          onChange={(value) => setField("year", value)}
-          inputMode="numeric"
-        />
-        <TextField id={fieldId("country")} label={FIELD_LABELS.country} error={errors.country} value={values.country} onChange={(value) => setField("country", value)} />
-        <TextField
-          id={fieldId("director")}
-          label={FIELD_LABELS.director}
-          required
-          hint="여러 명이면 쉼표로 나눕니다. 예: 한서윤, 김도윤"
-          error={errors.director}
-          value={values.director}
-          onChange={(value) => setField("director", value)}
-        />
-        <TextField
-          id={fieldId("runtime")}
-          label={`${FIELD_LABELS.runtime}(분)`}
-          error={errors.runtime}
-          value={values.runtime}
-          onChange={(value) => setField("runtime", value)}
-          inputMode="numeric"
-        />
-
-        {/* 장르: 여러 개 고르는 체크박스 칩. 도움말과 오류 문구는 묶음 설명(aria-describedby)으로 이어요. */}
-        <div className="grid gap-2">
-          <ChoiceGroup
-            legend={
-              <>
-                {FIELD_LABELS.genres} <span className="text-crt-dim">(필수)</span>
-              </>
-            }
-            describedBy={[`${fieldId("genres")}-hint`, errors.genres ? `${fieldId("genres")}-error` : ""].filter(Boolean).join(" ")}
-          >
-            {GENRES.map((genre, index) => (
-              <Choice
-                key={genre}
-                id={`${fieldId("genres")}-${index}`}
-                type="checkbox"
-                name="genres"
-                checked={values.genres.includes(genre)}
-                onChange={() => toggleGenre(genre)}
-              >
-                {genre}
-              </Choice>
-            ))}
-          </ChoiceGroup>
-          <p id={`${fieldId("genres")}-hint`} className="text-crt-dim">
-            여러 개 고를 수 있습니다.
-          </p>
-          <p id={`${fieldId("genres")}-error`} className="field-error">
-            {errors.genres}
-          </p>
-        </div>
-
-        {/* 평점: 0.5 ~ 5.0 중에서 고르기(0점은 없어요). 네이티브 <select>라 키보드·화면 낭독기가 그대로 써요. */}
-        <Field id={fieldId("rating")} label={FIELD_LABELS.rating} required hint="5점 만점, 0.5점 단위" error={errors.rating}>
-          {(describedBy) => (
-            <select
-              id={fieldId("rating")}
-              required
-              value={values.rating}
-              onChange={(event) => setField("rating", event.target.value)}
-              aria-invalid={errors.rating ? true : undefined}
-              aria-describedby={describedBy}
-              aria-errormessage={errors.rating ? `${fieldId("rating")}-error` : undefined}
-              className="field w-40"
-            >
-              <option value="">고르세요</option>
-              {RATINGS.map((rating) => (
-                <option key={rating} value={rating}>
-                  {rating}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-
-        <TextField
-          id={fieldId("oneLiner")}
-          label={FIELD_LABELS.oneLiner}
-          required
-          hint="목록의 셋째 줄과 상세 화면 맨 위에 보이는 한 문장"
-          error={errors.oneLiner}
-          value={values.oneLiner}
-          onChange={(value) => setField("oneLiner", value)}
-        />
-      </fieldset>
-
-      {/* 포스터 */}
-      <fieldset className="grid gap-6" disabled={saving}>
-        <legend className="glow mb-4 text-big">포스터</legend>
-        <div className="flex flex-wrap items-end gap-4">
-          {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(원본 파일은 그대로 올라가요). 꾸밈이라 alt를 비워요. */}
-          <span className="poster-frame relative block aspect-[2/3] w-32 shrink-0">
+      {/* 포스터와 영화 정보. 넓은 화면(lg, 1024px~)에서는 3칸으로 나눠 [포스터 | 영화 정보(2칸)]로 놓아요. */}
+      <div className="grid gap-10 lg:grid-cols-3 lg:gap-8">
+        {/* 포스터: 넓은 화면에서는 왼쪽 한 칸. 주소보다 먼저 골라도 돼요. */}
+        <fieldset className="grid content-start gap-4" disabled={saving}>
+          <legend className="glow mb-4 text-big">포스터</legend>
+          {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(원본 파일은 그대로 올라가요). 꾸밈이라 alt를 비워요.
+              w-40: 좁은 화면 10rem, lg:w-full: 넓은 화면에서는 왼쪽 칸 너비를 채워요(최대 18rem). */}
+          <span className="poster-frame relative block aspect-[2/3] w-40 shrink-0 lg:w-full lg:max-w-[18rem]">
             {posterSrc ? (
               // unoptimized: 브라우저 안의 blob: 주소는 이미지 최적화를 거칠 수 없어서 원본 그대로 보여 줘요.
-              <Image src={posterSrc} alt="" fill unoptimized sizes="128px" className="poster-image object-cover" />
+              <Image src={posterSrc} alt="" fill unoptimized sizes="(min-width: 1024px) 288px, 160px" className="poster-image object-cover" />
             ) : (
               <span className="grid h-full place-items-center text-crt-dim">없음</span>
             )}
           </span>
-          <div className="grid gap-2">
+          <div className="flex flex-wrap gap-2">
             <FileButton id={fieldId("poster")} label="포스터 고르기" accept={POSTER_ACCEPT} onChange={handlePosterChange} disabled={saving} describedBy={errors.poster ? `${fieldId("poster")}-error` : undefined} />
-            {values.poster && (
+            {(values.poster || posterFile) && (
               <button type="button" onClick={handlePosterRemove} className="btn-line">
                 포스터 빼기
               </button>
             )}
           </div>
-        </div>
-        <p className="text-crt-dim">가로 2 : 세로 3 비율(예: 600×900)이 가장 잘 맞습니다. 비율이 다르면 가운데를 기준으로 잘려 보입니다. JPG·PNG·WebP·AVIF, 4MB까지.</p>
-        <p id={`${fieldId("poster")}-error`} className="field-error">
-          {errors.poster}
-        </p>
-        <TextField
-          id={fieldId("posterAlt")}
-          label={FIELD_LABELS.posterAlt}
-          hint="화면 낭독기가 읽어 줄 한 문장. 비워 두면 “영화 ‘제목’ 포스터”라고 읽습니다."
-          error={errors.posterAlt}
-          value={values.posterAlt}
-          onChange={(value) => setField("posterAlt", value)}
-        />
-      </fieldset>
+          <p className="text-crt-dim">가로 2 : 세로 3 비율(예: 600×900)이 가장 잘 맞습니다. 비율이 다르면 가운데를 기준으로 잘려 보입니다. JPG·PNG·WebP·AVIF, 4MB까지.</p>
+          <p id={`${fieldId("poster")}-error`} className="field-error">
+            {errors.poster}
+          </p>
+        </fieldset>
+
+        {/* 영화 정보: 넓은 화면에서는 오른쪽 두 칸(lg:col-span-2)을 쓰고, 칸들을 2열로 놓아요(주소~한줄평 10칸 = 2열 × 5행).
+            content-start: 칸들이 위에서부터 놓이게 해요.
+            items-start: 같은 행의 옆 칸에 도움말이 길어도 이 칸(입력 상자)이 따라 늘어나지 않고 제 높이를 지켜요. */}
+        <fieldset className="grid content-start items-start gap-6 lg:col-span-2 lg:grid-cols-2 lg:gap-x-6" disabled={saving}>
+          <legend className="glow mb-4 text-big">영화 정보</legend>
+
+          {mode === "create" ? (
+            <TextField
+              id={fieldId("slug")}
+              label={FIELD_LABELS.slug}
+              required
+              hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: winter-stop → /reviews/winter-stop"
+              error={errors.slug}
+              value={values.slug}
+              onChange={changeSlug}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+          ) : (
+            <p>
+              <span className="text-crt-dim">주소(영문): </span>/reviews/{values.slug} <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다)</span>
+            </p>
+          )}
+
+          <TextField id={fieldId("title")} label={FIELD_LABELS.title} required error={errors.title} value={values.title} onChange={(value) => setField("title", value)} />
+          <TextField
+            id={fieldId("originalTitle")}
+            label={FIELD_LABELS.originalTitle}
+            error={errors.originalTitle}
+            value={values.originalTitle}
+            onChange={(value) => setField("originalTitle", value)}
+          />
+          {/* 숫자 칸: inputMode="numeric"이면 휴대폰에서 숫자 자판이 떠요(type="number"의 화살표·스크롤 문제는 피해요). */}
+          <TextField
+            id={fieldId("year")}
+            label={FIELD_LABELS.year}
+            required
+            hint="숫자 네 자리. 예: 2024"
+            error={errors.year}
+            value={values.year}
+            onChange={(value) => setField("year", value)}
+            inputMode="numeric"
+          />
+          <TextField id={fieldId("country")} label={FIELD_LABELS.country} error={errors.country} value={values.country} onChange={(value) => setField("country", value)} />
+          <TextField
+            id={fieldId("director")}
+            label={FIELD_LABELS.director}
+            required
+            hint="여러 명이면 쉼표로 나눕니다. 예: 한서윤, 김도윤"
+            error={errors.director}
+            value={values.director}
+            onChange={(value) => setField("director", value)}
+          />
+          <TextField
+            id={fieldId("runtime")}
+            label={`${FIELD_LABELS.runtime}(분)`}
+            error={errors.runtime}
+            value={values.runtime}
+            onChange={(value) => setField("runtime", value)}
+            inputMode="numeric"
+          />
+
+          {/* 장르: 여러 개 고르는 체크박스 칩. 도움말과 오류 문구는 묶음 설명(aria-describedby)으로 이어요. */}
+          <div className="grid gap-2">
+            <ChoiceGroup
+              layout="aside"
+              legend={
+                <>
+                  {FIELD_LABELS.genres} <span className="text-crt-dim">(필수)</span>
+                </>
+              }
+              describedBy={[`${fieldId("genres")}-hint`, errors.genres ? `${fieldId("genres")}-error` : ""].filter(Boolean).join(" ")}
+            >
+              {GENRES.map((genre, index) => (
+                <Choice
+                  key={genre}
+                  id={`${fieldId("genres")}-${index}`}
+                  type="checkbox"
+                  name="genres"
+                  checked={values.genres.includes(genre)}
+                  onChange={() => toggleGenre(genre)}
+                >
+                  {genre}
+                </Choice>
+              ))}
+            </ChoiceGroup>
+            <p id={`${fieldId("genres")}-hint`} className="text-crt-dim">
+              여러 개 고를 수 있습니다.
+            </p>
+            <p id={`${fieldId("genres")}-error`} className="field-error">
+              {errors.genres}
+            </p>
+          </div>
+
+          {/* 평점: 0.5 ~ 5.0 중에서 고르기(0점은 없어요). 네이티브 <select>라 키보드·화면 낭독기가 그대로 써요. */}
+          <Field id={fieldId("rating")} label={FIELD_LABELS.rating} required hint="5점 만점, 0.5점 단위" error={errors.rating}>
+            {(describedBy) => (
+              <select
+                id={fieldId("rating")}
+                required
+                value={values.rating}
+                onChange={(event) => setField("rating", event.target.value)}
+                aria-invalid={errors.rating ? true : undefined}
+                aria-describedby={describedBy}
+                aria-errormessage={errors.rating ? `${fieldId("rating")}-error` : undefined}
+                className="field w-40"
+              >
+                <option value="">고르세요</option>
+                {RATINGS.map((rating) => (
+                  <option key={rating} value={rating}>
+                    {rating}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+
+          <TextField
+            id={fieldId("oneLiner")}
+            label={FIELD_LABELS.oneLiner}
+            required
+            hint="목록과 상세 화면에 보이는 한 문장"
+            error={errors.oneLiner}
+            value={values.oneLiner}
+            onChange={(value) => setField("oneLiner", value)}
+          />
+        </fieldset>
+      </div>
 
       {/* 본문 */}
       <fieldset className="grid gap-4" disabled={saving}>
@@ -646,7 +657,6 @@ export function ReviewWriter(props: Props) {
         <Field
           id={fieldId("body")}
           label="본문(Markdown)"
-          hint="빈 줄로 문단을 나눕니다. ## 소제목, **강조**, *밑줄 강조*, > 인용, - 목록, [링크](주소)를 쓸 수 있습니다. 사진 줄 ![설명](주소)은 [장면 사진 넣기]로 넣습니다."
           error={errors.body}
         >
           {(describedBy) => (
@@ -669,7 +679,7 @@ export function ReviewWriter(props: Props) {
       {/* 저장·취소 */}
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={saving} className="btn-inverse">
-          {saving ? "저장하는 중…" : mode === "edit" ? "고친 내용 저장" : "리뷰 저장"}
+          {saving ? "저장하는 중…" : mode === "edit" ? "수정한 내용 저장" : "리뷰 저장"}
         </button>
         <Link href={mode === "edit" ? `/reviews/${values.slug}` : "/"} className="btn-line">
           취소
@@ -679,7 +689,7 @@ export function ReviewWriter(props: Props) {
   );
 }
 
-/** 처음 상태(칸 값과 안내)를 만들어요. 고치기면 원고를 읽어 채워요. */
+/** 처음 상태(칸 값과 안내)를 만들어요. 수정이면 원고를 읽어 채워요. */
 function initialState(props: Props): { values: ReviewFormValues; notice: string; failure: string } {
   if (props.mode === "create") return { values: EMPTY_VALUES, notice: "", failure: "" };
   const parsed = parseReviewFile(props.source);

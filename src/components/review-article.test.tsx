@@ -6,7 +6,7 @@
  *   - role "navigation": <nav>
  *
  * 상세 화면의 키보드 조작(review-keys.tsx)이 Next.js의 useRouter를 써서, 가짜 라우터를 넣어 줘요.
- * (키 조작 자체는 review-keys.test.tsx, 고치기·지우기는 admin-review-actions.test.tsx에서 확인해요.)
+ * (키 조작 자체는 review-keys.test.tsx, 수정·삭제는 admin-review-actions.test.tsx에서 확인해요.)
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -33,10 +33,10 @@ describe("ReviewArticle", () => {
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("영화 제목(h1)과 한 줄 정보를 보인다", () => {
+  it("영화 제목(h1)과, 감독까지 이어 쓴 한 줄 정보를 보인다", () => {
     renderAlone();
     expect(screen.getByRole("heading", { level: 1, name: "겨울 정류장" })).toBeInTheDocument();
-    expect(screen.getByText("Winter Stop · 2024 · 한국 · 112분")).toBeInTheDocument();
+    expect(screen.getByText("Winter Stop · 2024 · 한국 · 112분 · 감독 한서윤")).toBeInTheDocument();
   });
 
   it("포스터가 있으면 제목으로 만든 대체 텍스트와 함께 크게 보인다", () => {
@@ -55,17 +55,24 @@ describe("ReviewArticle", () => {
     expect(screen.getByRole("img", { name: "영화 ‘겨울 정류장’ 포스터(포스터 없음)" })).toHaveTextContent("NO POSTER");
   });
 
-  it("감독·장르·평점만 정보표로 보이고, 본 날·쓴 날은 보이지 않는다", () => {
-    renderAlone();
-    const terms = screen.getAllByRole("term").map((term) => term.textContent);
-    expect(terms).toEqual(["감독", "장르", "평점"]);
-    expect(screen.getByText("평점 5점 만점에 4.5점")).toBeInTheDocument();
+  it("머리 안내판에 장르(제목 위)와 큰 평점(오른쪽)을 두고, 정보표와 쓴 날은 없다", () => {
+    const { container } = renderAlone();
+    const header = container.querySelector("article > header")!;
+    const genres = within(header as HTMLElement).getByRole("list", { name: "장르" });
+    const title = within(header as HTMLElement).getByRole("heading", { level: 1 });
+    // compareDocumentPosition: 장르 목록이 제목보다 앞(위)에 있는지 확인해요.
+    expect(genres.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 평점은 안내판 안에 크게(text-big) 있어요. 화면 낭독기는 "평점 5점 만점에 4.5점"으로 읽어요.
+    const rating = within(header as HTMLElement).getByText("평점 5점 만점에 4.5점");
+    expect(rating.closest("p")).toHaveClass("text-big");
+    // 예전의 정보표(감독·장르·평점)와 쓴 날은 없어요.
+    expect(screen.queryAllByRole("term")).toHaveLength(0);
     expect(screen.queryByText("2026.11.08")).not.toBeInTheDocument();
   });
 
   it("장르는 그 장르로 거른 목록으로 가는 링크다", () => {
     renderAlone();
-    expect(screen.getByRole("link", { name: "음악" })).toHaveAttribute("href", "/?genre=%EC%9D%8C%EC%95%85");
+    expect(screen.getByRole("link", { name: "로맨스" })).toHaveAttribute("href", `/?genre=${encodeURIComponent("로맨스")}`);
   });
 
   it("한줄평은 화면 낭독기에 '한줄평:'을 붙여 읽히고, 본문 HTML도 보인다", () => {
@@ -99,15 +106,15 @@ describe("ReviewArticle", () => {
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
 
-  it("로그인 전에는 고치기·지우기가 없고, 로그인하면 보인다", () => {
+  it("로그인 전에는 수정·삭제가 없고, 로그인하면 보인다", () => {
     const { unmount } = renderAlone();
-    expect(screen.queryByRole("link", { name: "고치기" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "수정" })).not.toBeInTheDocument();
     unmount();
 
     // 로그인 표시 쿠키(서버가 로그인할 때 구워 줘요)를 흉내 내요.
     document.cookie = "blog_admin=1; path=/";
     renderAlone();
-    expect(screen.getByRole("link", { name: "고치기" })).toHaveAttribute("href", "/write/winter-stop");
-    expect(screen.getByRole("button", { name: "지우기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "수정" })).toHaveAttribute("href", "/write/winter-stop");
+    expect(screen.getByRole("button", { name: "삭제" })).toBeInTheDocument();
   });
 });

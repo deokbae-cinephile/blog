@@ -4,7 +4,7 @@ title: 이오타 목장
 originalTitle: Iota Ranch
 year: 2012
 director: 시험감독4
-genres: [서부]
+genres: [스포츠]
 rating: 1.5
 oneLiner: 시험용 이오타 목장 한줄평
 publishedAt: 2025-08-01

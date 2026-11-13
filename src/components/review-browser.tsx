@@ -7,8 +7,8 @@
  *   스크롤하면 검색 칸은 왼쪽 위에 붙어 있고 오른쪽 목록만 움직여요(globals.css의 .browse-aside).
  *
  *     ┌ 검색 칸(상세 화면 왼쪽 칸 너비) ┐   영화 목록 ·················· 전체 15편
- *     │ 검색  [__________] [찾기]       │   - [포스터] 겨울 정류장 ········ 4.5
- *     │ 장르  [▶전체 15편] [드라마 5편] │   - [포스터] ...
+ *     │ 검색  [__________] [찾기]       │   [포스터] 겨울 정류장 ·········· 4.5
+ *     │ 장르  [▶전체 15편] [드라마 5편] │   [포스터] ...
  *     │ 정렬  [▶최신순] [평점순]        │   (처음 10편, 내려가면 10편씩 더)
  *     └─────────────────────────────────┘
  *
@@ -18,6 +18,7 @@
  *   3. 결과 편수 안내: "15편 중 3편"을 화면 낭독기도 읽어 줘요(role="status").
  *   4. 조건을 주소(?q=&genre=&sort=)에 남겨요. 링크를 공유하거나 뒤로 가기를 해도 같은 목록이 보입니다.
  *   5. 결과가 없으면 안내하고, "검색 조건 지우기" 단추로 처음 상태로 돌아가요.
+ *      리뷰가 아직 한 편도 없으면 "아직 올린 리뷰가 없습니다"만 보여요.
  *   6. 옛 DOS처럼 ▲ ▼로 리뷰를 고르고 Enter로 열어요(use-list-keys.ts).
  *   7. 무한 스크롤: 처음에는 10편만 보여 주고, 목록 끝에 가까워지면 10편씩 더 보여 줘요.
  *      키보드·화면 낭독기 사용자를 위해 목록 끝에 [n편 더 보기] 단추도 둬요(누르면 새로 나온 첫 리뷰로 초점이 가요).
@@ -377,13 +378,18 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
         </div>
 
         {/* 결과가 있으면 목록(<ul>), 없으면 안내 상자를 보여 줘요. ref={listRef}: 위의 손잡이를 이 목록에 연결해요.
-            순서가 뜻을 갖는 번호 목록이 아니라서 <ol> 대신 <ul>을 쓰고, 항목 앞에는 번호 대신 "-"를 그려요. */}
+            순서가 뜻을 갖는 번호 목록이 아니라서 <ol> 대신 <ul>을 써요. 항목은 썸네일부터 시작해요. */}
         {results.length > 0 ? (
           <ul ref={listRef} className="mt-4 grid gap-2">
             {visible.map((review) => (
               <ReviewListItem key={review.slug} review={review} />
             ))}
           </ul>
+        ) : reviews.length === 0 ? (
+          // 리뷰가 아직 한 편도 없을 때: 거른 결과가 아니라서 검색을 바꾸라는 안내는 하지 않아요.
+          <div className="mt-4 border-2 border-dashed border-crt-line px-4 py-8 text-center">
+            <p className="glow">아직 올린 리뷰가 없습니다.</p>
+          </div>
         ) : (
           <div className="mt-4 border-2 border-dashed border-crt-line px-4 py-8 text-center">
             <p className="glow">찾는 리뷰가 없습니다.</p>

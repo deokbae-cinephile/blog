@@ -5,7 +5,7 @@
  *
  * 이 테스트가 하는 일
  *   실제 원고(content/reviews)와 E2E용 시험 원고(e2e/fixtures/reviews)가 모두 형식에 맞는지 확인해요.
- *   실제 원고는 글쓴이가 쓰고 고치고 지우면서 편수와 내용이 바뀌므로 "형식"만 봐요.
+ *   실제 원고는 글쓴이가 추가·수정·삭제하면서 편수와 내용이 바뀌므로 "형식"만 봐요(0편이어도 돼요).
  *   시험 원고는 고정이라, 무한 스크롤(10편씩)을 시험할 수 있게 10편보다 많은지도 확인해요.
  *
  * 왜 필요할까요?
@@ -23,17 +23,16 @@ import { describe, expect, it } from "vitest";
 
 import { loadReviews } from "./load-reviews";
 
-describe.each(["content/reviews", "e2e/fixtures/reviews"])("%s", (dir) => {
-  it("모든 원고가 형식에 맞는다", async () => {
+describe("content/reviews(실제 원고)", () => {
+  it("모든 원고가 형식에 맞는다(아직 한 편도 없어도 된다)", async () => {
     // 형식이 틀리면 loadReviews가 어느 파일의 어디가 틀렸는지 담은 오류를 던져 테스트가 실패해요.
-    const reviews = await loadReviews(path.resolve(dir));
-    // 폴더를 잘못 읽어 아무것도 검사하지 못한 채 통과하는 일이 없게, 원고가 한 편 이상인지도 봐요.
-    expect(reviews.length).toBeGreaterThan(0);
+    // 글쓴이가 아직 리뷰를 올리지 않았으면 0편이에요. 폴더(content/reviews/.gitkeep)는 늘 있어요.
+    await expect(loadReviews(path.resolve("content/reviews"))).resolves.toBeInstanceOf(Array);
   });
 });
 
 describe("e2e/fixtures/reviews(시험 원고)", () => {
-  it("무한 스크롤(처음 10편, 이어서 10편씩)을 시험할 수 있게 10편보다 많다", async () => {
+  it("모든 원고가 형식에 맞고, 무한 스크롤(처음 10편, 이어서 10편씩)을 시험할 수 있게 10편보다 많다", async () => {
     const reviews = await loadReviews(path.resolve("e2e/fixtures/reviews"));
     expect(reviews.length).toBeGreaterThan(10);
   });

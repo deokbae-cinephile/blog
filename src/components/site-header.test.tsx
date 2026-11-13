@@ -1,41 +1,24 @@
 /**
  * @file site-header.tsx 테스트
  *
- * Next.js의 훅(usePathname)을 쓰는 컴포넌트는 어떻게 테스트할까요?
- *   테스트 환경에는 진짜 Next.js 라우터가 없어서 usePathname이 동작하지 않아요.
- *   그래서 vi.mock으로 "next/navigation" 모듈을 가짜로 바꿔, 우리가 정한 주소를 돌려주게 해요.
- *
- *   - vi.hoisted(() => 값) : vi.mock보다 먼저 만들어지는 값이에요. vi.mock은 파일 맨 위로 끌어올려져 실행되기 때문에,
- *     mock 안에서 쓸 값은 이렇게 만들어야 해요.
- *   - importOriginal() : 원래 모듈을 가져와요. 나머지 기능은 그대로 두고 usePathname만 바꾸려고 펼쳐(...) 써요.
+ * 머리글이 블로그 이름(처음 화면 링크)과 GitHub 링크만 보이는지 확인해요.
+ * 리뷰 추가 단추는 머리글이 아니라 화면 오른쪽 아래에 떠 있어요(floating-buttons.test.tsx).
  */
 
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { SiteHeader } from "./site-header";
 
-/** 가짜 usePathname이 돌려줄 주소. 테스트마다 바꿔 써요. */
-const pathname = vi.hoisted(() => ({ current: "/" }));
-
-vi.mock("next/navigation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("next/navigation")>()),
-  usePathname: () => pathname.current,
-}));
-
 describe("SiteHeader", () => {
-  beforeEach(() => {
-    pathname.current = "/";
-  });
-
   afterEach(() => {
     // 로그인 표시 쿠키를 지워 다음 테스트가 로그인 전 상태에서 시작하게 해요.
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("블로그 이름이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
+  it("블로그 이름(DMB)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
     render(<SiteHeader />);
-    expect(screen.getByRole("link", { name: "덕배의 영화 블로그" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "DMB" })).toHaveAttribute("href", "/");
     expect(screen.queryByText("평론가를 꿈꾸는 덕배의 상영 기록")).not.toBeInTheDocument();
   });
 
@@ -49,17 +32,10 @@ describe("SiteHeader", () => {
     expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("로그인 전에는 [새 리뷰]가 없고, 로그인하면 글쓰기 화면으로 가는 링크가 보인다", () => {
-    const { unmount } = render(<SiteHeader />);
-    expect(screen.queryByRole("link", { name: "새 리뷰" })).not.toBeInTheDocument();
-    unmount();
-
+  it("로그인해도 머리글에는 리뷰 추가 링크가 없다(오른쪽 아래의 떠 있는 + 단추로 옮겼다)", () => {
     document.cookie = "blog_admin=1; path=/";
-    pathname.current = "/write";
     render(<SiteHeader />);
-    const link = screen.getByRole("link", { name: "새 리뷰" });
-    expect(link).toHaveAttribute("href", "/write");
-    // 지금 글쓰기 화면이면 "지금 보는 페이지"라고 알려 줘요.
-    expect(link).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: /추가|새 리뷰/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 });

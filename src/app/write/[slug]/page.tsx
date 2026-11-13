@@ -1,5 +1,5 @@
 /**
- * @file 리뷰 고치기 화면 (app/write/[slug]/page.tsx → 주소 "/write/<주소>")
+ * @file 리뷰 수정 화면 (app/write/[slug]/page.tsx → 주소 "/write/<주소>")
  *
  * 이 파일이 하는 일
  *   글쓴이가 이미 쓴 리뷰를 고치는 화면이에요. 예: /write/winter-stop
@@ -22,11 +22,11 @@ import { loadReviewSource } from "@/lib/review-store";
 
 /** 탭 제목, 그리고 검색엔진에 올리지 않기 */
 export const metadata: Metadata = {
-  title: "리뷰 고치기",
+  title: "리뷰 수정",
   robots: { index: false },
 };
 
-/** 리뷰 고치기 화면. params: 주소에서 읽은 { slug } (Next.js 15부터 Promise라 await로 꺼내요) */
+/** 리뷰 수정 화면. params: 주소에서 읽은 { slug } (Next.js 15부터 Promise라 await로 꺼내요) */
 export default async function EditPage({ params }: PageProps<"/write/[slug]">) {
   const { slug } = await params;
   // 로그인하지 않았으면 로그인 화면으로. 로그인한 뒤 이 화면으로 돌아오게 next를 적어요.
@@ -34,7 +34,7 @@ export default async function EditPage({ params }: PageProps<"/write/[slug]">) {
 
   if (!isGitHubConfigured()) {
     return (
-      <EditLayout title="리뷰 고치기">
+      <EditLayout title="리뷰 수정">
         <NotConfigured />
       </EditLayout>
     );
@@ -47,7 +47,7 @@ export default async function EditPage({ params }: PageProps<"/write/[slug]">) {
   } catch (error) {
     const message = error instanceof GitHubError ? error.message : "원고를 읽지 못했습니다. 잠시 뒤 다시 시도해 주세요.";
     return (
-      <EditLayout title="리뷰 고치기">
+      <EditLayout title="리뷰 수정">
         <p role="alert" className="alert-text">
           {message}
         </p>
@@ -58,13 +58,13 @@ export default async function EditPage({ params }: PageProps<"/write/[slug]">) {
   if (!review) notFound();
 
   return (
-    <EditLayout title={`리뷰 고치기: ${slug}`}>
+    <EditLayout title={`리뷰 수정: ${slug}`}>
       <ReviewWriter mode="edit" slug={slug} source={review.source} baseSha={review.sha} />
     </EditLayout>
   );
 }
 
-/** 고치기 화면의 틀: 제목(h1)과 내용 */
+/** 수정 화면의 틀: 제목(h1)과 내용 */
 function EditLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-labelledby="write-title" className="grid gap-8">

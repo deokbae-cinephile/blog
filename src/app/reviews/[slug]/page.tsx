@@ -54,7 +54,7 @@ export async function generateStaticParams() {
 /**
  * 리뷰마다 메타데이터(탭 제목, 설명, 메신저 미리보기 글자)를 정해요.
  *
- * 예: 탭 제목 "겨울 정류장 리뷰 — 덕배의 영화 블로그"
+ * 예: 탭 제목 "겨울 정류장 리뷰 — DMB"
  *     설명    "평점 4.5 · 버스는 오지 않아도, 기다림은 끝내 도착한다."
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -67,7 +67,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = `평점 ${formatRating(review.rating)} · ${review.oneLiner}`;
 
   return {
-    // layout.tsx의 template 덕분에 뒤에 " — 덕배의 영화 블로그"가 붙어요.
+    // layout.tsx의 template 덕분에 뒤에 " — DMB"가 붙어요.
     title,
     description,
     // 대표 주소. layout.tsx의 metadataBase와 합쳐져 전체 주소가 돼요.

@@ -14,7 +14,7 @@ import { Suspense } from "react";
 
 import { LoginForm } from "@/components/login-form";
 
-/** 탭 제목 "글쓴이 로그인 — 덕배의 영화 블로그", 그리고 검색엔진에 올리지 않기 */
+/** 탭 제목 "글쓴이 로그인 — DMB", 그리고 검색엔진에 올리지 않기 */
 export const metadata: Metadata = {
   title: "글쓴이 로그인",
   robots: { index: false },
@@ -28,7 +28,7 @@ export default function LoginPage() {
       <h1 id="login-title" className="glow text-big">
         글쓴이 로그인
       </h1>
-      <p className="text-crt-dim">리뷰를 쓰고 고치고 지우려면 로그인하세요. 이 블로그는 글쓴이 한 사람만 로그인할 수 있습니다.</p>
+      <p className="text-crt-dim">리뷰를 추가·수정·삭제하려면 로그인하세요. 이 블로그는 글쓴이 한 사람만 로그인할 수 있습니다.</p>
       {/* LoginForm은 주소의 ?next=를 읽어서(useSearchParams) Suspense로 감싸요. 미리 만든 HTML에는 빈 자리로 들어가요. */}
       <Suspense>
         <LoginForm />

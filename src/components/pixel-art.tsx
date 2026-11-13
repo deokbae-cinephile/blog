@@ -45,7 +45,7 @@ type Props = Omit<SVGProps<SVGSVGElement>, "children" | "width" | "height" | "vi
  *
  * @example
  * <PixelArt rows={["#.#", ".#.", "#.#"]} cell={4} />          // 꾸밈 그림(읽지 않음)
- * <PixelArt rows={LOGO_ROWS} label="덕배의 영화 블로그 로고" /> // 뜻이 있는 그림(이름을 읽음)
+ * <PixelArt rows={LOGO_ROWS} label="DMB 로고" /> // 뜻이 있는 그림(이름을 읽음)
  */
 export function PixelArt({ rows, cell = 2, label, ...rest }: Props) {
   // 그림의 가로 칸 수 = 가장 긴 줄의 글자 수, 세로 칸 수 = 줄 수

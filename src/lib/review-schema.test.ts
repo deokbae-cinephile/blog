@@ -21,7 +21,7 @@ const valid = {
   country: "한국",
   director: "한서윤",
   runtime: 112,
-  genres: ["드라마", "음악"],
+  genres: ["드라마", "로맨스"],
   rating: 4.5,
   oneLiner: "버스는 오지 않아도, 기다림은 끝내 도착한다.",
   publishedAt: "2026-11-08",
@@ -70,8 +70,8 @@ describe("reviewFrontmatterSchema", () => {
     expect(messages({ ...valid, sample: true })[0]).toContain("알 수 없는 항목입니다: sample");
   });
 
-  // 장르 목록에서 뺀 장르(SF, 판타지, 애니메이션, 가족, 로맨스)는 더 쓸 수 없어요.
-  it.each(["SF", "판타지", "애니메이션", "가족", "로맨스"])("뺀 장르 %s는 거절한다", (genre) => {
+  // 장르 목록(lib/genres.ts)에 없는 장르는 쓸 수 없어요. 예전에 있다가 뺀 장르도 마찬가지예요.
+  it.each(["SF", "판타지", "미스터리", "음악", "전쟁", "역사", "모험", "서부"])("목록에 없는 장르 %s는 거절한다", (genre) => {
     expect(messages({ ...valid, genres: [genre] })[0]).toContain("쓸 수 있는 장르가 아닙니다");
   });
 

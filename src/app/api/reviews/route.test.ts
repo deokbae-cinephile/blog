@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 /**
- * @file 리뷰 저장·고치기·지우기 API 테스트 (app/api/reviews/route.ts, app/api/reviews/[slug]/route.ts)
+ * @file 리뷰 추가·수정·삭제 API 테스트 (app/api/reviews/route.ts, app/api/reviews/[slug]/route.ts)
  *
  * API가 로그인과 보낸 내용의 모양을 확인하고, 실제 일은 lib/review-store.ts에 맡기는지 봐요.
  * 저장 함수는 가짜로 바꿔서, 받은 값과 돌려줄 결과를 우리가 정해요.
@@ -73,7 +73,7 @@ describe("리뷰 API", () => {
     expect(await response.json()).toEqual({ message: "같은 주소의 리뷰가 이미 있습니다.", errors: { slug: "이미 있어요" } });
   });
 
-  it("PUT: 고치기는 칸의 주소가 아니라 화면 주소(slug)로 저장한다", async () => {
+  it("PUT: 수정은 칸의 주소가 아니라 화면 주소(slug)로 저장한다", async () => {
     const response = await PUT(await request("PUT", "/api/reviews/winter-stop", { ...body, values: { ...body.values, slug: "other" }, baseSha: "s" }), ctx("winter-stop"));
     expect(response.status).toBe(200);
     expect(saveReview).toHaveBeenCalledWith("update", "winter-stop", expect.objectContaining({ baseSha: "s" }));

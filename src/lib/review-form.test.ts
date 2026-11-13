@@ -81,7 +81,7 @@ describe("validateReviewForm", () => {
     expect(result.ok === false && result.errors[field]).toBe(FIELD_MESSAGES[field]);
   });
 
-  it("고치기(checkSlug: false)에서는 주소를 검사하지 않는다", () => {
+  it("수정(checkSlug: false)에서는 주소를 검사하지 않는다", () => {
     expect(validateReviewForm({ ...valid, slug: "" }, { checkSlug: false }).ok).toBe(true);
     expect(validateReviewForm({ ...valid, slug: "겨울" }, { checkSlug: true }).ok).toBe(false);
   });
