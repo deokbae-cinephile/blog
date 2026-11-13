@@ -99,6 +99,20 @@ async function store(cacheName, href, { skipIfCached = false } = {}) {
   }
 }
 
+/**
+ * 꼭 있어야 하는 파일(오프라인 안내 화면)을 저장해요. store와 달리, 받지 못하면 실패를 알려(throw) 설치를 멈춰요.
+ * 설치가 실패하면 브라우저는 이 판을 켜지 않고, 다음에 페이지를 열 때 다시 설치해요.
+ * 그래야 "인터넷이 끊겼는데 안내 화면도 없는" 상태로 설치가 끝나는 일이 없어요.
+ *
+ * @param {string} cacheName 넣을 저장소 이름
+ * @param {string} href 받아 올 주소
+ */
+async function storeRequired(cacheName, href) {
+  const response = await fetch(href);
+  if (!response.ok) throw new Error(`${href}을(를) 받지 못했어요(응답 ${response.status}).`);
+  await (await caches.open(cacheName)).put(cacheKey(href), response);
+}
+
 /** 어떤 저장소에 넣을지 주소로 정해요. */
 function cacheNameFor(url) {
   if (url.pathname.startsWith(`${SCOPE}_next/static/`)) return STATIC_CACHE;
@@ -179,7 +193,8 @@ async function cacheFirst(request) {
  * ────────────────────────────────────────────────────────────── */
 self.addEventListener("install", (event) => {
   // waitUntil: 안의 일이 끝날 때까지 "설치 중"으로 기다려 달라는 뜻이에요.
-  event.waitUntil(Promise.all([store(PAGE_CACHE, SCOPE), store(PAGE_CACHE, OFFLINE_URL)]));
+  // 처음 화면은 받지 못해도 괜찮지만(나중에 방문하면 저장돼요), 오프라인 안내 화면은 꼭 있어야 해서 storeRequired로 받아요.
+  event.waitUntil(Promise.all([store(PAGE_CACHE, SCOPE), storeRequired(PAGE_CACHE, OFFLINE_URL)]));
   // 새 판이 설치되면 기다리지 않고 바로 켜요(예전 판이 열린 창이 모두 닫히기를 기다리지 않아요).
   self.skipWaiting();
 });

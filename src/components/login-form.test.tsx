@@ -98,4 +98,16 @@ describe("safeNext", () => {
     expect(safeNext("//evil.example")).toBe("/");
     expect(safeNext("/\\evil.example")).toBe("/");
   });
+
+  it("탭·줄바꿈이 섞여 다른 사이트 주소로 바뀔 수 있는 주소는 처음 화면으로 바꾼다", () => {
+    // 주소 해석기는 탭·줄바꿈을 지워서 "/\t/evil.example"이 "//evil.example"(다른 사이트)이 돼요.
+    expect(safeNext("/\t/evil.example")).toBe("/");
+    expect(safeNext("/\n/evil.example")).toBe("/");
+    expect(safeNext("/\r\n/evil.example")).toBe("/");
+    expect(safeNext("/%2F/evil.example")).toBe("/%2F/evil.example");
+  });
+
+  it("사이트 안 주소의 검색 조건과 # 부분은 그대로 둔다", () => {
+    expect(safeNext("/write?draft=1#body")).toBe("/write?draft=1#body");
+  });
 });

@@ -396,6 +396,13 @@ describe("ReviewBrowserView (미리 만든 HTML)", () => {
     // 목록은 그대로 보여요(검색엔진과 스크립트 없는 환경을 위해).
     expect(listTitles()).toHaveLength(4);
   });
+
+  it("10편이 넘어도 모두 담고 [더 보기]는 두지 않는다(스크립트가 없으면 더 불러올 수 없어서)", () => {
+    const reviews = manyReviews(15);
+    render(<ReviewBrowserView reviews={reviews} params={DEFAULT_PARAMS} onParamsChange={() => {}} interactive={false} />);
+    expect(listTitles()).toHaveLength(15);
+    expect(screen.queryByRole("button", { name: /더 보기/ })).toBeNull();
+  });
 });
 
 describe("ReviewBrowser (주소 연결)", () => {

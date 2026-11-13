@@ -21,6 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkCredentials, cookieOptions, isSameOrigin } from "@/lib/admin-auth";
 import { readJson } from "@/lib/api-response";
 import { ADMIN_HINT_COOKIE, SESSION_COOKIE } from "@/lib/auth-cookies";
+import { checkLoginAllowed, clearLoginFailures, clientKey, recordLoginFailure } from "@/lib/login-limit";
 import { createSessionToken, readSessionConfig } from "@/lib/session";
 
 /** 다른 사이트에서 보낸 요청에 돌려줄 답 */
@@ -39,6 +40,18 @@ export async function POST(request: NextRequest) {
   const id = typeof record.id === "string" ? record.id.trim() : "";
   const password = typeof record.password === "string" ? record.password : "";
 
+  // 같은 곳에서 너무 많이 틀렸으면, 비밀번호를 확인(계산)하기 전에 바로 막아요(lib/login-limit.ts).
+  const key = clientKey(request.headers);
+  const allowed = checkLoginAllowed(key);
+  if (!allowed.ok) {
+    const minutes = Math.ceil(allowed.retryAfter / 60);
+    return NextResponse.json(
+      { message: `로그인에 여러 번 실패해 잠시 막았습니다. ${minutes}분 뒤 다시 시도하세요.` },
+      // Retry-After: 몇 초 뒤에 다시 시도하면 되는지 알려 주는 표준 머리글
+      { status: 429, headers: { "Retry-After": String(allowed.retryAfter) } },
+    );
+  }
+
   const result = await checkCredentials(id, password);
   if (result === "not-configured") {
     return NextResponse.json(
@@ -47,11 +60,14 @@ export async function POST(request: NextRequest) {
     );
   }
   if (result === "wrong") {
+    recordLoginFailure(key);
     await wait(400);
     return NextResponse.json({ message: "아이디나 비밀번호가 맞지 않습니다. 다시 확인해 입력하세요." }, { status: 401 });
   }
 
-  // 맞았어요! 로그인 표(세션 토큰)를 만들어 쿠키에 담아요. checkCredentials가 "ok"면 설정은 늘 있어요.
+  // 맞았어요! 이곳의 실패 기록을 지우고, 로그인 표(세션 토큰)를 만들어 쿠키에 담아요.
+  // checkCredentials가 "ok"면 설정은 늘 있어요.
+  clearLoginFailures(key);
   const config = readSessionConfig()!;
   const token = await createSessionToken(config.adminId, config.secret);
   const response = NextResponse.json({ ok: true });

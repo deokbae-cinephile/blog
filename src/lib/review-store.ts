@@ -7,11 +7,13 @@
  *     쓰기(create)   : content/reviews/<주소>.md + 포스터 + 장면 사진을 커밋 하나로 더해요.
  *     고치기(update) : 원고를 바꾸고, 더 쓰지 않는 이 리뷰의 포스터·장면 사진은 지워요(저장소를 가볍게).
  *     지우기(delete) : 원고와 이 리뷰의 포스터·장면 사진 폴더를 지워요.
+ *     (단, 다른 리뷰 원고가 가져다 쓰는 파일은 지우지 않아요. withoutReferenced 참고)
  *
  * 저장 전에 하는 검사
- *   1. 칸 검사: 글쓰기 화면과 같은 규칙(lib/review-form.ts)
+ *   1. 칸 검사: 글쓰기 화면과 같은 규칙(lib/review-form.ts). 본문 사진은 빌드와 같은 도구로 한 번 더 봐요.
  *   2. 주소 겹침: 새 글의 주소가 이미 있으면 막아요.
  *   3. 고치는 사이 바뀜: 글쓰기 화면을 연 뒤 다른 곳(다른 탭 등)에서 먼저 고쳤으면 덮어쓰지 않고 알려요.
+ *      고치기 요청에는 처음 불러온 원고의 번호(baseSha)가 꼭 있어야 해요.
  *   4. 파일 확인: 포스터와 본문 사진이 저장소에 있거나 이번에 올린 파일인지(빌드할 때 원고 검사와 같은 확인)
  *   이 검사를 통과해야 커밋해요. 그래서 저장된 글 때문에 빌드가 실패하는 일이 없어요.
  *
@@ -23,11 +25,11 @@ import "server-only";
 
 import { z } from "zod";
 
-import { commitChanges, createBlob, type FileChange, getSnapshot, readTextBlob } from "./github";
-import { findImages } from "./markdown";
+import { commitChanges, createBlob, type FileChange, getSnapshot, readTextBlob, readTextFiles } from "./github";
+import { type BodyImage, findImages } from "./markdown";
 import { EMPTY_VALUES, parseReviewFile, type ReviewFormValues, serializeReviewFile } from "./review-file";
 import { type FieldErrors, validateReviewForm } from "./review-form";
-import { safeDecode, SLUG } from "./review-schema";
+import { imageRefProblems, safeDecode, SLUG } from "./review-schema";
 
 /** 저장하지 못한 이유. status는 API가 돌려줄 HTTP 상태 번호, errors는 칸별 오류(있을 때만)예요. */
 export class ReviewStoreError extends Error {
@@ -107,16 +109,46 @@ function posterOf(source: string): string {
 
 /**
  * 본문의 사진 주소를 저장소 경로로 바꿔 모아요. 예: "/images/a/%EC%9E%A5%EB%A9%B4.jpg" → "public/images/a/장면.jpg"
- * Markdown 변환 도구(findImages)로 찾아서 빌드할 때와 똑같이 찾아요. 사이트 안 주소(/로 시작)만 모아요.
+ * 사진은 Markdown 변환 도구(findImages)로 찾아서 넘겨받아요. 빌드할 때와 똑같이 찾으려고요. 사이트 안 주소(/로 시작)만 모아요.
  */
-async function bodyImagePaths(body: string): Promise<string[]> {
-  const paths = (await findImages(body))
+function toRepoPaths(images: BodyImage[]): string[] {
+  const paths = images
     .map(({ src }) => src)
     .filter((src) => src.startsWith("/") && !src.startsWith("//"))
     // ?나 # 뒤는 떼고, %EA... 모양의 한글은 되돌려요.
     .map((src) => `public${safeDecode(new URL(src, "http://localhost").pathname)}`);
   // 같은 사진을 여러 번 넣었어도 한 번만 세요.
   return [...new Set(paths)];
+}
+
+/**
+ * 지울 후보 가운데 다른 리뷰 원고가 쓰는 파일은 빼고 돌려줘요.
+ *
+ * 파일 이름이나 폴더가 "이 리뷰 것"이어도, 다른 리뷰 원고가 같은 사진을 가져다 쓸 수 있어요.
+ * 그래서 다른 리뷰 원고를 한 번에 읽어(readTextFiles), 파일 주소가 원고 어딘가에 적혀 있으면 지우지 않아요.
+ *   - 포스터는 원고에 파일 이름으로 적혀요(poster: winter-stop.jpg).
+ *   - 본문 사진은 /images/... 주소로 적혀요. 한글 이름은 %EA... 모양으로 적힐 수 있어 둘 다 찾아봐요.
+ * 원고를 읽지 못하면 아무것도 지우지 않아요. 남은 파일은 저장소를 조금 무겁게 할 뿐 블로그를 깨뜨리지 않거든요.
+ *
+ * @param candidates 지울 후보 파일 경로들
+ * @param commitSha 지금 저장소의 커밋 번호(이 모습의 원고들을 읽어요)
+ * @param slug 지금 저장하는(지우는) 리뷰 주소. 이 리뷰 원고는 비교에서 빼요.
+ */
+async function withoutReferenced(candidates: string[], commitSha: string, slug: string): Promise<string[]> {
+  if (candidates.length === 0) return candidates;
+  let texts: Map<string, string>;
+  try {
+    texts = await readTextFiles(commitSha, "content/reviews");
+  } catch {
+    return [];
+  }
+  const others = [...texts].filter(([path]) => path !== reviewPath(slug)).map(([, text]) => text);
+  return candidates.filter((path) => {
+    // 원고에 적히는 모양: 포스터는 파일 이름, 본문 사진은 public을 뗀 주소
+    const written = path.startsWith("public/posters/") ? path.slice("public/posters/".length) : path.slice("public".length);
+    const encoded = encodeURI(written);
+    return !others.some((text) => text.includes(written) || text.includes(encoded));
+  });
 }
 
 /**
@@ -151,6 +183,15 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
   if (!check.ok) throw new ReviewStoreError(422, "고칠 곳이 있습니다. 표시한 칸을 확인해 주세요.", check.errors);
   const { frontmatter } = check;
 
+  // 1-2) 본문 사진을 빌드와 같은 도구(findImages)로 찾아 같은 규칙(설명, /로 시작하는 주소)으로 검사해요.
+  //      화면 검사는 ![설명](주소) 모양만 찾아서, ![설명][이름] 같은 "참조형" 사진은 여기서 걸러요.
+  //      여기서 막지 않으면 저장은 되는데 빌드에서 원고 검사가 실패해 배포가 멈춰요.
+  const bodyImages = await findImages(values.body);
+  const imageMessages = bodyImages.flatMap(({ src, alt }) => imageRefProblems(src, alt).messages);
+  if (imageMessages.length > 0) {
+    throw new ReviewStoreError(422, "고칠 곳이 있습니다. 표시한 칸을 확인해 주세요.", { body: imageMessages.join(" ") });
+  }
+
   // 2) 올린 사진 목록 검사: 이 리뷰의 경로이고, sha 모양이 맞아야 해요.
   for (const upload of payload.uploads) {
     if (!isUploadPathFor(upload.path, slug) || !SHA.test(upload.sha)) {
@@ -164,7 +205,7 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
   const posterFile = frontmatter.poster;
   const markdown = serializeReviewFile(frontmatter, values.body);
   const markdownSha = await createBlob(new TextEncoder().encode(markdown));
-  const images = await bodyImagePaths(values.body);
+  const images = toRepoPaths(bodyImages);
   // 이 원고가 실제로 쓰는 파일들(포스터 + 본문 사진)
   const used = new Set([...images, ...(posterFile ? [posterPath(posterFile)] : [])]);
 
@@ -179,7 +220,10 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
     if (mode === "update" && !currentSha) {
       throw new ReviewStoreError(404, "고치려는 리뷰가 저장소에 없습니다. 다른 곳에서 지웠을 수 있습니다. 목록에서 다시 확인해 주세요.");
     }
-    if (mode === "update" && payload.baseSha && currentSha !== payload.baseSha) {
+    if (mode === "update" && !payload.baseSha) {
+      throw new ReviewStoreError(400, "처음 불러온 원고 정보가 없어 저장하지 않았습니다. 화면을 새로 고친 뒤 다시 고쳐 주세요.");
+    }
+    if (mode === "update" && currentSha !== payload.baseSha) {
       throw new ReviewStoreError(409, "이 리뷰를 다른 곳에서 먼저 고쳤습니다. 내용을 따로 복사해 둔 뒤 화면을 새로 고쳐 최신 원고에서 다시 고쳐 주세요.");
     }
 
@@ -202,15 +246,18 @@ export async function saveReview(mode: "create" | "update", slug: string, payloa
     // 7) 더 쓰지 않는 이 리뷰의 파일 지우기
     //    - 예전 포스터: 이름이 <주소>.확장자인 "이 리뷰 것"이고, 새 원고가 쓰지 않을 때
     //    - 장면 사진 폴더(public/images/<주소>/)의 사진 중 새 본문이 쓰지 않는 것
+    //    - 단, 다른 리뷰 원고가 쓰는 파일은 빼요(withoutReferenced).
+    const candidates: string[] = [];
     if (mode === "update" && currentSha) {
       const oldPoster = posterOf(await readTextBlob(currentSha));
       if (oldPoster && isOwnPoster(oldPoster, slug) && !used.has(posterPath(oldPoster)) && snapshot.files.has(posterPath(oldPoster))) {
-        changes.push({ path: posterPath(oldPoster), sha: null });
+        candidates.push(posterPath(oldPoster));
       }
     }
     for (const path of snapshot.files.keys()) {
-      if (path.startsWith(imagesDir(slug)) && !used.has(path)) changes.push({ path, sha: null });
+      if (path.startsWith(imagesDir(slug)) && !used.has(path)) candidates.push(path);
     }
+    for (const path of await withoutReferenced(candidates, snapshot.commitSha, slug)) changes.push({ path, sha: null });
     return changes;
   });
 
@@ -231,15 +278,18 @@ export async function deleteReview(slug: string): Promise<{ commitSha: string; t
   const parsed = parseReviewFile(current.source);
   const title = parsed.ok && parsed.values.title ? parsed.values.title : slug;
 
-  const commitSha = await commitChanges(`리뷰 지우기: ${title}`, (snapshot) => {
+  const commitSha = await commitChanges(`리뷰 지우기: ${title}`, async (snapshot) => {
     const sha = snapshot.files.get(reviewPath(slug));
     if (!sha) throw new ReviewStoreError(404, "지우려는 리뷰가 저장소에 없습니다. 이미 지웠을 수 있습니다.");
     const changes: FileChange[] = [{ path: reviewPath(slug), sha: null }];
-    // 포스터: "이 리뷰 것"일 때만 지워요.
+    const candidates: string[] = [];
+    // 포스터: "이 리뷰 것"일 때만 지울 후보예요.
     const poster = parsed.ok ? parsed.values.poster : "";
-    if (poster && isOwnPoster(poster, slug) && snapshot.files.has(posterPath(poster))) changes.push({ path: posterPath(poster), sha: null });
-    // 장면 사진 폴더의 파일을 모두 지워요.
-    for (const path of snapshot.files.keys()) if (path.startsWith(imagesDir(slug))) changes.push({ path, sha: null });
+    if (poster && isOwnPoster(poster, slug) && snapshot.files.has(posterPath(poster))) candidates.push(posterPath(poster));
+    // 장면 사진 폴더의 파일은 모두 지울 후보예요.
+    for (const path of snapshot.files.keys()) if (path.startsWith(imagesDir(slug))) candidates.push(path);
+    // 다른 리뷰 원고가 쓰는 파일은 빼고 지워요.
+    for (const path of await withoutReferenced(candidates, snapshot.commitSha, slug)) changes.push({ path, sha: null });
     return changes;
   });
 

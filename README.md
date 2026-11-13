@@ -32,7 +32,7 @@
 | 저장·인증 | GitHub Git Data API(커밋 저장), Web Crypto HMAC 세션, scrypt 비밀번호 해시 |
 | 스타일 | Tailwind CSS 4, CSS로 만든 CRT 효과, SVG 필터, Neo둥근모 픽셀 글꼴 |
 | 설치형 웹 앱 | Web App Manifest, 직접 작성한 서비스 워커(public/sw.js) |
-| 배포 | Cloudflare Workers(OpenNext 어댑터, Workers Builds), Cloudflare Images |
+| 배포 | Cloudflare Workers(OpenNext 어댑터), Cloudflare Images, GitHub Actions(검사 통과 뒤 배포) |
 | 품질 | ESLint 10(jsx-a11y), Vitest 5 + Testing Library, Playwright + axe, GitHub Actions |
 
 ## 시작하기

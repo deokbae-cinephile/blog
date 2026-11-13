@@ -63,12 +63,13 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 /login ─(아이디·비밀번호)─> /api/session ─> 세션 쿠키(httpOnly) + 표시 쿠키
 /write ─proxy.ts 확인─> 리뷰 라이터
    [저장] ─> /api/images(사진 한 장씩 → blob) ─> /api/reviews(검사 → 커밋 하나) ─> GitHub main
-                                                       └─> Cloudflare Workers Builds가 다시 빌드·배포(몇 분)
+                                                       └─> GitHub Actions가 검사한 뒤 Cloudflare에 배포(몇 분)
 ```
 
 - 사진은 요청 하나가 하는 일(CPU·메모리)을 작게 나누려고 한 장씩(최대 4MB) 먼저 올리고, 리뷰를 저장할 때 원고와 함께 커밋 하나로 묶어요.
 - 저장하기 전에 서버가 빌드 때와 같은 규칙으로 다시 검사해요(칸, 주소 겹침, 포스터·사진 파일, 그사이 다른 곳에서 고쳤는지).
-- 고치기·지우기는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다.
+- 고치기·지우기는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
+- 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
 
 ## 4. 로그인과 접근 막기
 
@@ -76,11 +77,14 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **로그인 표:** `내용.서명` 모양의 토큰을 `SESSION_SECRET`으로 HMAC 서명해 httpOnly 쿠키에 담아요(7일). 웹 표준 Web Crypto만 써서 어느 호스팅에서나 돌아요.
 - **이중 잠금:** `src/proxy.ts`가 쓰기 화면·API 앞에서 먼저 막고, API와 글쓰기 화면이 `lib/admin-auth.ts`로 한 번 더 확인해요. Next.js 문서도 proxy만 믿지 말라고 권해요.
 - **CSRF:** 쿠키는 `SameSite=Lax`이고, 쓰기 API는 `Origin`이 우리 주소일 때만 받아요.
+- **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, 도메인을 연결한 뒤 Cloudflare 속도 제한 규칙도 함께 걸어요(아래 "도메인 연결" 6번).
+- **로그인 뒤 이동:** `?next=` 주소는 우리 사이트 안 주소만 받아요. 탭·줄바꿈을 섞어 다른 사이트로 보내는 주소도 막아요.
+- **본문 링크:** `javascript:` 같은 위험한 방식의 링크는 HTML로 바꿀 때 주소를 지워요(`isSafeHref`).
 - **화면의 단추:** 목록·상세는 정적 HTML이라, 비밀이 없는 표시 쿠키(`blog_admin=1`)로 [새 리뷰]·[고치기]·[지우기]를 보일지만 정해요. 실제 권한은 늘 서버가 확인해요.
 
 ## 5. 환경 변수와 배포(Cloudflare Workers)
 
-블로그는 **Cloudflare Workers**에서 돌아요. OpenNext 어댑터(`@opennextjs/cloudflare`)가 `next build` 결과를 Workers용 코드(`.open-next/`)로 바꾸고, `wrangler.jsonc` 설정대로 올라가요. main에 커밋이 올라올 때마다(글쓰기 화면의 저장 포함) Cloudflare의 **Workers Builds**가 다시 빌드·배포해요. Workers Builds는 배포 횟수가 아니라 빌드 시간으로 세서(무료 한 달 3,000분), 저장할 때마다 다시 배포하는 이 블로그에 맞아요.
+블로그는 **Cloudflare Workers**에서 돌아요. OpenNext 어댑터(`@opennextjs/cloudflare`)가 `next build` 결과를 Workers용 코드(`.open-next/`)로 바꾸고, `wrangler.jsonc` 설정대로 올라가요. main에 커밋이 올라올 때마다(글쓰기 화면의 저장 포함) **GitHub Actions**(`.github/workflows/ci.yml`)가 검사를 돌리고, 통과하면 `deploy` 단계가 Cloudflare에 올려요. 공개 저장소의 GitHub Actions와 Cloudflare 배포는 횟수 제한이 없어서, 저장할 때마다 다시 배포하는 이 블로그에 맞아요.
 
 | 이름 | 설명 |
 |---|---|
@@ -90,17 +94,20 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | `SITE_URL` | (선택) 대표 주소. 없으면 `https://deokbae.blog` |
 | `GITHUB_REPOSITORY`, `GITHUB_BRANCH` | (선택) 다른 저장소·브랜치에 저장할 때만 |
 
-모두 서버가 요청을 처리할 때 읽는 값이라, 빌드 변수는 따로 넣지 않아도 돼요. 내 컴퓨터에서는 `.env.local`에 넣어요.
+로그인·저장 값 4개는 서버가 요청을 처리할 때 읽어요. 운영에서는 Cloudflare 워커의 비밀 값(Secret)으로, 내 컴퓨터에서는 `.env.local`에 넣어요.
+`SITE_URL`만은 빌드할 때도 읽어요(미리 만든 화면의 대표 주소와 사이트맵에 들어가요). 다른 주소로 바꾸려면 `.github/workflows/ci.yml`의 배포 단계 `env`에 넣고 다시 배포해야 사이트맵까지 바뀌어요.
 
-**처음 배포하기**
+**배포 설정(처음 한 번)** — 2026-11-13에 이렇게 해 두었어요.
 
-1. Cloudflare 대시보드 → Workers & Pages → **Create application** → **GitHub**에서 `deokbae-cinephile/blog`를 고릅니다.
-2. 이름은 `blog`(`wrangler.jsonc`의 `name`과 다르면 빌드가 실패해요), Build command는 `pnpm exec opennextjs-cloudflare build`, Deploy command는 `pnpm exec opennextjs-cloudflare deploy`로 넣고 **Save and Deploy**를 눌러요.
-3. Settings → Build → Branch control에서 **Enable Preview Builds**를 꺼요. main이 아닌 브랜치의 미리보기 빌드는 화면 캐시를 채우지 않아 목록이 깨지고 빌드 시간만 써요.
-4. Settings → **Variables and Secrets** → Add로 위 네 값을 **Secret**으로 넣고 Deploy를 눌러 반영해요.
-5. `https://blog.<계정 이름>.workers.dev`에서 확인한 뒤 아래 "도메인 연결"로 `deokbae.blog`를 붙여요.
+| 어디에 | 무엇을 |
+|---|---|
+| GitHub 저장소 → Settings → Secrets and variables → Actions | 비밀 값 `CLOUDFLARE_API_TOKEN`(Workers 배포 권한만 준 Cloudflare API 토큰), 변수 `CLOUDFLARE_ACCOUNT_ID`(Cloudflare 계정 번호) |
+| Cloudflare 워커 `blog`의 비밀 값 | 위 표의 `ADMIN_ID`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `GITHUB_CONTENT_TOKEN` |
 
-> 내 컴퓨터에서 `opennextjs-cloudflare deploy`로 직접 올리지 마세요. OpenNext는 `.env.local` 같은 `.env` 파일의 값을 워커 코드에 기본값으로 함께 넣어서, 시험용 값(가짜 GitHub 주소 등)이 운영 워커에 실릴 수 있어요. 배포는 Workers Builds에 맡겨요.
+- 비밀 값 바꾸기: `pnpm exec wrangler login` 뒤 `pnpm exec wrangler secret put ADMIN_PASSWORD_HASH`처럼 하나씩 넣거나, Cloudflare 대시보드 → Workers & Pages → blog → Settings → Variables and Secrets에서 바꿔요. 비밀번호를 바꿀 때는 `pnpm admin-secrets`로 새 해시를 만들어요.
+- `GITHUB_CONTENT_TOKEN`은 기한(1년)이 있어요. 기한이 지나면 저장이 실패하니, 같은 권한으로 새로 만들어 바꿔 넣어요.
+- 배포는 GitHub Actions에 맡겨요. 내 컴퓨터에서 `opennextjs-cloudflare deploy`로 직접 올리면, OpenNext가 `.env.local` 같은 `.env` 파일의 값을 워커 코드에 기본값으로 함께 넣어서 시험용 값(가짜 GitHub 주소 등)이 운영 워커에 실릴 수 있어요.
+- 처음 주소는 `https://blog.<계정 하위 도메인>.workers.dev`이고, 아래 "도메인 연결"로 `deokbae.blog`를 붙여요.
 
 **무료 플랜 한도와 이 블로그** — 요청 하나에 CPU 10ms, 하루 요청 10만 건, 이미지 변환 한 달 5,000개(넘으면 새 변환만 실패하고 요금은 없어요). 아래는 내 컴퓨터의 Workers 런타임(workerd)으로 잰 값이에요(2026-11).
 
@@ -125,6 +132,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 3. Cloudflare가 알려 준 네임서버 두 개를 호스팅케이알 관리 화면의 네임서버 변경에 넣어요. Cloudflare에서 도메인이 Active가 되면 끝이에요(몇 분~하루).
 4. `wrangler.jsonc`의 `"routes"` 줄 앞 `//`를 지우고 main에 올려요. 다음 배포 때 Cloudflare가 DNS 기록과 HTTPS 인증서를 알아서 만들어요.
 5. (선택) www 주소도 받으려면 `www`에 프록시(주황 구름) DNS 기록을 하나 두고, Rules → Redirect Rules의 "Redirect from WWW to root" 템플릿으로 `deokbae.blog`에 넘겨요.
+6. (권장) Security → WAF → Rate limiting rules에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. 그리고 `wrangler.jsonc`에 `"workers_dev": false`를 넣어 `workers.dev` 주소를 닫으면, 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 
@@ -150,4 +158,4 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 내 컴퓨터에서 글쓰기 화면을 써 보고 싶으면, 가짜 GitHub 서버를 띄우고(`node e2e/mock-github.mjs`) `.env.local`에 `GITHUB_API_URL=http://127.0.0.1:3101`과 `GITHUB_CONTENT_TOKEN=e2e-token`을 넣으면 진짜 저장소를 건드리지 않고 저장해 볼 수 있어요. `pnpm dev`와 `pnpm cf:preview` 모두 같은 방법으로 돼요.
 
-CI(GitHub Actions)는 Node.js 서버(`pnpm build` → `pnpm start`)로 검사하고, Workers용 빌드는 배포할 때 Workers Builds가 해요. Workers용 빌드가 실패하면 배포되지 않고 이전 버전이 그대로 남아요.
+CI(GitHub Actions)의 검사(`check`)는 Node.js 서버(`pnpm build` → `pnpm start`)로 하고, Workers용 빌드는 검사가 통과한 뒤 배포(`deploy`) 단계에서 해요. 검사나 Workers용 빌드가 실패하면 배포되지 않고 이전 버전이 그대로 남아요.

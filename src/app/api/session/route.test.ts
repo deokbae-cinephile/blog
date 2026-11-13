@@ -10,6 +10,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MAX_FAILURES, recordLoginFailure } from "@/lib/login-limit";
 import { hashPassword } from "@/lib/password-hash";
 
 import { DELETE, POST } from "./route";
@@ -17,11 +18,14 @@ import { DELETE, POST } from "./route";
 const SECRET = "test-secret-0123456789-abcdefghij-klmnop";
 let hash: string;
 
-/** 로그인 요청을 만들어요. origin: 요청을 보낸 사이트(기본은 우리 사이트) */
-const loginRequest = (body: unknown, origin = "http://localhost") =>
+/**
+ * 로그인 요청을 만들어요.
+ * origin: 요청을 보낸 사이트(기본은 우리 사이트), ip: 요청한 곳(실패 횟수를 곳마다 세요. 테스트끼리 섞이지 않게 바꿔 써요)
+ */
+const loginRequest = (body: unknown, origin = "http://localhost", ip = "192.0.2.1") =>
   new NextRequest("http://localhost/api/session", {
     method: "POST",
-    headers: { origin, "content-type": "application/json" },
+    headers: { origin, "content-type": "application/json", "cf-connecting-ip": ip },
     body: JSON.stringify(body),
   });
 
@@ -65,6 +69,27 @@ describe("POST /api/session (로그인)", () => {
   it("다른 사이트에서 보낸 요청은 받지 않는다(CSRF 막기)", async () => {
     const response = await POST(loginRequest({ id: "deokbae", password: "correct horse" }, "https://evil.example"));
     expect(response.status).toBe(403);
+  });
+
+  it(`같은 곳에서 ${MAX_FAILURES}번 틀린 뒤에는 맞는 비밀번호라도 확인하지 않고 429와 기다릴 시간을 알려 준다`, async () => {
+    const ip = "192.0.2.50";
+    for (let index = 0; index < MAX_FAILURES; index += 1) recordLoginFailure(ip);
+    const response = await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip));
+    expect(response.status).toBe(429);
+    expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect((await response.json()).message).toContain("분 뒤 다시 시도");
+    expect(response.headers.getSetCookie()).toEqual([]);
+    // 다른 곳에서는 그대로 로그인할 수 있어요.
+    expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, "192.0.2.51"))).status).toBe(200);
+  });
+
+  it("로그인에 성공하면 그곳의 실패 기록을 지운다", async () => {
+    const ip = "192.0.2.60";
+    for (let index = 0; index < MAX_FAILURES - 1; index += 1) recordLoginFailure(ip);
+    expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip))).status).toBe(200);
+    // 기록이 지워져서, 다시 MAX_FAILURES - 1번 틀려도 막히지 않아요.
+    for (let index = 0; index < MAX_FAILURES - 1; index += 1) recordLoginFailure(ip);
+    expect((await POST(loginRequest({ id: "deokbae", password: "correct horse" }, undefined, ip))).status).toBe(200);
   });
 });
 

@@ -229,8 +229,11 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
     setShown(PAGE_SIZE);
   }
   // 지금 보여 줄 리뷰와, 아직 남은 리뷰가 있는지
-  const visible = results.slice(0, shown);
-  const hasMore = shown < results.length;
+  // 미리 만든 HTML(interactive가 false)에는 모든 리뷰를 담아요. 자바스크립트가 꺼져 있으면
+  // [더 보기]도 저절로 불러오기도 동작하지 않아서, 처음 10편 뒤의 리뷰에 닿을 길이 없어지거든요.
+  // (자바스크립트가 켜지면 처음 10편 + [더 보기]로 바뀌어요. 바뀌는 곳은 첫 화면 아래라 눈에 띄지 않아요.)
+  const visible = interactive ? results.slice(0, shown) : results;
+  const hasMore = interactive && shown < results.length;
 
   // [더 보기]로 불러왔을 때(단추를 누르거나, 단추에 초점이 있는 채로 저절로 불러왔을 때),
   // 새로 나온 첫 리뷰로 초점을 옮기려고 그 번호를 기억해 둬요.

@@ -15,6 +15,7 @@
  *   POST  /repos/:주인/:이름/git/trees                 새 트리 만들기(base_tree + 바뀐 파일)
  *   POST  /repos/:주인/:이름/git/commits               새 커밋 만들기
  *   PATCH /repos/:주인/:이름/git/refs/heads/main        브랜치 옮기기
+ *   POST  /graphql                                      커밋의 폴더 안 원고 글자를 한 번에(다른 리뷰가 쓰는 사진 확인용)
  *
  * 시험용 도구
  *   GET  /__commits : 지금까지 올라온 커밋 목록(메시지, 더한 파일, 지운 파일). 테스트가 결과를 확인할 때 써요.
@@ -132,6 +133,18 @@ const server = createServer(async (request, response) => {
 
   // 토큰 확인: 진짜 GitHub처럼 틀리면 401
   if (request.headers.authorization !== `Bearer ${TOKEN}`) return send(response, 401, { message: "Bad credentials" });
+
+  // GraphQL: "커밋:폴더" 모양의 expression을 받아, 그 폴더 바로 아래 파일들의 글자를 돌려줘요(lib/github.ts의 readTextFiles).
+  if (route === "/graphql" && request.method === "POST") {
+    const { variables } = await readBody(request);
+    const [commitSha, dir] = String(variables?.expression ?? "").split(":");
+    const commit = commits.get(commitSha);
+    if (!commit) return send(response, 200, { data: { repository: { object: null } } });
+    const entries = [...trees.get(commit.tree)]
+      .filter(([file]) => file.startsWith(`${dir}/`) && !file.slice(dir.length + 1).includes("/"))
+      .map(([file, sha]) => ({ name: file.slice(dir.length + 1), type: "blob", object: { text: blobs.get(sha).toString("utf8") } }));
+    return send(response, 200, { data: { repository: { object: { entries } } } });
+  }
   if (!route.startsWith(`${REPO}/git/`)) return send(response, 404, { message: "Not Found" });
   const rest = route.slice(`${REPO}/git/`.length);
 

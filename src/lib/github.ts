@@ -4,7 +4,7 @@
  * 이 파일이 하는 일
  *   리뷰 원고(.md)와 포스터·장면 사진은 모두 GitHub 저장소에 파일로 들어 있어요.
  *   글쓴이가 글쓰기 화면에서 저장하면, 서버가 이 파일의 함수로 저장소에 "커밋"을 만들어 올려요.
- *   그러면 Cloudflare(Workers Builds)가 바뀐 저장소로 블로그를 다시 빌드·배포해서, 몇 분 뒤 새 글이 보여요.
+ *   그러면 GitHub Actions가 바뀐 저장소를 검사한 뒤 Cloudflare에 다시 배포해서, 몇 분 뒤 새 글이 보여요.
  *
  * 왜 데이터베이스가 아니라 저장소에 저장하나요?
  *   - 원고가 그냥 Markdown 파일이라 어디서든 열어 보고 고칠 수 있어요.
@@ -92,18 +92,31 @@ function describeFailure(status: number): string {
  * @param init 요청 방법(method)과 보낼 내용(body). 없으면 GET
  */
 async function call<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  return send<T>((config) => `${config.api}/repos/${config.owner}/${config.name}${path}`, init);
+}
+
+/**
+ * GitHub API에 요청을 보내는 공통 부분이에요. 저장소 API(call)와 GraphQL(readTextFiles)이 함께 써요.
+ *
+ * @param url 설정을 받아 요청 주소를 만드는 함수
+ * @param init 요청 방법(method)과 보낼 내용(body). 없으면 GET
+ */
+async function send<T>(url: (config: NonNullable<ReturnType<typeof readConfig>>) => string, init: { method?: string; body?: unknown }): Promise<T> {
   const config = readConfig();
   if (!config) throw new GitHubError(503, "서버에 GitHub 토큰(GITHUB_CONTENT_TOKEN)이 없어 저장할 수 없습니다. .env.example을 보고 설정해 주세요.");
 
   let response: Response;
   try {
-    response = await fetch(`${config.api}/repos/${config.owner}/${config.name}${path}`, {
+    response = await fetch(url(config), {
       method: init.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${config.token}`,
         // GitHub가 권하는 API 판 번호. 답의 모양이 갑자기 바뀌지 않게 정해 둬요.
         "X-GitHub-Api-Version": "2022-11-28",
+        // GitHub API는 User-Agent(누가 보낸 요청인지)가 없는 요청을 거절해요.
+        // Node.js의 fetch는 알아서 붙이지만 Cloudflare Workers의 fetch는 붙이지 않아서 직접 적어요.
+        "User-Agent": "deokbae-blog",
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -116,6 +129,50 @@ async function call<T>(path: string, init: { method?: string; body?: unknown } =
   }
   if (!response.ok) throw new GitHubError(response.status, describeFailure(response.status));
   return (await response.json()) as T;
+}
+
+/** GraphQL로 폴더 안 파일들의 글자를 한꺼번에 받는 질의. 그림 같은 파일은 text가 null로 와요. */
+const TREE_TEXTS_QUERY = `query($owner: String!, $name: String!, $expression: String!) {
+  repository(owner: $owner, name: $name) {
+    object(expression: $expression) {
+      ... on Tree { entries { name type object { ... on Blob { text } } } }
+    }
+  }
+}`;
+
+/** TREE_TEXTS_QUERY의 답 모양 */
+type TreeTextsAnswer = {
+  data?: { repository?: { object?: { entries?: { name: string; type: string; object?: { text?: string | null } | null }[] } | null } | null };
+  errors?: unknown[];
+};
+
+/**
+ * 커밋 하나에서 폴더 안 글자 파일들을 한 번에 읽어요(GraphQL 요청 하나).
+ *
+ * 왜 한 번에 읽나요?
+ *   파일마다 따로 요청하면 리뷰가 많아질수록 요청도 늘어요. Cloudflare Workers 무료 플랜은
+ *   요청 하나를 처리하는 동안 바깥으로 보낼 수 있는 요청이 50개까지라, 한 번에 읽어야 안전해요.
+ *
+ * @param commitSha 읽을 커밋 번호(getSnapshot의 commitSha)
+ * @param dir 폴더 경로. 예: "content/reviews"
+ * @returns 파일 경로 → 글자. 바로 아래 파일만 담고, 글자로 읽을 수 없는 파일은 빼요.
+ */
+export async function readTextFiles(commitSha: string, dir: string): Promise<Map<string, string>> {
+  const answer = await send<TreeTextsAnswer>((config) => `${config.api}/graphql`, {
+    method: "POST",
+    body: {
+      query: TREE_TEXTS_QUERY,
+      variables: { owner: readConfig()?.owner, name: readConfig()?.name, expression: `${commitSha}:${dir}` },
+    },
+  });
+  // GraphQL은 실패해도 200으로 답하고 errors에 이유를 담아요.
+  if (answer.errors?.length) throw new GitHubError(502, "GitHub가 원고 목록을 돌려주지 않았습니다. 잠시 뒤 다시 시도해 주세요.");
+  const files = new Map<string, string>();
+  for (const entry of answer.data?.repository?.object?.entries ?? []) {
+    const text = entry.object?.text;
+    if (entry.type === "blob" && typeof text === "string") files.set(`${dir}/${entry.name}`, text);
+  }
+  return files;
 }
 
 /** 브랜치 이름(설정이 없으면 기본값). 주소에 넣을 때 쓰려고 따로 꺼내 둬요. */

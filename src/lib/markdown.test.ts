@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { findImages, renderMarkdown } from "./markdown";
+import { findImages, isSafeHref, renderMarkdown } from "./markdown";
 
 describe("renderMarkdown", () => {
   it("문단과 강조를 HTML로 바꾼다", async () => {
@@ -34,6 +34,16 @@ describe("renderMarkdown", () => {
   it("원고 안의 HTML 태그는 옮기지 않는다(스크립트가 실행되지 않게)", async () => {
     const html = await renderMarkdown('글 <script>alert("x")</script> 끝');
     expect(html).not.toContain("<script");
+  });
+
+  it("javascript: 같은 위험한 주소의 링크는 주소를 지우고 글자만 남긴다(XSS 막기)", async () => {
+    const html = await renderMarkdown(
+      "[누르기](javascript:alert(1)) [대문자](JAVASCRIPT:alert(1)) [자료](data:text/html,x) [메일](mailto:a@example.com)",
+    );
+    expect(html).not.toMatch(/javascript:/i);
+    expect(html).not.toContain("data:text");
+    expect(html).toContain("<a>누르기</a>");
+    expect(html).toContain('href="mailto:a@example.com"');
   });
 
   it("사이트 안 링크·이미지 주소는 그대로 두고, 바깥 링크는 opener를 넘기지 않는다", async () => {
@@ -93,6 +103,17 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown("본문[^1]\n\n[^1]: 각주 내용");
     expect(html).toContain(">각주</h2>");
     expect(html).toContain('aria-label="1번 각주를 단 곳으로 돌아가기"');
+  });
+});
+
+describe("isSafeHref", () => {
+  it("사이트 안 주소와 http·https·mailto만 받고, 탭·줄바꿈으로 숨긴 javascript:도 막는다", () => {
+    for (const ok of ["/reviews/winter-stop", "#fn-1", "./a", "../b", "https://example.com", "http://a.b", "mailto:a@b.c"]) {
+      expect(isSafeHref(ok)).toBe(true);
+    }
+    for (const bad of ["javascript:alert(1)", "java\tscript:alert(1)", " javascript:alert(1)", "vbscript:x", "data:text/html,x"]) {
+      expect(isSafeHref(bad)).toBe(false);
+    }
   });
 });
 

@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { commitChanges, createBlob, getSnapshot, GitHubError, isGitHubConfigured, readTextBlob } from "./github";
+import { commitChanges, createBlob, getSnapshot, GitHubError, isGitHubConfigured, readTextBlob, readTextFiles } from "./github";
 
 /** 가짜 fetch가 받은 요청 기록: [방법, 주소 뒷부분, 보낸 내용] */
 let calls: [string, string, unknown][];
@@ -25,6 +25,17 @@ function fakeGitHub(url: string, init: RequestInit = {}) {
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
   calls.push([method, path, body]);
   const json = (data: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(data), { status }));
+
+  // GraphQL: 폴더 안 파일들의 글자를 한 번에 돌려줘요(그림 파일은 text가 null, 폴더는 type이 tree).
+  if (url === "https://api.github.com/graphql" && method === "POST") {
+    const entries = [
+      { name: "a.md", type: "blob", object: { text: "원고 A" } },
+      { name: "b.md", type: "blob", object: { text: "원고 B" } },
+      { name: "poster.png", type: "blob", object: { text: null } },
+      { name: "drafts", type: "tree", object: {} },
+    ];
+    return json({ data: { repository: { object: { entries } } } });
+  }
 
   if (path === "/git/ref/heads/main") return json({ object: { sha: `commit-${calls.length}` } });
   if (path.startsWith("/git/commits/")) return json({ tree: { sha: "base-tree" } });
@@ -57,11 +68,16 @@ describe("github", () => {
     vi.unstubAllGlobals();
   });
 
-  it("토큰이 있으면 설정된 것으로 보고, 요청에 토큰과 API 판 번호를 붙인다", async () => {
+  it("토큰이 있으면 설정된 것으로 보고, 요청에 토큰과 API 판 번호, User-Agent를 붙인다", async () => {
     expect(isGitHubConfigured()).toBe(true);
     await getSnapshot();
     const [, init] = vi.mocked(fetch).mock.calls[0]!;
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer test-token", "X-GitHub-Api-Version": "2022-11-28" });
+    // User-Agent가 없으면 GitHub가 요청을 거절해요(Cloudflare Workers의 fetch는 알아서 붙이지 않아요).
+    expect(init?.headers).toMatchObject({
+      Authorization: "Bearer test-token",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "deokbae-blog",
+    });
   });
 
   it("최신 커밋의 파일 목록(폴더 제외)을 읽는다", async () => {
@@ -122,6 +138,24 @@ describe("github", () => {
   ])("GitHub가 %i로 답하면 고치는 방법을 알려 준다", async (status, message) => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("{}", { status }))));
     await expect(getSnapshot()).rejects.toThrow(message);
+  });
+
+  it("폴더 안 원고들을 GraphQL 요청 하나로 읽고, 글자가 아닌 파일과 폴더는 뺀다", async () => {
+    const files = await readTextFiles("c1", "content/reviews");
+    expect([...files]).toEqual([
+      ["content/reviews/a.md", "원고 A"],
+      ["content/reviews/b.md", "원고 B"],
+    ]);
+    // 리뷰가 많아도 요청은 하나예요(Workers 무료 플랜의 바깥 요청 수 한도 안).
+    expect(calls).toHaveLength(1);
+    const [method, url, body] = calls[0]!;
+    expect([method, url]).toEqual(["POST", "https://api.github.com/graphql"]);
+    expect(body).toMatchObject({ variables: { owner: "deokbae-cinephile", name: "blog", expression: "c1:content/reviews" } });
+  });
+
+  it("GraphQL이 오류를 담아 답하면 502로 알린다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ errors: [{ message: "x" }] }), { status: 200 })));
+    await expect(readTextFiles("c1", "content/reviews")).rejects.toMatchObject({ status: 502 });
   });
 
   it("GitHub에 닿지 못하면 502로, 토큰이 없으면 503으로 알린다", async () => {

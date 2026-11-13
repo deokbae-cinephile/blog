@@ -177,9 +177,27 @@ function toFigure(image: Element): Element {
   return { type: "element", tagName: "figure", properties: { className: ["photo"], style }, children };
 }
 
+/** 링크 주소로 받아 주는 방식(scheme). 사이트 안 주소(/, #, ./, ../)는 방식이 없어서 따로 받아 줘요. */
+const SAFE_SCHEMES = new Set(["http", "https", "mailto"]);
+
+/**
+ * 링크로 남겨도 안전한 주소인지 확인해요.
+ *
+ * "javascript:alert(1)" 같은 주소를 링크로 두면, 독자가 누르는 순간 우리 블로그에서 스크립트가 돌아요(XSS).
+ * 그래서 http·https·mailto와 사이트 안 주소만 받아요.
+ * 주소 해석기는 탭·줄바꿈·공백을 지우고 읽어서("java\tscript:"도 javascript:가 돼요), 그것들을 지운 뒤 판단해요.
+ */
+export function isSafeHref(href: string): boolean {
+  const value = href.replace(/[\u0000- \u007f]/g, "");
+  // "글자:" 모양으로 시작하면 방식(scheme)이 있는 주소예요. 예: javascript:, data:, https:
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value);
+  return !scheme || SAFE_SCHEMES.has(scheme[1]!.toLowerCase());
+}
+
 /**
  * [우리 도구 3] HTML 나무를 손봅니다.
  *
+ * - 위험한 방식의 링크(javascript: 등)는 주소를 지우고 글자만 남겨요(isSafeHref).
  * - 바깥 링크에는 rel="noopener noreferrer"를 달아, 열린 사이트가 우리 페이지를 조작하지 못하게 해요.
  * - 이미지는 loading="lazy"로 화면에 가까워질 때 받아 첫 화면을 빠르게 해요.
  * - 표는 좁은 화면에서 넘치지 않게 가로 스크롤 영역으로 감싸요. 키보드 사용자도 스크롤할 수 있게
@@ -194,6 +212,11 @@ function rehypeSiteContent() {
 
     // [1번째 방문] HTML 나무의 모든 요소(element)를 방문해요.
     visit(tree, "element", (node: Element) => {
+      // 위험한 방식의 링크는 주소(href)를 지워요. <a>는 남아서 글자는 그대로 보이지만 누를 수는 없어요.
+      if (node.tagName === "a" && typeof node.properties.href === "string" && !isSafeHref(node.properties.href)) {
+        delete node.properties.href;
+      }
+
       // <a>이면서 http:// 또는 https://로 시작하는 바깥 링크라면 rel을 달아요.
       // /^https?:\/\//는 정규식이에요. "http"로 시작하고 s는 있어도 없어도 되며(?) 뒤에 "://"가 오는 글자를 찾습니다.
       if (node.tagName === "a" && typeof node.properties.href === "string" && /^https?:\/\//.test(node.properties.href)) {

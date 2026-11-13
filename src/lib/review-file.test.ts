@@ -131,4 +131,20 @@ describe("serializeReviewFile", () => {
     // 저장한 원고는 빌드 때 원고 검사도 통과해야 해요(따옴표로 감싼 "1987"은 글자 제목이에요).
     expect(text).toContain('title: "1987"');
   });
+
+  it("줄바꿈이 든 값도 한 줄 따옴표로 적어서, 다시 읽으면 같은 값이 된다(틀린 YAML이 되지 않게)", () => {
+    const frontmatter = reviewFrontmatterSchema.parse({
+      title: "겨울 정류장",
+      year: 2024,
+      director: "한서윤",
+      genres: ["드라마"],
+      rating: 4,
+      oneLiner: "첫 줄\n둘째 줄",
+      publishedAt: "2026-11-08",
+    });
+    const text = serializeReviewFile(frontmatter, "");
+    expect(text).toContain('oneLiner: "첫 줄\\n둘째 줄"');
+    const parsed = parseReviewFile(text);
+    expect(parsed.ok && parsed.values.oneLiner).toBe("첫 줄\n둘째 줄");
+  });
 });

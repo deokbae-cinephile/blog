@@ -38,7 +38,20 @@ type Errors = { id?: string; password?: string; form?: string };
  * 다른 사이트로 보내는 주소가 들어오면 처음 화면("/")으로 가요(로그인 화면을 이용한 피싱 막기).
  */
 export function safeNext(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+  // 1) "/"로 시작하는 주소만 받아요.
+  // 2) 제어 문자(탭·줄바꿈 등)와 역슬래시가 섞인 주소는 받지 않아요.
+  //    브라우저의 주소 해석기는 탭·줄바꿈을 지우고 역슬래시를 "/"로 바꿔서,
+  //    "/\t/evil.example" 같은 주소가 다른 사이트 주소("//evil.example")로 바뀔 수 있어요.
+  // 3) 끝으로 진짜 주소 해석기로 풀어 본 뒤, 출처(origin)가 우리 사이트 그대로인지 확인해요.
+  if (!next || !next.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(next)) return "/";
+  try {
+    // 기준 주소는 아무 값이나 괜찮아요. 풀어 낸 주소의 출처가 기준과 같으면 사이트 안 주소예요.
+    const base = "http://same.origin";
+    const url = new URL(next, base);
+    return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : "/";
+  } catch {
+    return "/";
+  }
 }
 
 /** 로그인 폼 */

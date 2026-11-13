@@ -35,9 +35,21 @@ async function send<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
   } catch {
     return OFFLINE;
   }
-  // 답이 JSON이 아닐 수도 있어서(호스팅의 오류 화면 등) 읽기에 실패하면 빈 객체로 봐요.
-  const body = (await response.json().catch(() => ({}))) as { message?: string; errors?: FieldErrors };
-  if (response.ok) return { ok: true, data: body as T };
+  // 답이 JSON이 아닐 수도 있어서(호스팅의 오류 화면, 중간에 끊긴 답 등) 읽기에 실패하면 undefined로 봐요.
+  const read: unknown = await response.json().catch(() => undefined);
+  if (response.ok) {
+    // 성공 답은 늘 JSON이에요. 읽지 못했다면 답이 중간에 끊긴 거라, 성공으로 넘기지 않아요.
+    // 서버에서는 저장이 끝났을 수도 있어서, 다시 하기 전에 먼저 확인하라고 알려요.
+    if (read === null || typeof read !== "object") {
+      return {
+        ok: false,
+        status: response.status,
+        message: "서버의 답을 끝까지 받지 못했습니다. 이미 저장됐을 수 있으니 목록에서 먼저 확인한 뒤 다시 시도해 주세요.",
+      };
+    }
+    return { ok: true, data: read as T };
+  }
+  const body = (read ?? {}) as { message?: string; errors?: FieldErrors };
   return {
     ok: false,
     status: response.status,

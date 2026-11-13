@@ -13,7 +13,7 @@ import { EMPTY_VALUES } from "./review-file";
 import { deleteReview, isUploadPathFor, ReviewStoreError, saveReview, type SavePayload } from "./review-store";
 
 /** 가짜 저장소: 파일 경로 → 내용 번호, 그리고 내용 번호 → 글자(원고) */
-const repo = vi.hoisted(() => ({ files: new Map<string, string>(), texts: new Map<string, string>() }));
+const repo = vi.hoisted(() => ({ files: new Map<string, string>(), texts: new Map<string, string>(), failTexts: false }));
 
 vi.mock("./github", async (importOriginal) => {
   const original = await importOriginal<typeof import("./github")>();
@@ -26,6 +26,12 @@ vi.mock("./github", async (importOriginal) => {
       return sha;
     }),
     readTextBlob: vi.fn(async (sha: string) => repo.texts.get(sha) ?? ""),
+    // 원고들을 한 번에 읽는 가짜: 저장소의 원고(.md) 글자를 돌려줘요. failTexts를 켜면 읽기에 실패해요.
+    readTextFiles: vi.fn(async () => {
+      if (repo.failTexts) throw new Error("원고를 읽지 못함");
+      const reviews = [...repo.files].filter(([path]) => path.startsWith("content/reviews/"));
+      return new Map(reviews.map(([path, sha]) => [path, repo.texts.get(sha) ?? ""] as const));
+    }),
     getSnapshot: vi.fn(async () => ({ commitSha: "c1", treeSha: "t1", files: repo.files })),
     // 바꿀 파일 목록을 만든 뒤 그대로 돌려받으려고, 결과를 lastChanges에 담아 둬요.
     commitChanges: vi.fn(async (_message: string, build: (snapshot: unknown) => unknown) => {
@@ -68,6 +74,7 @@ const SHA = "a".repeat(40);
 beforeEach(() => {
   repo.files = new Map();
   repo.texts = new Map();
+  repo.failTexts = false;
   lastChanges = undefined;
 });
 
@@ -117,6 +124,13 @@ describe("saveReview(새 리뷰)", () => {
     expect(error).toMatchObject({ status: 422, errors: { body: expect.stringContaining("/images/winter-stop/scene-1.jpg") } });
   });
 
+  it("참조형 사진(![설명][이름])도 빌드와 같은 규칙으로 검사해, 바깥 주소면 저장하지 않는다", async () => {
+    const body = "![장면][a]\n\n[a]: https://example.com/a.jpg";
+    const error = await saveReview("create", "winter-stop", payload({ body })).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ status: 422, errors: { body: expect.stringContaining("/로 시작하는 주소") } });
+    expect(lastChanges).toBeUndefined();
+  });
+
   it("다른 리뷰의 경로로 올린 파일은 받지 않는다", async () => {
     await expect(
       saveReview("create", "winter-stop", payload({}, [{ path: "public/posters/other.jpg", sha: SHA }])),
@@ -134,6 +148,32 @@ describe("saveReview(고치기)", () => {
 
   it("없는 리뷰를 고치려 하면 404로 알린다", async () => {
     await expect(saveReview("update", "winter-stop", payload())).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("처음 불러온 원고 번호(baseSha) 없이 고치려 하면 덮어쓰지 않고 400으로 알린다", async () => {
+    seedReview("winter-stop", OLD);
+    await expect(saveReview("update", "winter-stop", payload())).rejects.toMatchObject({ status: 400 });
+    expect(lastChanges).toBeUndefined();
+  });
+
+  it("다른 리뷰 원고가 쓰는 예전 포스터와 장면 사진은 지우지 않는다", async () => {
+    const sha = seedReview("winter-stop", OLD);
+    repo.files.set("public/posters/winter-stop.jpg", "p1");
+    repo.files.set("public/images/winter-stop/old.jpg", "i1");
+    // 다른 리뷰가 이 리뷰의 포스터와 장면 사진을 가져다 써요.
+    seedReview("other", "---\ntitle: 다른 리뷰\nposter: winter-stop.jpg\n---\n\n![빌린 장면](/images/winter-stop/old.jpg)\n");
+
+    await saveReview("update", "winter-stop", { ...payload({ poster: "", body: "새 본문" }), baseSha: sha });
+    expect(lastChanges).toEqual([{ path: "content/reviews/winter-stop.md", sha: expect.stringMatching(/^blob-/) }]);
+  });
+
+  it("다른 리뷰 원고를 읽지 못하면 안전하게 아무 파일도 지우지 않는다", async () => {
+    const sha = seedReview("winter-stop", OLD);
+    repo.files.set("public/images/winter-stop/old.jpg", "i1");
+    repo.failTexts = true;
+
+    await saveReview("update", "winter-stop", { ...payload({ poster: "", body: "새 본문" }), baseSha: sha });
+    expect(lastChanges).toEqual([{ path: "content/reviews/winter-stop.md", sha: expect.stringMatching(/^blob-/) }]);
   });
 
   it("더 쓰지 않는 이 리뷰의 예전 포스터와 장면 사진은 지운다", async () => {
@@ -175,6 +215,19 @@ describe("deleteReview", () => {
     repo.files.set("public/posters/test-pattern.png", "p2");
     await deleteReview("alpha");
     expect(lastChanges).toEqual([{ path: "content/reviews/alpha.md", sha: null }]);
+  });
+
+  it("다른 리뷰 원고가 쓰는 사진은 남기고, 쓰지 않는 사진만 지운다", async () => {
+    seedReview("winter-stop", "---\ntitle: 겨울 정류장\n---\n");
+    repo.files.set("public/images/winter-stop/shared.jpg", "i1");
+    repo.files.set("public/images/winter-stop/alone.jpg", "i2");
+    seedReview("other", "---\ntitle: 다른 리뷰\n---\n\n![함께 쓰는 장면](/images/winter-stop/shared.jpg)\n");
+
+    await deleteReview("winter-stop");
+    expect(lastChanges).toEqual([
+      { path: "content/reviews/winter-stop.md", sha: null },
+      { path: "public/images/winter-stop/alone.jpg", sha: null },
+    ]);
   });
 
   it("없는 리뷰를 지우려 하면 404로 알린다", async () => {
