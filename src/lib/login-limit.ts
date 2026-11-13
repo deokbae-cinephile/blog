@@ -14,8 +14,8 @@
  *
  * 한계
  *   기록은 서버 메모리에 있어서 서버 인스턴스(Workers의 isolate)마다 따로 세고, 인스턴스가 바뀌면 사라져요.
- *   그래서 도메인을 Cloudflare에 연결한 뒤에는 Cloudflare의 속도 제한 규칙(Rate limiting rules, 무료 1개)으로
- *   /api/session을 함께 막으면 더 단단해요(docs/development.md 5장).
+ *   그래서 Cloudflare의 속도 제한 규칙(Rate limiting rules, 무료 1개)으로 /api/session을 함께 막고 있어요
+ *   (IP마다 10초에 5번, docs/development.md 5장).
  *
  * 누가 쓰나요?
  *   app/api/session/route.ts(로그인 API)
