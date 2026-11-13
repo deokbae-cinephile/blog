@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit PR 리뷰 설정 (.coderabbit.yaml)
+# PR을 열면 CodeRabbit(AI 코드 리뷰)이 자동으로 리뷰를 남겨요. 리뷰는 한국어로, 이 프로젝트의 규칙을 기준으로 봅니다.
+language: ko-KR
+tone_instructions: '한국어 존댓말로 짧고 구체적으로 씁니다. 근거가 약한 추측성 지적은 하지 않습니다.'
+
+reviews:
+  profile: chill # 꼭 필요한 지적만
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  poem: false
+  in_progress_fortune: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ['main']
+  # 자동으로 만들어지거나 리뷰할 필요가 없는 파일
+  path_filters:
+    - '!pnpm-lock.yaml'
+    - '!public/posters/**'
+    - '!src/app/fonts/**'
+    - '!public/icons/**'
+    - '!src/app/apple-icon.png'
+  path_instructions:
+    - path: 'src/**'
+      instructions: |
+        - 구조는 평범한 Next.js입니다: src/app(라우트), src/components(화면 조각), src/lib(데이터·규칙). FSD를 쓰지 않습니다.
+        - 신입 개발자가 읽는 코드입니다. 파일마다 맨 위에 @file JSDoc(하는 일, 맡은 기능, 쓰는 곳)이 있어야 하고, 줄마다 쉬운 한국어 주석이 코드와 맞는지 확인해 주세요.
+        - 가벼움이 우선입니다(미니 판). 새 의존성을 더하면 직접 구현으로 대신할 수 있는지 지적해 주세요.
+        - 서버가 있는 Next.js 앱입니다. 목록·상세는 빌드할 때 미리 만들고(정적 생성), 로그인·글쓰기(src/app/write)·저장 API(src/app/api)만 요청 때 돕니다.
+        - 인증: src/proxy.ts가 /write·/api/reviews·/api/images를 먼저 막고, API와 글쓰기 화면이 lib/admin-auth.ts로 한 번 더 확인해야 합니다(이중 잠금).
+        - proxy.ts와 lib/session.ts는 어느 호스팅에서나 돌도록 웹 표준 API(Web Crypto)만 씁니다. 비밀 값(GitHub 토큰, 해시, 세션 열쇠)은 서버 환경 변수에만 있어야 합니다.
+        - 저장 요청은 useRef 잠금으로 두 번 누름을 막고, 성공 후 화면을 떠나는 폼은 실패했을 때만 잠금을 풉니다.
+        - 접근성은 KWCAG 2.2와 WAI-ARIA 1.2 기준입니다: 네이티브 HTML 우선, 레이블·대체 텍스트, 키보드 조작, 초점 표시, 색만으로 구분하지 않기, 명도 대비.
+        - 디자인 규칙: 색은 globals.css의 변수(--crt-*), 글자 크기는 16px과 32px(text-big)만, 굵게·기울임 대신 반전과 밑줄.
+    - path: 'content/reviews/**'
+      instructions: |
+        - 리뷰 원고입니다. 문장이나 감상 내용은 지적하지 말고, frontmatter 형식(content/templates/review.md)만 봐 주세요.
+    - path: 'e2e/**'
+      instructions: |
+        - 화면의 역할·이름(getByRole)으로 찾고, 핵심 흐름과 접근성(axe)·레이아웃 넘침만 가볍게 확인합니다.

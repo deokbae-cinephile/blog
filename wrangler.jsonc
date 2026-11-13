@@ -1,0 +1,47 @@
+// Cloudflare Workers 설정 (wrangler.jsonc)
+//
+// 이 파일이 하는 일
+//   블로그를 Cloudflare Workers에 올릴 때 쓰는 설정이에요.
+//   wrangler(Cloudflare 명령줄 도구)와 OpenNext 어댑터(open-next.config.ts)가 읽어요.
+//   JSON에 주석을 달 수 있는 JSONC 형식이라 이렇게 설명을 적어 둘 수 있어요.
+//
+// 비밀 값은 여기에 적지 않아요
+//   ADMIN_ID, ADMIN_PASSWORD_HASH, SESSION_SECRET, GITHUB_CONTENT_TOKEN은
+//   Cloudflare 대시보드 → Workers & Pages → blog → Settings → Variables and Secrets에 "Secret"으로 넣어요.
+//   이 파일은 공개 저장소에 올라가니까요. 순서는 docs/development.md의 "5. 배포"를 보세요.
+{
+  // 편집기가 항목 설명과 자동 완성을 보여 주게 하는 설정 규칙 파일이에요.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 워커 이름. 대시보드에 보이는 이름이자 기본 주소(blog.<계정 이름>.workers.dev)가 돼요.
+  "name": "blog",
+  // 워커의 시작 파일. `opennextjs-cloudflare build`가 만들어요.
+  "main": ".open-next/worker.js",
+  // 이 날짜 기준의 Workers 런타임 동작을 써요. 날짜를 올리면 동작이 바뀔 수 있어서, 올릴 때는 미리 띄워 보고 올려요.
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": [
+    // Node.js 기본 모듈(node:crypto 등)을 쓸 수 있게 해요. 비밀번호 확인(scrypt)과 Next.js 서버에 필요해요.
+    "nodejs_compat",
+    // 워커 안의 fetch가 우리 도메인으로 갈 때도 일반 인터넷 길로 가게 해요(OpenNext가 권하는 값).
+    "global_fetch_strictly_public"
+  ],
+  // 정적 파일: public/의 파일, 빌드 파일(_next/static), 미리 만든 화면의 캐시가 여기에 올라가요.
+  //   정적 파일은 워커 코드를 거치지 않고 Cloudflare가 바로 내줘서 무료이고 빨라요.
+  //   헤더(보안·캐시)는 public/_headers에서 정해요.
+  "assets": {
+    "directory": ".open-next/assets",
+    // 워커 코드가 정적 파일을 읽을 때 쓰는 이름. 미리 만든 화면의 캐시를 여기서 읽어요.
+    "binding": "ASSETS"
+  },
+  // 이미지 최적화(next/image)를 Cloudflare Images로 해요. 무료로 한 달에 서로 다른 변환 5,000개까지 돼요.
+  "images": {
+    "binding": "IMAGES"
+  },
+  // 도메인 연결: deokbae.blog를 Cloudflare로 옮긴 뒤(docs/development.md "도메인 연결") 다음 줄 맨 앞의 //를 지워요.
+  // "routes": [{ "pattern": "deokbae.blog", "custom_domain": true }],
+  // 대시보드에서 넣은 일반 변수를 배포할 때 지우지 않아요. (기본으로는 이 파일에 없는 변수를 지워요.)
+  "keep_vars": true,
+  // 요청마다 걸린 CPU 시간과 오류를 대시보드(Observability)에서 볼 수 있게 기록해요(무료 플랜은 하루 20만 건까지).
+  "observability": {
+    "enabled": true
+  }
+}

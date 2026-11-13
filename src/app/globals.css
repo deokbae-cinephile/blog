@@ -1,0 +1,898 @@
+/**
+ * @file 전역 스타일 (app/globals.css)
+ *
+ * 이 파일이 하는 일
+ *   블로그 전체의 색, 글꼴, 그리고 "형광 초록 CRT 단말기" 느낌을 내는 스타일을 정합니다.
+ *   app/layout.tsx가 한 번 불러오면 모든 페이지에 적용돼요.
+ *
+ * 디자인 콘셉트
+ *   옛날 브라운관(CRT) 모니터의 단말기 화면이에요.
+ *   - 검은 화면에 형광 초록 글자, 글자 둘레가 살짝 번지는 빛(glow)
+ *   - 화면을 가로지르는 가는 줄무늬(주사선)와 둥근 화면 모서리, 어두운 가장자리
+ *   - 고른 것·강조는 초록 바탕에 검은 글자(반전, inverse)
+ *
+ * 이 파일의 순서
+ *   1. Tailwind 불러오기
+ *   2. 색 변수(:root)
+ *   3. Tailwind 테마에 우리 색·글꼴 등록(@theme)
+ *   4. 기본 요소 스타일(@layer base)
+ *   5. CRT 화면 효과(주사선, 모서리, 그늘)
+ *   6. 우리만의 유틸리티 클래스(@utility): inverse, glow, leader, stretched-link
+ *   7. 여러 번 쓰는 부품 스타일(@layer components): 단추, 떠 있는 단추, 포스터·사진 액자, 칩, 검색 칸·추천 층,
+ *      입력 칸·오류 문구, 확인 창, 본문(prose)
+ *
+ * Tailwind CSS가 뭔가요?
+ *   "flex", "mt-4", "text-center"처럼 미리 만들어진 작은 클래스를 HTML에 붙여 꾸미는 도구예요.
+ *   이 파일에서는 Tailwind로 안 되는 것(CRT 효과 등)과 여러 곳에서 쓰는 우리만의 클래스를 만들어요.
+ */
+
+/* 1. Tailwind의 기본 스타일과 모든 유틸리티 클래스를 불러와요. */
+@import "tailwindcss";
+
+/*
+ * 2. 색 변수
+ *
+ * CSS 변수(--이름: 값)는 한 번 정해 두고 var(--이름)으로 꺼내 쓰는 값이에요.
+ * 색을 변수로 두면 색을 바꿀 때 여기만 고치면 되고, 특정 영역 안에서만 다른 값으로 바꿀 수도 있어요(반전 영역처럼).
+ *
+ * 인광(phosphor) 색
+ *   옛 모니터는 화면에 바른 형광 물질(인광체)에 따라 글자색이 정해졌어요. 이 블로그는 형광 초록 하나만 써요.
+ *
+ * 명도 대비(글자가 배경에서 얼마나 잘 보이는지, 접근성 기준은 4.5:1 이상)
+ *   - 글자 / 화면: 14.9
+ *   - 보조 글자 / 화면: 10.1 (검색창 안내 글자도 이 색이에요)
+ *   - 선 / 화면: 4.5
+ *   - 반전 글자 / 인광 바탕: 14.4 (오류 문구도 반전으로 보여요)
+ */
+:root {
+  /* 인광 색 묶음(기본: 형광 초록) */
+  --phosphor: #39ff14; /* 글자 */
+  --phosphor-dim: #2ad40e; /* 조금 어두운 글자(보조 글자) */
+  --phosphor-line: #178a0a; /* 어두운 색(선, 빈 별) */
+  --screen: #020802; /* 화면 바탕(인광 빛이 아주 살짝 도는 검정) */
+  --ink: #021002; /* 반전 영역의 글자색 */
+  --pixel-secondary-inverse: #158a0b; /* 반전 영역의 빈 별 */
+  --glow-rgb: 57 255 20; /* 빛 번짐 색(빨강 초록 파랑). rgb(var(--glow-rgb) / 0.35)처럼 투명도를 붙여 써요. */
+  --phosphor-filter: url(#crt-phosphor); /* 포스터·사진을 형광 초록 4단계 명암으로 칠하는 SVG 필터(app/layout.tsx) */
+
+  /*
+   * 쓰임에 따라 붙인 이름(역할 변수)이에요. 컴포넌트는 이 이름을 써요.
+   * 반전 영역(.inverse)에서는 이 값들을 바꿔서, 그 안의 글자·선·별이 한꺼번에 뒤집히게 합니다.
+   */
+  --crt-bg: var(--screen); /* 바탕 */
+  --crt-fg: var(--phosphor); /* 글자 */
+  --crt-dim: var(--phosphor-dim); /* 보조 글자 */
+  --crt-line: var(--phosphor-line); /* 선 */
+  --pixel-secondary: var(--phosphor-line); /* 픽셀 그림의 보조색(빈 별) */
+
+  /* 글자 둘레 빛 번짐(text-shadow). 약한 것은 본문, 강한 것은 제목에 써요. */
+  --glow-soft: 0 0 4px rgb(var(--glow-rgb) / 0.35);
+  --glow-strong: 0 0 2px rgb(var(--glow-rgb) / 0.7), 0 0 12px rgb(var(--glow-rgb) / 0.45);
+
+  /* 이 사이트는 어두운 화면이라고 브라우저에 알려요. 스크롤바 등 기본 요소도 어둡게 그려져요. */
+  color-scheme: dark;
+}
+
+/*
+ * 3. Tailwind 테마에 우리 값 등록하기
+ *
+ * 여기에 --color-crt-fg를 등록하면 Tailwind가 text-crt-fg, bg-crt-fg, border-crt-fg 같은 클래스를 만들어 줘요.
+ * inline을 붙이면 클래스가 var(--crt-fg)를 그대로 가리켜서, 반전 영역에서 변수를 바꾸면 클래스 색도 따라 바뀌어요.
+ */
+@theme inline {
+  --color-crt-bg: var(--crt-bg);
+  --color-crt-fg: var(--crt-fg);
+  --color-crt-dim: var(--crt-dim);
+  --color-crt-line: var(--crt-line);
+  /* font-pixel 클래스: Neo둥근모를 먼저 쓰고, 없으면 고정폭 글꼴을 써요. --font-neodgm은 app/layout.tsx가 만들어요. */
+  --font-pixel: var(--font-neodgm), ui-monospace, monospace;
+  /*
+   * text-big 클래스: 32px 글자. 픽셀 글꼴은 16px의 정수배(16, 32)에서만 또렷해서,
+   * 이 블로그는 글자 크기를 16px(기본)과 32px(text-big) 두 가지만 써요.
+   */
+  --text-big: 2rem;
+  --text-big--line-height: 1.25;
+}
+
+/*
+ * 4. 기본 요소 스타일
+ *
+ * @layer base에 넣은 스타일은 Tailwind 클래스보다 우선순위가 낮아요.
+ * 그래서 기본값을 정해 두고, 필요한 곳에서는 클래스로 쉽게 바꿀 수 있어요.
+ */
+@layer base {
+  html {
+    background: var(--screen);
+    color: var(--crt-fg);
+    font-family: var(--font-pixel);
+    /* 휴대폰을 가로로 돌렸을 때 브라우저가 글자 크기를 멋대로 키우지 않게 해요. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* 픽셀 글꼴에는 굵게·기울임 모양이 없어요. 브라우저가 억지로 흉내 내면 글자가 뭉개져서 막아요.
+       대신 강조는 반전(초록 바탕)과 밑줄로 보여 줘요. */
+    font-synthesis: none;
+    /* 스크롤바 색(손잡이, 바탕) */
+    scrollbar-color: var(--phosphor-line) var(--screen);
+    /* 화면 아래 구석에 떠 있는 단추(키보드 조작, 맨 위로)만큼 아래쪽에 여유를 둬요.
+       Tab이나 방향키로 고른 항목을 화면 안으로 스크롤할 때 이 여유를 빼고 맞춰서, 고른 항목이 단추 뒤에 숨지 않아요. */
+    scroll-padding-block-end: 5rem;
+  }
+
+  body {
+    /* 화면 높이만큼은 늘 차지해요(svh: 휴대폰 주소창을 뺀 화면 높이). */
+    min-height: 100svh;
+    background: var(--screen);
+    /* 16px 글자, 줄 간격 1.75배(28px). 한글 긴 글을 읽기 편한 간격이에요. */
+    font-size: 1rem;
+    line-height: 1.75;
+    /* 모든 글자에 약한 빛 번짐 */
+    text-shadow: var(--glow-soft);
+    /* macOS에서 글자 가장자리를 부드럽게 다듬지 않아 픽셀이 또렷하게 보여요. */
+    -webkit-font-smoothing: none;
+    /* keep-all: 한글 낱말 중간에서 줄을 바꾸지 않아요(읽기 편해요).
+       overflow-wrap: anywhere: 그래도 너무 긴 낱말(띄어쓰기 없는 긴 제목, 주소)은 어디서든 끊어 화면 밖으로 넘치지 않게 해요. */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* 글자를 드래그해 고르면(선택) 반전 색으로 보여요. */
+  ::selection {
+    background: var(--phosphor);
+    color: var(--ink);
+    text-shadow: none;
+  }
+
+  /* 키보드 초점 표시. Tab으로 옮겨 다닐 때 지금 어디에 있는지 점선 테두리로 또렷하게 보여 줘요(접근성 필수!). */
+  :focus-visible {
+    outline: 2px dashed var(--phosphor);
+    outline-offset: 3px;
+  }
+
+  /* 링크: 글자색은 주변을 따르고, 두꺼운 밑줄로 링크임을 알려요. */
+  a {
+    color: inherit;
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  /* 입력란·고르기 칸·글상자와 단추는 브라우저 기본 글꼴 대신 주변 글꼴(픽셀 글꼴)을 그대로 써요. */
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    text-shadow: inherit;
+  }
+
+  /* <kbd>(누르는 키): 옛 키보드 자판처럼 테두리 상자로 그려요. 예: [Enter] */
+  kbd {
+    display: inline-block;
+    min-width: 1.75rem;
+    padding-inline: 0.375rem;
+    border: 2px solid currentColor;
+    font-family: inherit; /* 브라우저 기본값(고정폭 글꼴) 대신 픽셀 글꼴 */
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  /* 검색란 오른쪽의 기본 ✕ 단추는 화면과 어울리지 않아 숨겨요. 대신 "검색 조건 지우기" 단추를 따로 둬요. */
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
+  /* 입력 칸의 안내 글자(placeholder)는 보조 글자색으로 또렷하게(명도 대비 10:1). 브라우저 기본값은 흐려서 읽기 어려워요. */
+  ::placeholder {
+    color: var(--crt-dim);
+    opacity: 1;
+  }
+}
+
+/*
+ * 5. CRT 화면 효과
+ *
+ * body::before와 body::after는 body 안에 CSS로 만드는 가짜 요소예요(HTML에는 없어요).
+ * 화면 전체를 덮는 투명한 막 두 장을 깔고 효과를 그려요.
+ *   - ::before: 가로 줄무늬(주사선)
+ *   - ::after : 둥근 화면 모서리, 가장자리 그늘, 은은한 초록빛
+ *
+ * pointer-events: none — 막이 화면을 덮고 있어도 클릭·글자 선택은 아래 내용으로 그대로 전달돼요.
+ */
+body::before,
+body::after {
+  content: ""; /* 가짜 요소는 content가 있어야 그려져요(빈 글자). */
+  position: fixed; /* 스크롤해도 화면에 고정 */
+  inset: 0; /* 위·오른쪽·아래·왼쪽 0 = 화면 전체를 덮음 */
+  pointer-events: none;
+}
+
+body::before {
+  z-index: 50; /* 내용보다 위에 */
+  /* 4px마다 1px짜리 반투명 검은 줄을 반복해 그려요(repeating-linear-gradient). 0~3px은 투명, 3~4px은 검은 줄. */
+  background: repeating-linear-gradient(to bottom, transparent 0 3px, rgb(0 0 0 / 0.22) 3px 4px);
+}
+
+body::after {
+  z-index: 51; /* 주사선보다도 위에 */
+  /* 막의 모서리를 둥글게 깎고, 바깥쪽에 아주 두꺼운 검은 그림자(4rem)를 그려요.
+     그러면 화면 네 모서리만 검게 채워져 옛 모니터처럼 둥근 화면이 돼요. */
+  border-radius: 1.5rem;
+  box-shadow:
+    0 0 0 4rem #000,
+    /* inset(안쪽 그림자): 가장자리를 살짝 어둡게 */ inset 0 0 1.5rem rgb(0 0 0 / 0.45),
+    /* 안쪽에 은은한 초록빛 */ inset 0 0 6rem rgb(var(--glow-rgb) / 0.05);
+  /* 가운데는 투명하고 바깥으로 갈수록 조금 어두워지는 그늘(비네트) */
+  background: radial-gradient(ellipse at center, transparent 62%, rgb(0 0 0 / 0.3) 100%);
+}
+
+/* 좁은 화면(40rem = 640px 미만)에서는 모서리를 덜 둥글게 해서 글자가 가리지 않게 해요. */
+@media (width < 40rem) {
+  body::after {
+    border-radius: 0.875rem;
+  }
+}
+
+/*
+ * 사용자가 "대비 높이기"를 켰거나(prefers-contrast: more) 윈도우 고대비 모드(forced-colors)일 때는
+ * 효과가 글자를 가릴 수 있으니 모두 꺼요. 꾸밈보다 읽기가 먼저예요.
+ */
+@media (prefers-contrast: more), (forced-colors: active) {
+  :root {
+    --glow-soft: none;
+    --glow-strong: none;
+  }
+
+  body::before,
+  body::after,
+  .poster-frame::after,
+  .photo-frame::after {
+    display: none;
+  }
+}
+
+/* 인쇄할 때도 효과를 꺼요. */
+@media print {
+  body::before,
+  body::after {
+    display: none;
+  }
+}
+
+/*
+ * 6. 우리만의 유틸리티 클래스
+ *
+ * @utility로 만든 클래스는 Tailwind 클래스처럼 hover:inverse, sm:glow처럼 앞에 조건(변형)을 붙여 쓸 수 있어요.
+ */
+
+/* inverse: 초록 바탕에 검은 글자(반전). 안쪽의 역할 변수를 바꿔 글자·선·별 색도 함께 뒤집어요. */
+@utility inverse {
+  background-color: var(--phosphor);
+  color: var(--ink);
+  --crt-fg: var(--ink);
+  --crt-dim: var(--ink);
+  --crt-line: var(--ink);
+  --pixel-secondary: var(--pixel-secondary-inverse); /* 빈 별은 진한 인광 색 */
+  --glow-soft: none; /* 반전 영역에서는 빛 번짐이 없어야 또렷해요. */
+  --glow-strong: none;
+  text-shadow: none;
+  box-shadow: 0 0 1rem rgb(var(--glow-rgb) / 0.3); /* 바깥으로 은은한 빛 */
+
+  /* 반전 영역 안의 초점 테두리는 초록 위에서 보이도록 검게 그려요. */
+  & :focus-visible {
+    outline-color: var(--ink);
+  }
+}
+
+/* glow: 강한 빛 번짐. 제목처럼 눈에 띄어야 하는 글자에 써요. */
+@utility glow {
+  text-shadow: var(--glow-strong);
+}
+
+/* leader: 항목 이름과 값 사이를 잇는 점선(이름 ······ 값). flex 줄 안에서 남는 자리를 채워요. */
+@utility leader {
+  flex: 1 1 1.5rem; /* 남는 자리만큼 늘어나요(최소 1.5rem부터). */
+  min-width: 1rem;
+  height: 0.6em; /* 아래 테두리(점선)가 글자 가운데쯤 오도록 높이를 정해요. */
+  border-bottom: 2px dotted var(--crt-line);
+}
+
+/*
+ * stretched-link: 링크를 누르는 영역을 가장 가까운 "position: relative" 조상 전체로 넓혀요.
+ * 링크의 투명한 ::after 막을 조상 크기만큼 덮는 방법이에요(목록의 리뷰 항목에서 써요).
+ */
+@utility stretched-link {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/*
+ * 7. 여러 번 쓰는 부품 스타일
+ *
+ * @layer components는 base보다 위, Tailwind 유틸리티보다 아래 우선순위예요.
+ * 그래서 부품 기본 모양을 정해 두고, 클래스로 조금씩 바꿔 쓸 수 있어요.
+ * 안쪽의 &:hover처럼 &를 쓰는 문법을 "중첩(nesting)"이라고 해요. & 자리에 바깥 선택자가 들어가요.
+ */
+@layer components {
+  /* 단말기 명령 단추(초록 바탕). 누르면 1px 내려가 눌린 느낌이 나요. */
+  .btn-inverse {
+    display: inline-flex;
+    min-height: 2.75rem; /* 44px: 손가락으로 누르기 충분한 높이 */
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.875rem;
+    background: var(--phosphor);
+    color: var(--ink);
+    text-shadow: none;
+    text-decoration: none;
+    box-shadow: 0 0 0.75rem rgb(var(--glow-rgb) / 0.35);
+    cursor: pointer;
+
+    &:hover {
+      box-shadow: 0 0 1.25rem rgb(var(--glow-rgb) / 0.6); /* 마우스를 올리면 빛이 강해져요. */
+    }
+
+    &:active {
+      translate: 0 1px; /* 누르는 동안 1px 내려가요. */
+    }
+  }
+
+  /* 선만 있는 단추. 마우스를 올리면 반전돼요. */
+  .btn-line {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.875rem;
+    border: 2px solid var(--crt-line);
+    text-decoration: none;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--phosphor);
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+    }
+  }
+
+  /*
+   * 화면 구석에 떠 있는 단추(components/keyboard-help.tsx, back-to-top.tsx)
+   * 뒤로 지나가는 글이 비치지 않게 화면 바탕색을 깔고, 밝은 초록 테두리로 눈에 띄게 해요.
+   * 마우스를 올리거나 안내가 펼쳐져 있으면(aria-expanded="true") 반전돼요.
+   */
+  .btn-float {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.875rem;
+    border: 2px solid var(--phosphor);
+    background: var(--screen);
+    /* 글자색을 직접 정해요. 반전 영역(초록 바탕) 안에 놓여도 어두운 글자를 물려받아 바탕에 묻히지 않게요. */
+    color: var(--phosphor);
+    box-shadow: 0 0 0.75rem rgb(var(--glow-rgb) / 0.35);
+    cursor: pointer;
+
+    &:hover,
+    &[aria-expanded="true"] {
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+    }
+  }
+
+  /*
+   * 포스터 액자(components/poster.tsx)와 본문 사진 액자(lib/markdown.ts가 만드는 .photo-frame)
+   * 어두운 바탕과 테두리를 둬서, 목록 항목이 반전(초록 바탕)되어도 초록 그림이 묻히지 않게 해요.
+   */
+  .poster-frame,
+  .photo-frame {
+    position: relative; /* 아래 주사선 막(::after)이 액자 크기에 맞게 덮이는 기준 */
+    overflow: hidden; /* 넘치는 이미지를 액자 밖으로 내보내지 않아요. */
+    border: 2px solid var(--crt-line);
+    background: var(--screen);
+    box-shadow: 0 0 0.75rem rgb(var(--glow-rgb) / 0.25);
+
+    /* 그림 위에만 더 촘촘한 주사선(3px마다 1px)을 덮어 브라운관 화면처럼 보이게 해요. */
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.35) 2px 3px);
+      pointer-events: none;
+    }
+  }
+
+  /* 포스터·사진을 형광 초록으로: app/layout.tsx의 SVG 필터(--phosphor-filter = #crt-phosphor)를 씌우고 대비를 조금 높여요.
+     원본 파일은 그대로이고, 화면에 그릴 때만 바뀌어요. */
+  .poster-image,
+  .photo-image {
+    filter: var(--phosphor-filter) contrast(1.05);
+  }
+
+  /*
+   * 머리글의 화면 메뉴(components/site-header.tsx)
+   * 단말기 메뉴처럼 글자만 두고, 지금 화면의 메뉴(aria-current="page")는 반전해요. 색만이 아니라 ▶ 표시로도 알려 줘요.
+   */
+  .menu-link {
+    display: inline-flex;
+    min-height: 2.75rem; /* 44px: 손가락으로 누르기 충분한 높이 */
+    align-items: center;
+    padding-inline: 0.625rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &[aria-current="page"] {
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+
+      &::before {
+        content: "▶ ";
+        content: "▶ " / ""; /* 꾸밈 기호라 화면 낭독기는 읽지 않아요(alt 글 비우기). */
+      }
+    }
+  }
+
+  /* 글 속 링크. 점선 밑줄, 마우스를 올리면 반전돼요. */
+  .term-link {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+
+    &:hover {
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+      text-decoration-style: solid;
+    }
+  }
+
+  /*
+   * 칩 모양 라디오 단추(장르·정렬 고르기)
+   *
+   * <label class="chip">
+   *   <input type="radio">            ← 진짜 라디오 단추(투명하게 칩 위에 덮어 둠)
+   *   <span class="chip-face">...</span> ← 눈에 보이는 칩 모양
+   * </label>
+   *
+   * 진짜 라디오 단추를 지우지 않고 투명하게 덮어 두는 이유:
+   * 키보드 화살표로 고르기, 화면 낭독기로 읽기 같은 기능을 브라우저가 그대로 해 주기 때문이에요.
+   */
+  .chip {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+
+    /* 진짜 라디오 단추: 칩 전체를 덮고(inset: 0) 투명하게(opacity: 0).
+       z-index: 1로 칩 모양보다 위에 올려, 누르는 손가락·마우스가 진짜 단추에 바로 닿게 해요. */
+    & > input {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* 눈에 보이는 칩 모양 */
+    & > .chip-face {
+      display: inline-flex;
+      min-height: 2.5rem;
+      align-items: center;
+      gap: 0.375rem;
+      /* 왼쪽·오른쪽 여백을 같게: 고르지 않은 칩은 ▶ 자리가 없어서 글자가 가운데에 놓여요. */
+      padding: 0.125rem 0.75rem;
+      border: 2px solid var(--crt-line);
+    }
+
+    /* 마우스를 올리면 테두리가 밝아져요. */
+    &:hover > .chip-face {
+      border-color: var(--phosphor);
+    }
+
+    /* 골라진 단추(:checked) 바로 뒤의 칩(+ .chip-face)을 반전시켜요. */
+    & > input:checked + .chip-face {
+      border-color: var(--phosphor);
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+      --crt-dim: var(--ink);
+    }
+
+    /* ▶ 표시는 고른 칩에만 보여요. 색만으로 구분하지 않게 모양으로도 알려 줘요.
+       고르지 않은 칩에서는 자리도 차지하지 않아(display: none) 글자 왼쪽이 비지 않아요. */
+    & .chip-mark {
+      display: none;
+    }
+
+    & > input:checked + .chip-face .chip-mark {
+      display: inline;
+    }
+
+    /* 진짜 단추에 키보드 초점이 오면 칩 둘레에 점선 테두리를 그려요. */
+    & > input:focus-visible + .chip-face {
+      outline: 2px dashed var(--phosphor);
+      outline-offset: 3px;
+    }
+
+    /* 사용할 수 없는 칩(미리 만든 HTML, 저장하는 중)은 손가락 모양 커서를 보이지 않아요. */
+    & > input:disabled {
+      cursor: default;
+    }
+  }
+
+  /*
+   * 처음 화면 왼쪽의 검색 칸(components/review-browser.tsx)
+   * 넓은 화면(64rem = 1024px 이상)이면서 키도 충분할 때(40rem = 640px 이상)만, 스크롤해도 왼쪽 위에 붙어 있어요(sticky).
+   * 키가 작은 화면에서 붙여 두면 검색 칸 아래쪽(정렬)이 화면 밖으로 잘려 영영 볼 수 없어서, 그때는 함께 스크롤돼요.
+   */
+  @media (width >= 64rem) and (height >= 40rem) {
+    .browse-aside {
+      position: sticky;
+      top: 2rem;
+      align-self: start;
+    }
+  }
+
+  /*
+   * 검색창 아래에 뜨는 추천 층(components/search-box.tsx)
+   * 검색창 바로 아래(top: 100%)에 붙고, 목록·칩보다 위(z-index)에 떠요. 어두운 바탕을 깔아 뒤 글자가 비치지 않게 해요.
+   */
+  .search-suggestions {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 20;
+    max-height: 18rem;
+    margin-top: 0.25rem;
+    overflow-y: auto;
+    border: 2px solid var(--phosphor);
+    background: var(--screen);
+    box-shadow: 0 0 1rem rgb(var(--glow-rgb) / 0.3);
+
+    /* hidden 속성이 있으면 숨겨요. 위의 display 값보다 hidden이 이기도록 한 번 더 적어 둬요. */
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  /* 추천 하나: 고른 것(aria-selected="true")과 마우스를 올린 것은 반전돼요. 색만이 아니라 반전된 "막대" 모양으로 보여요. */
+  .search-option {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-selected="true"] {
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+      --crt-dim: var(--ink);
+    }
+  }
+
+  /*
+   * 글쓰기·로그인 화면의 입력 칸(input, select, textarea)
+   * 단말기처럼 어두운 바탕 + 선 테두리. 초점이 오면 테두리가 밝아지고 점선 초점 표시(:focus-visible)가 함께 보여요.
+   */
+  .field {
+    min-height: 2.75rem; /* 44px: 손가락으로 누르기 충분한 높이 */
+    padding: 0.375rem 0.625rem;
+    border: 2px solid var(--crt-line);
+    background: var(--screen);
+    color: var(--crt-fg);
+
+    &:focus {
+      border-color: var(--phosphor);
+    }
+
+    /* 잘못된 값(aria-invalid="true")이면 테두리를 점선으로 바꿔요. 색이 아니라 모양으로도 알려 줘요. */
+    &[aria-invalid="true"] {
+      border-color: var(--phosphor);
+      border-style: dashed;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+
+  /*
+   * 칸 아래 오류 문구. 반전(초록 바탕에 검은 글자)으로 눈에 띄게 보여요. 이 블로그는 색이 하나라 빨강 대신 반전을 써요.
+   * 비어 있으면 자리를 차지하지 않아요.
+   */
+  .field-error {
+    width: fit-content;
+    padding-inline: 0.5rem;
+    background: var(--phosphor);
+    color: var(--ink);
+    text-shadow: none;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  /* 칸과 상관없는 실패 알림(role="alert"). 모양은 오류 문구와 같아요. 비어 있을 때 숨기는 일은 화면 쪽(empty:sr-only)이 해요. */
+  .alert-text {
+    width: fit-content;
+    padding-inline: 0.5rem;
+    background: var(--phosphor);
+    color: var(--ink);
+    text-shadow: none;
+  }
+
+  /* 글쓰기 화면의 "고칠 곳" 목록: 밝은 테두리 상자. 초점이 오면(저장을 눌렀을 때) 점선 초점 표시가 보여요. */
+  .error-summary {
+    border: 2px solid var(--phosphor);
+    box-shadow: 0 0 1rem rgb(var(--glow-rgb) / 0.3);
+  }
+
+  /* 단추 모양의 파일 고르기 칸(components/review-writer.tsx). 숨긴 파일 칸에 키보드 초점이 오면 단추 둘레에 점선을 그려요. */
+  .file-button {
+    cursor: pointer;
+
+    &:has(:focus-visible) {
+      outline: 2px dashed var(--phosphor);
+      outline-offset: 3px;
+    }
+  }
+
+  /*
+   * 확인 창(components/delete-review.tsx)
+   * 네이티브 <dialog>라 브라우저가 화면 맨 위(top layer)에 띄워 줘요. ::backdrop은 창 뒤를 덮는 어두운 막이에요.
+   */
+  .confirm-dialog {
+    width: min(32rem, 100% - 2rem);
+    margin: auto;
+    padding: 0;
+    border: 2px solid var(--phosphor);
+    background: var(--screen);
+    color: var(--crt-fg);
+    box-shadow: 0 0 1.5rem rgb(var(--glow-rgb) / 0.35);
+
+    &::backdrop {
+      background: rgb(0 0 0 / 0.85);
+    }
+  }
+
+  /*
+   * 리뷰 본문(prose)
+   *
+   * 원고(Markdown)에서 바꾼 HTML에는 클래스가 없어서, 상자(.prose) 안쪽의 태그 이름으로 꾸며요.
+   * 예: .prose h2 → 본문 안의 모든 h2
+   */
+  .prose {
+    /* 본문은 오른쪽 칸 너비를 모두 써요(풀 페이지). 글줄 길이를 따로 줄이지 않아요. */
+
+    /* `* + *`: 앞에 형제가 있는 모든 요소 = 두 번째 요소부터. 문단 사이에 1.5rem 간격을 둬요. */
+    & > * + * {
+      margin-top: 1.5rem;
+    }
+
+    /*
+     * 초록 바탕(반전)으로 보이는 본문 요소: 소제목(h2), **강조**, 표 머리 칸
+     * 안에 `코드`나 ~~취소선~~이 들어가도 초록 위 초록이 되지 않게, .inverse처럼 역할 변수를 검게 바꿔요.
+     */
+    & h2,
+    & strong,
+    & th {
+      --crt-fg: var(--ink);
+      --crt-dim: var(--ink);
+      --crt-line: var(--ink);
+      --glow-strong: none;
+    }
+
+    /* 본문 소제목(h2)은 반전 막대로 보여요. 레퍼런스의 "고른 줄" 모양이에요. */
+    & h2 {
+      display: inline-block;
+      margin-top: 3rem;
+      padding: 0 0.5rem;
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+    }
+
+    /* 더 작은 제목(h3~h6)은 앞에 ▶를 붙이고 강한 빛 번짐을 줘요. */
+    & h3,
+    & h4,
+    & h5,
+    & h6 {
+      margin-top: 2.25rem;
+      text-shadow: var(--glow-strong);
+
+      &::before {
+        content: "▶ ";
+        /* "/ ''"는 화면 낭독기가 읽을 대체 글이에요. 꾸밈 기호라 빈 글자로 둬서 읽지 않게 해요.
+           이 문법을 모르는 옛 브라우저는 이 줄을 버리고 위 줄(▶)만 써요. */
+        content: "▶ " / "";
+        color: var(--crt-dim);
+      }
+    }
+
+    /* 제목 바로 다음 문단은 제목과 가깝게 붙여요. */
+    & h2 + *,
+    & h3 + *,
+    & h4 + * {
+      margin-top: 1rem;
+    }
+
+    & a {
+      text-decoration-style: dotted;
+
+      &:hover {
+        background: var(--phosphor);
+        color: var(--ink);
+        text-shadow: none;
+        text-decoration-style: solid;
+      }
+    }
+
+    /* **강조**: 픽셀 글꼴에는 굵은 모양이 없어서 반전으로 보여요. */
+    & strong {
+      padding-inline: 0.125rem;
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+    }
+
+    /* *기울임*: 기울인 모양 대신 점선 밑줄로 보여요. */
+    & em {
+      font-style: normal;
+      text-decoration: underline dotted 2px;
+      text-underline-offset: 4px;
+    }
+
+    /* ~~취소선~~ */
+    & del {
+      color: var(--crt-dim);
+    }
+
+    /* `코드` */
+    & code {
+      padding-inline: 0.25rem;
+      border: 1px solid var(--crt-line);
+      color: var(--crt-dim);
+    }
+
+    /* > 인용: 왼쪽에 굵은 선 */
+    & blockquote {
+      padding-left: 1rem;
+      border-left: 4px solid var(--crt-line);
+      color: var(--crt-dim);
+    }
+
+    /* 목록: 기본 점 대신 "-"와 "1."을 직접 그려요(단말기 느낌). */
+    & ul > li,
+    & ol > li {
+      position: relative;
+      padding-left: 1.75rem;
+    }
+
+    & ul > li + li,
+    & ol > li + li {
+      margin-top: 0.5rem;
+    }
+
+    & ul > li::before {
+      content: "-";
+      position: absolute;
+      left: 0.5rem;
+      color: var(--crt-dim);
+    }
+
+    /* 번호 목록은 CSS 카운터로 1, 2, 3...을 세요. */
+    & ol {
+      counter-reset: item;
+    }
+
+    & ol > li::before {
+      counter-increment: item;
+      content: counter(item) ".";
+      position: absolute;
+      left: 0;
+      color: var(--crt-dim);
+    }
+
+    /* --- 가로줄: 점선 */
+    & hr {
+      margin-block: 3rem;
+      border: 0;
+      border-top: 2px dotted var(--crt-line);
+    }
+
+    /* 글 속의 그림: 글 폭을 넘지 않게, 인광 색으로 */
+    & img {
+      max-width: 100%;
+      height: auto;
+      border: 2px solid var(--crt-line);
+      filter: var(--phosphor-filter) contrast(1.05);
+    }
+
+    /*
+     * 본문 사진(lib/markdown.ts가 사진만 있는 문단을 바꿔 만들어요)
+     *
+     *   <figure class="photo" style="--photo-ratio: 1.7778; --photo-width: 1280px">
+     *     <div class="photo-frame"><img class="photo-image"></div>
+     *     <figcaption>사진 설명</figcaption>
+     *   </figure>
+     *
+     * 사진 앞뒤는 문단 사이보다 넓게(2.5rem) 띄워 글과 사진이 또렷이 나뉘게 해요.
+     */
+    & > .photo,
+    & > .photo-row,
+    & > .photo + *,
+    & > .photo-row + * {
+      margin-top: 2.5rem;
+    }
+
+    /* 액자 너비는 아래 셋 중 가장 작은 값(min)이에요.
+       - 100%: 글 칸의 너비
+       - --photo-width: 사진 원래 너비(작은 사진을 억지로 늘려 흐리게 만들지 않아요)
+       - 80svh × 비율: 세로로 긴 사진도 화면 높이의 80%를 넘지 않게. 비율은 가로 ÷ 세로라 너비 = 높이 × 비율이에요. */
+    & .photo-frame {
+      width: min(100%, var(--photo-width, 100%), calc(80svh * var(--photo-ratio, 1.5)));
+    }
+
+    /* 사진은 액자를 꽉 채우고, 높이는 width·height 속성의 비율로 정해져요(그래서 사진이 오기 전에도 자리가 잡혀 있어요). */
+    & .photo-image {
+      display: block;
+      width: 100%;
+      border: 0;
+    }
+
+    & figcaption {
+      margin-top: 0.5rem;
+      color: var(--crt-dim);
+    }
+
+    /* 사진 여러 장을 나란히. 한 장이 16rem보다 좁아지면 저절로 위아래로 쌓여요(auto-fit). */
+    & .photo-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+      align-items: start;
+      gap: 1.5rem;
+    }
+
+    /* 표를 감싼 상자(lib/markdown.ts가 만들어요): 넘치면 가로로 스크롤 */
+    & .table-scroll {
+      overflow-x: auto;
+    }
+
+    & table {
+      border-collapse: collapse;
+    }
+
+    & th,
+    & td {
+      padding: 0.25rem 0.75rem;
+      border: 1px solid var(--crt-line);
+      text-align: left;
+    }
+
+    /* 표 머리 칸은 반전 */
+    & th {
+      background: var(--phosphor);
+      color: var(--ink);
+      text-shadow: none;
+    }
+
+    /* 각주 영역: 위에 점선을 긋고 보조 글자색으로 */
+    & .footnotes {
+      margin-top: 4rem;
+      padding-top: 1rem;
+      border-top: 2px dotted var(--crt-line);
+      color: var(--crt-dim);
+    }
+  }
+}
