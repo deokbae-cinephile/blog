@@ -77,7 +77,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **로그인 표:** `내용.서명` 모양의 토큰을 `SESSION_SECRET`으로 HMAC 서명해 httpOnly 쿠키에 담아요(7일). 웹 표준 Web Crypto만 써서 어느 호스팅에서나 돌아요.
 - **이중 잠금:** `src/proxy.ts`가 쓰기 화면·API 앞에서 먼저 막고, API와 글쓰기 화면이 `lib/admin-auth.ts`로 한 번 더 확인해요. Next.js 문서도 proxy만 믿지 말라고 권해요.
 - **CSRF:** 쿠키는 `SameSite=Lax`이고, 쓰기 API는 `Origin`이 우리 주소일 때만 받아요.
-- **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, 도메인을 연결한 뒤 Cloudflare 속도 제한 규칙도 함께 걸어요(아래 "도메인 연결" 6번).
+- **비밀번호 대입 막기:** 같은 IP에서 10분 동안 10번 틀리면, 비밀번호를 확인(계산)하기 전에 429로 막아요(`lib/login-limit.ts`). 기록은 서버 인스턴스마다 따로라, Cloudflare 속도 제한 규칙도 함께 걸어요(아래 "도메인 연결"의 권장 항목).
 - **로그인 뒤 이동:** `?next=` 주소는 우리 사이트 안 주소만 받아요. 탭·줄바꿈을 섞어 다른 사이트로 보내는 주소도 막아요.
 - **본문 링크:** `javascript:` 같은 위험한 방식의 링크는 HTML로 바꿀 때 주소를 지워요(`isSafeHref`).
 - **화면의 단추:** 목록·상세는 정적 HTML이라, 비밀이 없는 표시 쿠키(`blog_admin=1`)로 [새 리뷰]·[고치기]·[지우기]를 보일지만 정해요. 실제 권한은 늘 서버가 확인해요.
@@ -107,7 +107,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 비밀 값 바꾸기: `pnpm exec wrangler login` 뒤 `pnpm exec wrangler secret put ADMIN_PASSWORD_HASH`처럼 하나씩 넣거나, Cloudflare 대시보드 → Workers & Pages → blog → Settings → Variables and Secrets에서 바꿔요. 비밀번호를 바꿀 때는 `pnpm admin-secrets`로 새 해시를 만들어요.
 - `GITHUB_CONTENT_TOKEN`은 기한(1년)이 있어요. 기한이 지나면 저장이 실패하니, 같은 권한으로 새로 만들어 바꿔 넣어요.
 - 배포는 GitHub Actions에 맡겨요. 내 컴퓨터에서 `opennextjs-cloudflare deploy`로 직접 올리면, OpenNext가 `.env.local` 같은 `.env` 파일의 값을 워커 코드에 기본값으로 함께 넣어서 시험용 값(가짜 GitHub 주소 등)이 운영 워커에 실릴 수 있어요.
-- 처음 주소는 `https://blog.<계정 하위 도메인>.workers.dev`이고, 아래 "도메인 연결"로 `deokbae.blog`를 붙여요.
+- 처음 배포한 주소는 `https://blog.deokbae.workers.dev`였고, 아래 "도메인 연결"로 `deokbae.blog`를 붙이면서 닫았어요.
 
 **무료 플랜 한도와 이 블로그** — 요청 하나에 CPU 10ms, 하루 요청 10만 건, 이미지 변환 한 달 5,000개(넘으면 새 변환만 실패하고 요금은 없어요). 아래는 내 컴퓨터의 Workers 런타임(workerd)으로 잰 값이에요(2026-11).
 
@@ -133,8 +133,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | Cloudflare 계정 | 영역(zone) `deokbae.blog`(Free). 예전 GitHub Pages 기록은 가져오지 않았어요 |
 | `wrangler.jsonc`의 `routes` | `deokbae.blog`, `www.deokbae.blog`를 Custom Domain으로. 배포할 때 DNS 기록과 HTTPS 인증서가 자동으로 만들어져요 |
 
-- 처음 주소 `https://blog.deokbae.workers.dev`도 그대로 열려요. 대표 주소는 늘 `https://deokbae.blog`라 검색엔진에는 한 주소만 알려요.
-- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. 그다음 `wrangler.jsonc`에 `"workers_dev": false`를 넣어 `workers.dev` 주소를 닫으면, 모든 요청이 이 규칙을 지나요.
+- 처음 주소 `https://blog.deokbae.workers.dev`는 닫았어요(`wrangler.jsonc`의 `"workers_dev": false`). 블로그 주소는 `https://deokbae.blog` 하나예요. `www.deokbae.blog`도 같은 블로그를 보여 주고, 화면마다 대표 주소를 `https://deokbae.blog/...`로 알려요.
+- (권장) Cloudflare 대시보드 → deokbae.blog → Security → WAF → **Rate limiting rules**에서 규칙 하나(무료 1개)를 만들어, 경로가 `/api/session`이고 방법이 POST인 요청을 IP마다 10초에 5번으로 막아요. 서버의 실패 횟수 제한과 함께 비밀번호 대입을 막아요. workers.dev 주소를 닫아서 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 
