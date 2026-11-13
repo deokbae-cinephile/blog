@@ -36,8 +36,14 @@
   "images": {
     "binding": "IMAGES"
   },
-  // 도메인 연결: deokbae.blog를 Cloudflare로 옮긴 뒤(docs/development.md "도메인 연결") 다음 줄 맨 앞의 //를 지워요.
-  // "routes": [{ "pattern": "deokbae.blog", "custom_domain": true }],
+  // 도메인: deokbae.blog와 www.deokbae.blog를 이 워커에 바로 붙여요(Custom Domain).
+  //   배포할 때 Cloudflare가 두 주소의 DNS 기록과 HTTPS 인증서를 알아서 만들어요.
+  //   도메인(영역)은 이 Cloudflare 계정에 있어야 해요(docs/development.md "도메인 연결").
+  //   www 주소도 같은 블로그를 보여 주고, 검색엔진에는 화면마다 대표 주소(https://deokbae.blog/...)를 알려 줘요.
+  "routes": [
+    { "pattern": "deokbae.blog", "custom_domain": true },
+    { "pattern": "www.deokbae.blog", "custom_domain": true }
+  ],
   // 대시보드에서 넣은 일반 변수를 배포할 때 지우지 않아요. (기본으로는 이 파일에 없는 변수를 지워요.)
   "keep_vars": true,
   // 요청마다 걸린 CPU 시간과 오류를 대시보드(Observability)에서 볼 수 있게 기록해요(무료 플랜은 하루 20만 건까지).
