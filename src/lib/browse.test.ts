@@ -62,10 +62,11 @@ describe("parseParams / toSearch", () => {
 });
 
 describe("matchesQuery", () => {
-  it("제목, 원제, 감독, 한줄평에서 찾는다", () => {
+  it("제목, 원제, 감독, 출연, 한줄평에서 찾는다", () => {
     expect(matchesQuery(winter, "정류장")).toBe(true); // 제목
     expect(matchesQuery(winter, "winter")).toBe(true); // 원제
     expect(matchesQuery(winter, "한서윤")).toBe(true); // 감독
+    expect(matchesQuery(winter, "이배우")).toBe(true); // 출연(배우)
     expect(matchesQuery(winter, "기다림")).toBe(true); // 한줄평
     expect(matchesQuery(winter, "화성")).toBe(false);
   });
@@ -165,6 +166,16 @@ describe("suggest(자동완성 추천)", () => {
   it("공동 감독은 한 사람씩 나눠 추천한다", () => {
     const reviews = [{ ...reviewMocks[0]!, director: "박감독, 최감독" }];
     expect(suggest(reviews, "감독").map((item) => item.value)).toEqual(["박감독", "최감독"]);
+  });
+
+  it("출연 배우도 한 사람씩 나눠 '출연'으로 추천한다", () => {
+    expect(suggest(reviewMocks, "배우")).toEqual([
+      { value: "김배우", kind: "출연" },
+      { value: "이배우", kind: "출연" },
+    ]);
+    // 띄어 쓴 이름도 붙여 쳐서 찾을 수 있어요.
+    const reviews = [{ ...reviewMocks[0]!, cast: "레오나르도 디카프리오, 마크 러팔로" }];
+    expect(suggest(reviews, "마크러")).toEqual([{ value: "마크 러팔로", kind: "출연" }]);
   });
 
   it("빈 글자나 맞는 것이 없으면 추천하지 않는다", () => {

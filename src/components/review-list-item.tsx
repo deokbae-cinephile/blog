@@ -5,7 +5,7 @@
  *   처음 화면 목록에서 리뷰 한 편을 한 덩어리로 보여 줍니다.
  *
  *     ┌────┐ 겨울 정류장 [드라마] [로맨스] ················ 4.5   ← 첫째 줄: 제목 + 장르 태그 · 평점
- *     │포스│ Winter Stop · 2024 · 감독 한서윤                  ← 둘째 줄: 원제 · 연도 · 감독
+ *     │포스│ Winter Stop · 2024 · 감독 한서윤 · 출연 김태리      ← 둘째 줄: 원제 · 연도 · 감독 · 출연(글자만)
  *     │ 터 │
  *     │2:3 │ “버스는 오지 않아도, 기다림은 끝내 도착한다.”     ← 한줄평: 썸네일 아래 끝에 맞춰요
  *     └────┘
@@ -45,7 +45,7 @@ type Props = {
 /** 목록의 리뷰 한 편 */
 export function ReviewListItem({ review }: Props) {
   // 구조 분해 할당: review.title 대신 title처럼 짧게 쓰려고 필요한 항목을 꺼내 둬요.
-  const { slug, title, originalTitle, year, director, genres, rating, oneLiner, poster } = review;
+  const { slug, title, originalTitle, year, director, cast, genres, rating, oneLiner, poster } = review;
   // 제목 요소의 id. 아래 <article>의 이름(aria-labelledby)으로 연결해요. slug는 겹치지 않으니 id로 쓰기 좋아요.
   const titleId = `review-${slug}`;
 
@@ -89,9 +89,12 @@ export function ReviewListItem({ review }: Props) {
             <Rating value={rating} className="ml-auto" />
           </div>
 
-          {/* 둘째 줄: 원제 · 연도 · 감독. 없는 값(원제가 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
-              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 감독 …"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요. */}
-          <p className="mt-1 text-crt-dim">{joinFacts([originalTitle, year, labeled("감독", director)])}</p>
+          {/* 둘째 줄: 원제 · 연도 · 감독 · 출연. 없는 값(원제·출연이 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
+              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 감독 …"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요.
+              감독·배우 이름은 글자로만 둬요. 목록 한 편 전체가 상세로 가는 링크라(이름을 눌러도 상세로 가요), 이름으로 찾기는 상세 화면에서 해요. */}
+          <p className="mt-1 text-crt-dim">
+            {joinFacts([originalTitle, year, labeled("감독", director), cast ? labeled("출연", cast) : undefined])}
+          </p>
 
           {/* 한줄평. mt-auto: 남는 높이를 위에 두어 글자 칸 맨 아래(썸네일 아래 끝)에 붙어요.
               pt-2: 썸네일이 글보다 낮을 때(좁은 화면)에도 둘째 줄과 붙지 않게 조금 띄워요.

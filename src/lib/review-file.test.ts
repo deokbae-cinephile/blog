@@ -16,8 +16,8 @@ const SOURCE = `---
 title: 겨울 정류장
 originalTitle: Winter Stop
 year: 2024
-country: 한국
 director: 한서윤
+cast: 레오나르도 디카프리오, 마크 러팔로
 runtime: 112
 genres: [드라마, 로맨스]
 rating: 4.5
@@ -48,8 +48,8 @@ describe("parseReviewFile", () => {
         title: "겨울 정류장",
         originalTitle: "Winter Stop",
         year: "2024",
-        country: "한국",
         director: "한서윤",
+        cast: "레오나르도 디카프리오, 마크 러팔로",
         runtime: "112",
         genres: ["드라마", "로맨스"],
         rating: "4.5",
@@ -87,6 +87,19 @@ describe("parseReviewFile", () => {
     expect(parseReviewFile("그냥 글")).toEqual({ ok: false, message: expect.stringContaining("원고 틀") });
     expect(parseReviewFile("---\ntitle: [닫히지 않은 괄호\n---\n")).toEqual({ ok: false, message: expect.stringContaining("따옴표 짝") });
     expect(parseReviewFile("---\n- 목록\n---\n")).toEqual({ ok: false, message: expect.stringContaining("이름: 값") });
+  });
+
+  it("출연에 이름이 아닌 값(숫자·true, 목록 안의 숫자)이 있으면 바꾸거나 빼지 않고 고치는 방법을 알려 준다", () => {
+    const withCast = (cast: string) => SOURCE.replace("cast: 레오나르도 디카프리오, 마크 러팔로", `cast: ${cast}`);
+    for (const cast of ["1987", "true", "[이배우, 1987]", "[이배우, true]"]) {
+      expect(parseReviewFile(withCast(cast))).toEqual({ ok: false, message: expect.stringContaining("cast(출연)에 이름이 아닌 값") });
+    }
+    // 이름만 있는 목록은 "A, B"로 이어 칸에 넣어요.
+    const parsed = parseReviewFile(withCast("[이배우, 박배우]"));
+    expect(parsed.ok && parsed.values.cast).toBe("이배우, 박배우");
+    // 비어 있는 `cast:`는 적지 않은 것으로 보고 빈 칸으로 읽어요(저장하면 그 줄이 정리돼요).
+    const empty = parseReviewFile(SOURCE.replace("cast: 레오나르도 디카프리오, 마크 러팔로", "cast:"));
+    expect(empty.ok && empty.values.cast).toBe("");
   });
 });
 

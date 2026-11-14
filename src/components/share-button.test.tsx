@@ -40,8 +40,10 @@ describe("ShareButton", () => {
     stubNavigator({ share, writeText });
     render(<ShareButton {...props} />);
 
-    // 안내 칸은 처음부터 있어요(비어 있음).
+    // 안내 칸은 처음부터 있어요(비어 있음). 비어 있으면 단추 옆 간격도 없어요(empty:mr-0, 줄이 바뀌어도 단추가 안쪽으로 밀리지 않게).
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status")).toHaveClass("empty:mr-0");
+    expect(screen.getByRole("status").parentElement).not.toHaveClass("gap-x-3");
     await user.click(screen.getByRole("button", { name: "공유하기" }));
 
     expect(share).toHaveBeenCalledWith({ title: "겨울 정류장 리뷰", text: "평점 4.5 · 기다림은 끝내 도착한다", url: props.url });

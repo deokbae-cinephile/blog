@@ -3,8 +3,8 @@
 title: 엡실론의 밤
 originalTitle: Epsilon Night
 year: 2016
-country: 영국
 director: 한시험
+cast: [이배우, 최배우]
 runtime: 99
 genres: [스릴러, 범죄]
 rating: 3.5

@@ -136,12 +136,28 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(container.textContent).not.toContain("빈 줄로 문단을 나눕니다");
   });
 
+  it("포스터를 고르기 전에는 상세 화면과 같은 기본 포스터를 보이고, 고르면 그 사진으로 바뀐다", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ReviewWriter mode="create" />);
+    const frame = container.querySelector<HTMLElement>(".poster-frame")!;
+    // 기본 포스터: 빈 필름 그림 + NO POSTER. 그림은 꾸밈이라 숨기고, 화면 낭독기에는 "고른 포스터 없음"이라고 알려요.
+    expect(frame.querySelector("svg")).toBeInTheDocument();
+    expect(frame).toHaveTextContent("NO POSTER");
+    expect(frame.querySelector("svg")!.closest("[aria-hidden='true']")).toBeInTheDocument();
+    expect(within(frame).getByText("고른 포스터 없음")).toHaveClass("sr-only");
+
+    await user.upload(screen.getByLabelText("포스터 고르기"), new File(["jpg"], "poster.jpeg", { type: "image/jpeg" }));
+    await vi.waitFor(() => expect(frame.querySelector("img")).toBeInTheDocument());
+    expect(frame.querySelector("svg")).not.toBeInTheDocument();
+    expect(within(frame).queryByText("고른 포스터 없음")).not.toBeInTheDocument();
+  });
+
   it("칸 아래 도움말은 주소(영문)에만 있고(예: shutter-island), 다른 칸에는 없다", () => {
     const { container } = render(<ReviewWriter mode="create" />);
     expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(
       "리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. (예: shutter-island → /reviews/shutter-island)",
     );
-    for (const label of [/^제목/, /^원제/, /^개봉 연도/, /^제작 국가/, /^감독/, /^상영 시간/, /^평점/, /^한줄평/]) {
+    for (const label of [/^제목/, /^원제/, /^개봉 연도/, /^감독/, /^출연\(쉼표로 구분\)/, /^상영 시간/, /^평점/, /^한줄평/]) {
       expect(screen.getByLabelText(label)).not.toHaveAccessibleDescription();
     }
     expect(screen.getByRole("group", { name: /^장르/ })).not.toHaveAccessibleDescription();
@@ -284,11 +300,14 @@ describe("ReviewWriter(리뷰 수정)", () => {
     return result.ok ? { ok: true, values: result.values } : { ok: false, message: result.message, source };
   };
 
-  it("저장소의 원고로 칸을 채우고, 주소는 바꿀 수 없다", () => {
+  it("저장소의 원고로 칸을 채우고, 주소는 바꿀 수 없다(괄호 안내는 다음 줄)", () => {
     render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsedOf(SOURCE)} baseSha="base" />);
     expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장");
     expect(screen.queryByLabelText(/^주소\(영문\)/)).not.toBeInTheDocument();
-    expect(screen.getByText(/수정할 때는 바꿀 수 없습니다/)).toBeInTheDocument();
+    const note = screen.getByText("(수정할 때는 바꿀 수 없습니다)");
+    // 주소 줄 바로 다음에 줄바꿈(<br>)이 있어, 괄호 안내가 다음 줄에 보여요.
+    expect(note.previousElementSibling?.tagName).toBe("BR");
+    expect(note.parentElement).toHaveTextContent("주소(영문): /reviews/winter-stop(수정할 때는 바꿀 수 없습니다)");
   });
 
   it("수정한 내용을 처음 원고 sha와 함께 PUT으로 저장한다(글 쓴 날은 그대로)", async () => {

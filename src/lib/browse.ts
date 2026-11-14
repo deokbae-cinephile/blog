@@ -21,6 +21,7 @@
 
 import { GENRES, type Genre, genreFromParam, genreSlug } from "./genres";
 import { compareLatest, compareRating, type ReviewSummary } from "./review";
+import { splitNames } from "./people";
 
 /** 정렬 방법: "latest"(최신순) 또는 "rating"(평점순) 둘 중 하나만 쓸 수 있어요. */
 export type SortKey = "latest" | "rating";
@@ -109,7 +110,8 @@ const squeeze = (text: string) => text.replace(/\s+/g, "");
 /**
  * 리뷰 한 편이 검색어에 맞는지 확인해요.
  *
- * 찾는 곳: 제목, 원제, 감독, 한줄평 (+ 국가, 연도, 장르)
+ * 찾는 곳: 제목, 원제, 감독, 출연(배우), 한줄평 (+ 연도, 장르)
+ *   (상세 화면에서 감독·배우 이름을 누르면 그 이름으로 찾은 목록이 열려요: /?q=이름, lib/people.ts)
  * 규칙:
  *   - 대소문자를 가리지 않아요. ("winter" → "Winter Stop")
  *   - 낱말을 여럿 쓰면 모두 들어 있어야 해요. ("겨울 한서윤" → 둘 다 있는 리뷰만)
@@ -126,9 +128,9 @@ export function matchesQuery(review: ReviewSummary, q: string): boolean {
   if (terms.length === 0) return true;
 
   // 찾을 곳의 글자를 모두 한 줄로 이어 "건초 더미(haystack)"를 만들어요.
-  // 없는 값(원제·국가가 없을 때 undefined)은 filter(Boolean)으로 뺍니다.
+  // 없는 값(원제·출연이 없을 때 undefined)은 filter(Boolean)으로 뺍니다.
   const haystack = fold(
-    [review.title, review.originalTitle, review.director, review.oneLiner, review.country, String(review.year), ...review.genres]
+    [review.title, review.originalTitle, review.director, review.cast, review.oneLiner, String(review.year), ...review.genres]
       .filter(Boolean)
       .join(" "),
   );
@@ -145,14 +147,14 @@ export type Suggestion = {
   /** 추천 글자. 고르면 검색창에 이 글자가 들어가고 바로 찾아요. 예: "겨울 정류장" */
   value: string;
   /** 무엇의 이름인지. 추천 옆에 작게 보여 줘요. */
-  kind: "제목" | "원제" | "감독";
+  kind: "제목" | "원제" | "감독" | "출연";
 };
 
 /**
  * 검색창에 친 글자로 자동완성 추천을 만들어요.
  *
  * 규칙
- *   - 리뷰의 제목·원제·감독(여러 명이면 한 사람씩) 가운데 친 글자가 들어 있는 것을 골라요(대소문자·띄어쓰기 무시).
+ *   - 리뷰의 제목·원제·감독·출연(여러 명이면 한 사람씩) 가운데 친 글자가 들어 있는 것을 골라요(대소문자·띄어쓰기 무시).
  *   - 친 글자로 "시작하는" 추천을 앞에, 중간에 "들어 있는" 추천을 뒤에 놓아요. 같은 무리 안에서는 가나다순이에요.
  *   - 같은 글자는 한 번만 보여요(예: 감독 한 사람이 리뷰 여러 편에 나와도 추천은 하나).
  *   - 너무 길어지지 않게 limit개까지만 돌려줘요.
@@ -176,9 +178,12 @@ export function suggest(reviews: readonly ReviewSummary[], text: string, limit =
     if (review.originalTitle) {
       candidates.set(review.originalTitle, candidates.get(review.originalTitle) ?? { value: review.originalTitle, kind: "원제" });
     }
-    // 감독이 여러 명이면 "A, B"처럼 쉼표로 이어 적어요. 한 사람씩 나눠 추천해요.
-    for (const name of review.director.split(",").map((part) => part.trim()).filter(Boolean)) {
+    // 감독·출연이 여러 명이면 "A, B"처럼 쉼표로 이어 적어요. 한 사람씩 나눠 추천해요(lib/people.ts).
+    for (const name of splitNames(review.director)) {
       candidates.set(name, candidates.get(name) ?? { value: name, kind: "감독" });
+    }
+    for (const name of splitNames(review.cast)) {
+      candidates.set(name, candidates.get(name) ?? { value: name, kind: "출연" });
     }
   }
 

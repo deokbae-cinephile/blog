@@ -102,9 +102,10 @@ export function Poster({ src, alt, size, preload = false, className = "" }: Prop
  * 가운데에 빈 필름 그림과 "NO POSTER" 글자를 둔, 포스터 비율(2:3)의 상자예요.
  *
  * 접근성: 대체 텍스트(alt)가 있으면 role="img"로 "그림 하나"라고 알리고 그 글자를 읽어요.
- * alt가 비어 있으면(목록 썸네일) 꾸밈이라 화면 낭독기에서 통째로 숨겨요.
+ * alt가 비어 있으면(목록 썸네일, 글쓰기 화면의 미리보기) 꾸밈이라 화면 낭독기에서 통째로 숨겨요.
+ * 글쓰기 화면(review-writer.tsx)도 포스터를 아직 고르지 않았을 때 이 그림을 보여 줘요.
  */
-function DefaultPoster({ alt, size }: { alt: string; size: Props["size"] }) {
+export function DefaultPoster({ alt, size }: { alt: string; size: Props["size"] }) {
   // 읽어 줄 글자가 있을 때와 없을 때의 속성. 상세 화면은 "포스터 없음"이라고 알려 줘요.
   const a11y = alt ? { role: "img", "aria-label": `${alt}(포스터 없음)` } : { "aria-hidden": true };
 

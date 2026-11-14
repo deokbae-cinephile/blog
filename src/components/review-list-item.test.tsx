@@ -35,9 +35,9 @@ describe("ReviewListItem", () => {
     expect(screen.getByRole("article", { name: "겨울 정류장" })).toBeInTheDocument();
   });
 
-  it("원제·연도·감독과 장르, 숫자 평점, 맨 아래 한줄평을 보이고, 쓴 날·조회수는 보이지 않는다", () => {
+  it("원제·연도·감독·출연과 장르, 숫자 평점, 맨 아래 한줄평을 보이고, 쓴 날·조회수는 보이지 않는다", () => {
     renderItem();
-    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤")).toBeInTheDocument();
+    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤 · 출연 김배우, 이배우")).toBeInTheDocument();
     // 조회수는 2.0.0 핫픽스에서 화면에서 뺐어요.
     expect(screen.queryByText(/조회/)).not.toBeInTheDocument();
     // 평점은 별 그림 없이 숫자만 보이고, 화면 낭독기에는 무엇의 숫자인지 알려 줘요.
@@ -49,7 +49,7 @@ describe("ReviewListItem", () => {
     expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
   });
 
-  it("원제가 없으면 연도·감독만 보인다", () => {
+  it("원제·출연이 없으면 연도·감독만 보인다", () => {
     renderItem({ ...legend!, originalTitle: undefined });
     expect(screen.getByText("2024 · 감독 브렌트 콜")).toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe("ReviewListItem", () => {
     expect(screen.getByText(/버스는 오지 않아도/).closest("p")).toHaveClass("mt-auto");
   });
 
-  it("장르 태그는 제목 바로 옆(첫째 줄)에 글자로만 두고, 둘째 줄에는 원제·연도·감독만 둔다", () => {
+  it("장르 태그는 제목 바로 옆(첫째 줄)에 글자로만 두고, 둘째 줄에는 원제·연도·감독·출연을 둔다", () => {
     renderItem();
     const heading = screen.getByRole("heading", { level: 3 });
     const genres = screen.getByRole("list", { name: "장르" });
@@ -84,5 +84,12 @@ describe("ReviewListItem", () => {
     expect(heading.nextElementSibling).toBe(genres);
     // 목록 한 편 전체가 상세로 가는 링크라, 장르에는 링크가 없어요(링크 안에 링크를 두지 않아요).
     expect(within(genres).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("감독·배우 이름은 링크 없이 글자로만 둔다(항목 어디를 눌러도 상세 화면으로 가요)", () => {
+    renderItem();
+    // 항목 안의 링크는 제목 하나뿐이에요. 이름으로 찾기는 상세 화면의 이름 링크가 맡아요.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByText(/감독 한서윤/).closest("a")).toBeNull();
   });
 });

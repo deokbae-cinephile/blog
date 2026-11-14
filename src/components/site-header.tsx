@@ -5,11 +5,12 @@
  *   모든 화면 맨 위에 보이는 머리글이에요. 옛 단말기 프로그램의 맨 윗줄처럼
  *   왼쪽에 로고와 블로그 이름, 오른쪽에 링크를 두고 그 사이를 점선(....)으로 잇습니다.
  *
- *     [로고] DMB: 덕배의 영화 블로그 (v2.0.0)  ·····························  [GitHub 아이콘]
+ *     [로고] DMB: 덕배의 영화 블로그  ·····································  [GitHub 아이콘]
  *
- *   이름 옆의 (v2.0.0)은 지금 버전이에요(lib/version.ts가 package.json에서 읽어요). 링크 밖에 둬서, 링크 이름은 블로그 이름만 읽어요.
+ *   버전은 머리글에 보이지 않아요(2.0.0 핫픽스에서 뺐어요). 버전은 package.json과 GitHub 릴리스에서 확인해요.
  *
  *   왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)이고, 누르는 높이도 44px로 같아요.
+ *   로고와 이름 사이(22px)는 점선 끝과 GitHub 아이콘 사이와 같아요.
  *   로고는 본문 왼쪽 끝에, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞춰요. 휴대폰에서도 줄을 바꾸지 않고 첫 줄 오른쪽 끝에 있어요.
  *   GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름).
  *
@@ -27,13 +28,11 @@
  *   app/layout.tsx가 모든 화면 위에 이 머리글을 놓습니다.
  */
 
-
 import Link from "next/link";
 
 // 로고 그림(슬레이트)은 lib/logo.ts에 있어요. 머리글용은 GitHub 아이콘과 같은 12 × 12칸 그림이에요.
 import { HEADER_LOGO_ROWS } from "@/lib/logo";
 import { site } from "@/lib/site";
-import { APP_VERSION } from "@/lib/version";
 
 import { GitHubLink } from "./github-link";
 import { PixelArt } from "./pixel-art";
@@ -51,19 +50,17 @@ export function SiteHeader() {
       tabIndex={-1}
       className="flex w-full items-center px-4 pt-6 outline-none sm:gap-x-3 sm:px-8 sm:pt-8 lg:px-12"
     >
-      {/* 이름 링크와 버전을 한 묶음으로 둬요. gap-x-2: 이름과 버전 사이 8px(글자 한 칸 너비)
-          min-w-0 + flex-wrap: 아주 좁은 화면(약 340px 아래)에서는 아이콘을 밀어내지 않고, 이 묶음 안에서 버전이 다음 줄로 내려가요. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2">
-        {/* min-h-11: 누르는 높이 44px(오른쪽 GitHub 링크와 같아요). gap-2: 로고와 이름 사이 8px.
-            왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. */}
-        <Link href="/" className="inline-flex min-h-11 items-center gap-2 no-underline hover:underline">
-          {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
-          <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
-          <span>{site.headerTitle}</span>
-        </Link>
-        {/* 지금 버전. 보조 글자색(text-crt-dim)으로 이름보다 덜 눈에 띄게 해요. */}
-        <span className="text-crt-dim">(v{APP_VERSION})</span>
-      </div>
+      {/* 로고와 블로그 이름이 처음 화면으로 가는 링크 하나예요.
+          min-h-11: 누르는 높이 44px(오른쪽 GitHub 링크와 같아요).
+          gap-5.5: 로고와 이름 사이 22px. 오른쪽 점선 끝과 GitHub 아이콘 사이(점선 옆 간격 12px + 링크 안쪽 여백 10px)와 같아서
+            양쪽 아이콘 옆 간격이 같아 보여요. (두 그림 모두 가장자리 칸까지 색칠돼 있어 그림 끝 = 요소 끝이에요.)
+          min-w-0: 아주 좁은 화면에서도 오른쪽 GitHub 아이콘을 밀어내지 않아요.
+          왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. */}
+      <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-5.5 no-underline hover:underline">
+        {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
+        <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
+        <span>{site.headerTitle}</span>
+      </Link>
 
       {/* 이름과 링크 사이의 점선. 꾸밈이라 읽지 않아요. 휴대폰에서는 숨겨요. */}
       <span aria-hidden="true" className="leader hidden sm:block" />

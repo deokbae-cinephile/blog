@@ -2,7 +2,6 @@
 title: 폰 부스
 originalTitle: Phone Booth
 year: 2002
-country: 미국
 director: 조엘 슈마허
 runtime: 81
 genres: [드라마, 스릴러]

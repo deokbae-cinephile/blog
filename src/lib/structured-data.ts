@@ -5,7 +5,7 @@
  *   검색엔진(구글 등)이 화면 내용을 정확히 알아보게, 정해진 모양(schema.org)의 정보를 만들어요.
  *   화면에 보이지 않는 <script type="application/ld+json"> 안에 JSON으로 넣어요(JSON-LD).
  *
- *     리뷰 상세: Review(리뷰) ── itemReviewed: Movie(영화 제목·원제·개봉 연도·감독·장르·국가·상영 시간·포스터)
+ *     리뷰 상세: Review(리뷰) ── itemReviewed: Movie(영화 제목·원제·개봉 연도·감독·출연·장르·상영 시간·포스터)
  *                             ├─ reviewRating: Rating(평점 0.5~5)
  *                             └─ author: Person(덕배), datePublished(글 쓴 날)
  *     처음 화면: WebSite(사이트 이름 "DMB", 다른 이름 "덕배의 영화 블로그", 주소)
@@ -18,6 +18,7 @@
  */
 
 import type { Review } from "./review";
+import { splitNames } from "./people";
 import { site, siteUrl } from "./site";
 
 /** 사이트 안 주소("/reviews/a")를 전체 주소("https://deokbae.blog/reviews/a")로 바꿔요. */
@@ -27,7 +28,7 @@ const absolute = (path: string) => `${siteUrl}${path}`;
  * 리뷰 상세 화면의 검색엔진용 정보(schema.org Review)
  *
  * @param review 리뷰 한 편
- * @returns JSON으로 바꿔 <script type="application/ld+json">에 넣을 객체. 없는 항목(원제·국가 등)은 넣지 않아요.
+ * @returns JSON으로 바꿔 <script type="application/ld+json">에 넣을 객체. 없는 항목(원제·출연 등)은 넣지 않아요.
  */
 export function reviewJsonLd(review: Review) {
   return {
@@ -48,14 +49,10 @@ export function reviewJsonLd(review: Review) {
       // ...(조건 ? { 항목 } : {}): 값이 있을 때만 그 항목을 넣어요.
       ...(review.originalTitle ? { alternateName: review.originalTitle } : {}),
       dateCreated: String(review.year),
-      // 공동 감독은 "한서윤, 김도윤"처럼 쉼표로 적어서, 한 사람씩 나눠요.
-      director: review.director
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean)
-        .map((name) => ({ "@type": "Person", name })),
+      // 공동 감독·여러 배우는 "한서윤, 김도윤"처럼 쉼표로 적어서, 한 사람씩 나눠요(lib/people.ts).
+      director: splitNames(review.director).map((name) => ({ "@type": "Person", name })),
+      ...(review.cast ? { actor: splitNames(review.cast).map((name) => ({ "@type": "Person", name })) } : {}),
       genre: review.genres,
-      ...(review.country ? { countryOfOrigin: { "@type": "Country", name: review.country } } : {}),
       // 상영 시간: "PT112M"은 "112분"을 나타내는 국제 표준(ISO 8601) 모양이에요.
       ...(review.runtime ? { duration: `PT${review.runtime}M` } : {}),
       ...(review.poster ? { image: absolute(review.poster) } : {}),

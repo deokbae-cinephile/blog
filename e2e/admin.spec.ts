@@ -116,12 +116,21 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^제목/).fill("E2E 새 리뷰");
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
+    // 출연: 배우 이름을 쉼표로 나눠 적어요. 빈칸이 들쭉날쭉해도 원고에는 "A, B"로 가지런히 들어가요.
+    await page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ }).fill("시험배우1,시험배우2 ");
     await page.getByRole("checkbox", { name: "로맨스" }).check();
     // 평점은 처음에 5.0이 골라져 있어요("고르세요"가 없어요).
     await expect(page.getByLabel(/^평점/)).toHaveValue("5.0");
     await page.getByLabel(/^평점/).selectOption("3.5");
     await page.getByLabel(/^한줄평/).fill("끝까지 저장되는지 보는 한줄평");
+    // 포스터를 고르기 전에는 상세 화면과 같은 기본 포스터(빈 필름 그림 + NO POSTER)가 보여요.
+    const posterFrame = page.getByRole("group", { name: "포스터" }).locator(".poster-frame");
+    await expect(posterFrame).toContainText("NO POSTER");
+    await expect(posterFrame.locator("svg")).toBeVisible();
     await page.getByLabel("포스터 고르기").setInputFiles(PICTURE);
+    // 고르면 기본 포스터 대신 고른 사진이 보여요.
+    await expect(posterFrame.locator("img")).toBeVisible();
+    await expect(posterFrame).not.toContainText("NO POSTER");
     // [포스터 고르기]·[포스터 빼기]는 포스터와 같은 너비예요.
     const frame = (await page.getByRole("group", { name: "포스터" }).locator(".poster-frame").boundingBox())!;
     for (const button of [page.getByText("포스터 고르기", { exact: true }), page.getByRole("button", { name: "포스터 빼기" })]) {
@@ -169,6 +178,7 @@ test.describe("글쓴이 기능", () => {
       "public/images/e2e-new-review/scene-1.png",
       "public/posters/e2e-new-review.png",
     ]);
+    expect(commit.texts["content/reviews/e2e-new-review.md"]).toContain("director: 시험감독\ncast: 시험배우1, 시험배우2\n");
     expect(commit.texts["content/reviews/e2e-new-review.md"]).toContain("genres: [로맨스]\nrating: 3.5\n");
     expect(commit.texts["content/reviews/e2e-new-review.md"]).toContain("![화면 조정 무늬](/images/e2e-new-review/scene-1.png)");
   });
@@ -348,6 +358,13 @@ test.describe("글쓴이 기능", () => {
     await page.getByRole("link", { name: "수정" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "리뷰 수정: alpha-station" })).toBeVisible();
     await expect(page.getByLabel(/^제목/)).toHaveValue("알파 정거장");
+    // 출연 칸에 원고의 배우들이 들어 있어요.
+    await expect(page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ })).toHaveValue("이배우, 박배우");
+    // 주소는 바꿀 수 없어요. "(수정할 때는 바꿀 수 없습니다)"는 주소 다음 줄에 보여요.
+    const slugLabel = (await page.getByText("주소(영문):", { exact: true }).boundingBox())!;
+    const slugNote = (await page.getByText("(수정할 때는 바꿀 수 없습니다)", { exact: true }).boundingBox())!;
+    expect(slugNote.y).toBeGreaterThanOrEqual(slugLabel.y + slugLabel.height - 1);
+    expect(Math.round(slugNote.x)).toBe(Math.round(slugLabel.x));
 
     await page.getByLabel(/^한줄평/).fill("고친 한줄평");
     await page.getByRole("button", { name: "수정한 내용 저장" }).click();
@@ -358,19 +375,74 @@ test.describe("글쓴이 기능", () => {
     expect(commit.texts["content/reviews/alpha-station.md"]).toContain("oneLiner: 고친 한줄평");
   });
 
-  test("삭제: 확인 창에서 [삭제]를 누르면 원고를 지우는 커밋이 올라가고, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
+  test("삭제: 확인 창에서 [삭제]를 누르면 로딩 UI를 보이고 원고를 지우는 커밋이 올라가며, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
     await page.goto("/login?next=/reviews/epsilon-night");
     await login(page);
-    await page.getByRole("button", { name: "삭제" }).click();
+    const back = page.getByRole("link", { name: "목록으로", exact: true });
+    const share = page.getByRole("button", { name: "공유하기" });
+    const edit = page.getByRole("link", { name: "수정" });
+    const remove = page.getByRole("button", { name: "삭제" });
+
+    // 맨 윗줄: [◀ 목록으로] … [공유하기] [수정] [삭제]가 모두 같은 높이(44px)로, 세로 가운데가 정확히 같아요.
+    // (예전에는 [수정]·[삭제] 묶음 아래의 빈 안내 칸 때문에 [공유하기]만 2px 내려가 있었어요.)
+    await expect(page.locator(".boot-overlay")).toBeHidden();
+    const boxes = await Promise.all([back, share, edit, remove].map(async (control) => (await control.boundingBox())!));
+    const center = boxes[0]!.y + boxes[0]!.height / 2;
+    for (const box of boxes) {
+      expect(Math.round(box.height)).toBe(44);
+      expect(Math.abs(box.y + box.height / 2 - center)).toBeLessThan(1);
+    }
+    // 좁은 휴대폰(360px)에서는 [공유하기] [수정] [삭제]가 다음 줄로 내려가고, [◀ 목록으로]와 왼쪽 끝이 맞아요(안쪽으로 밀리지 않아요).
+    const viewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 360, height: 740 });
+    const [narrowBack, narrowShare, narrowEdit, narrowRemove] = await Promise.all(
+      [back, share, edit, remove].map(async (control) => (await control.boundingBox())!),
+    );
+    expect(narrowShare!.y).toBeGreaterThanOrEqual(narrowBack!.y + narrowBack!.height);
+    expect(Math.round(narrowShare!.x)).toBe(Math.round(narrowBack!.x));
+    for (const box of [narrowEdit!, narrowRemove!]) expect(Math.abs(box.y - narrowShare!.y)).toBeLessThan(1);
+    await page.setViewportSize(viewport);
+
+    await remove.click();
     const dialog = page.getByRole("alertdialog", { name: "리뷰를 삭제할까요?" });
     await expect(dialog).toBeVisible();
     // 처음 초점은 되돌리기 쉬운 [취소]에 있어요.
     await expect(dialog.getByRole("button", { name: "취소" })).toBeFocused();
     await expectNoA11yViolations(page);
 
-    await dialog.getByRole("button", { name: "삭제" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "리뷰를 삭제했습니다" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "목록으로", exact: true }).last()).toBeFocused();
+    // 느린 GitHub 흉내(0.8초): 삭제하는 동안 창 안에 로딩 UI가 보이고, 두 단추는 막혀요.
+    await request.post(`${GITHUB}/__delay?ms=800`);
+    try {
+      const confirm = dialog.getByRole("button", { name: "삭제" });
+      await confirm.click();
+      await expect(dialog.getByRole("status")).toHaveText(/리뷰를 삭제하는 중/);
+      await expect(dialog.getByRole("button", { name: "취소" })).toHaveAttribute("aria-disabled", "true");
+      await expect(confirm).toHaveAttribute("aria-disabled", "true");
+      // 막아도 초점은 누른 [삭제]에 그대로 있어요(문서 전체로 빠지지 않아요).
+      await expect(confirm).toBeFocused();
+      // Esc로도 닫히지 않고, 상세 화면의 "Esc = 목록으로"도 쉬어요(창이 떠 있는 동안). 끝날 때까지 결과를 기다려요.
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+      await expect(page).toHaveURL(/\/reviews\/epsilon-night$/);
+
+      // 다 지우면 창이 닫히고, 맨 윗줄 아래에 화면 너비로 안내가 보이며, 초점은 [목록으로]에 있어요.
+      const notice = page.getByRole("status").filter({ hasText: "리뷰를 삭제했습니다" });
+      await expect(notice).toBeVisible({ timeout: 15_000 });
+      await expect(dialog).toBeHidden();
+      await expect(back).toBeFocused();
+    } finally {
+      await request.post(`${GITHUB}/__delay?ms=0`);
+    }
+    // 오른쪽 단추([공유하기]·[수정]·[삭제])는 치워요. 안내는 윗줄 아래, 윗줄과 같은 너비예요(좁은 칸에 끼어 깨지지 않아요).
+    await expect(share).toHaveCount(0);
+    await expect(edit).toHaveCount(0);
+    await expect(remove).toHaveCount(0);
+    const notice = (await page.getByRole("status").filter({ hasText: "리뷰를 삭제했습니다" }).boundingBox())!;
+    const row = (await back.locator("..").boundingBox())!;
+    expect(notice.y).toBeGreaterThanOrEqual(row.y + row.height);
+    expect(Math.round(notice.x)).toBe(Math.round(row.x));
+    expect(Math.round(notice.width)).toBe(Math.round(row.width));
+    await expectNoA11yViolations(page);
 
     const commits = (await (await request.get(`${GITHUB}/__commits`)).json()) as Commit[];
     expect(commits.find((item) => item.message === "리뷰 삭제: 엡실론의 밤")?.deleted).toEqual(["content/reviews/epsilon-night.md"]);

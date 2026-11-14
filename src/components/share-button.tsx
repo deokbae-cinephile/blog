@@ -6,7 +6,7 @@
  * 이 파일이 하는 일
  *   상세 화면 맨 윗줄 오른쪽의 [공유하기] 단추예요. 누르면 휴대폰(과 지원하는 컴퓨터)의 공유 창이 열려요.
  *
- *     ◀ 목록으로                 (링크를 복사했어요.) [공유하기] [수정] [삭제]
+ *     [◀ 목록으로]               (링크를 복사했어요.) [공유하기] [수정] [삭제]
  *                                       ↑ 공유 창이 없을 때만 보이는 안내
  *     [공유하기] → 휴대폰 공유 창: 카카오톡·메시지·메일 등 → 받는 쪽에는 포스터가 들어간 미리 보기 카드가 보여요
  *
@@ -68,13 +68,15 @@ export function ShareButton({ url, title, text }: Props) {
 
   return (
     // 단추와 안내를 한 줄에. 안내는 단추 왼쪽에 나타나서(order-first), 안내가 생겨도 단추 자리는 그대로예요.
-    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+    <div className="flex flex-wrap items-center justify-end gap-y-1">
       <button type="button" onClick={share} className="btn-line">
         공유하기
       </button>
       {/* 결과 안내(처음부터 있는 칸, 내용만 바꿔요). 비어 있으면 아무 자리도 차지하지 않아요.
+          mr-3 empty:mr-0: 안내가 있을 때만 단추와 12px 띄워요. 예전에는 묶음의 간격(gap)이 빈 칸 옆에도 생겨서,
+          좁은 화면에서 줄이 바뀌면 [공유하기]만 12px 안쪽에서 시작했어요.
           break-all: 복사하지 못해 주소를 보여 줄 때 긴 주소가 화면 밖으로 나가지 않게 아무 데서나 줄을 바꿔요. */}
-      <p role="status" className="order-first break-all text-crt-dim">
+      <p role="status" className="order-first mr-3 break-all text-crt-dim empty:mr-0">
         {message}
       </p>
     </div>
