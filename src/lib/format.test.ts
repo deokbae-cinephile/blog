@@ -24,7 +24,7 @@ describe("formatRating", () => {
 describe("joinFacts · labeled", () => {
   it("항목을 ' · '로 잇되 가운뎃점 앞은 NBSP라, 줄이 넘쳐도 가운뎃점이 줄 첫머리에 오지 않는다", () => {
     expect(FACT_SEPARATOR).toBe("\u00a0· ");
-    expect(joinFacts(["Winter Stop", 2024, labeled("감독", "한서윤")])).toBe("Winter Stop\u00a0· 2024\u00a0· 감독\u00a0한서윤");
+    expect(joinFacts(["Winter Stop", 2024, labeled("감독", "한서윤")])).toBe("Winter Stop\u00a0· 2024\u00a0· 감독:\u00a0한서윤");
   });
 
   it("없는 항목(undefined·null·빈 글자)은 빼고 잇는다", () => {
@@ -32,7 +32,7 @@ describe("joinFacts · labeled", () => {
     expect(joinFacts([])).toBe("");
   });
 
-  it("이름표와 값 사이는 NBSP로 붙인다(‘감독’과 이름이 다른 줄로 떨어지지 않게)", () => {
-    expect(labeled("조회", "1,234")).toBe(`조회${NBSP}1,234`);
+  it("이름표 뒤에 쌍점(:)을 붙이고, 값과의 사이는 NBSP로 붙인다(‘감독:’과 이름이 다른 줄로 떨어지지 않게)", () => {
+    expect(labeled("감독", "한서윤")).toBe(`감독:${NBSP}한서윤`);
   });
 });

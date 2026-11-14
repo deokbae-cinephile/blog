@@ -6,7 +6,7 @@
  * 이 파일이 하는 일
  *   상세 화면 맨 위 한 줄을 그려요. 모든 단추가 같은 모양(btn-line, 높이 44px)이라 한 줄에 가지런히 놓여요.
  *
- *     [◀ 목록으로]                                [공유하기] [수정] [삭제]   ← 수정·삭제는 로그인했을 때만
+ *     [◀ 목록으로]                                [공유하기] [수정] [삭제]   ← 수정·삭제는 로그인했을 때만(단추 사이는 모두 8px)
  *
  *   리뷰를 삭제하면 [공유하기]·[수정]·[삭제]를 치우고, 윗줄 아래에 안내를 화면 너비로 보여 줘요.
  *
@@ -19,15 +19,16 @@
  *    조금 내려가 보였는데, 이제 안내 칸은 처음부터 있되 비어 있으면 자리를 차지하지 않아요.)
  *
  * [◀ 목록으로]의 ◀는 아래쪽 [◀ 이전 리뷰]와 같은 표시예요. 꾸밈이라 읽지 않아요(키보드로는 Esc도 같은 일을 해요).
+ * 누르면 목록을 받는 동안 화면 가운데에 로딩 UI를 보여요(review-navigation.tsx).
  *
  * 누가 쓰나요?
  *   components/review-article.tsx(상세 화면)
  */
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { AdminReviewActions } from "./admin-review-actions";
+import { ReviewNavLink } from "./review-navigation";
 import { ShareButton } from "./share-button";
 
 /** ReviewToolbar가 받는 값 */
@@ -59,11 +60,13 @@ export function ReviewToolbar({ slug, title, shareUrl, shareTitle, shareText }: 
     <div>
       {/* flex-wrap: 좁은 화면에서 자리가 모자라면 오른쪽 묶음이 다음 줄로 내려가요. items-center: 모든 단추의 세로 가운데를 맞춰요. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link ref={backRef} href="/" className="btn-line">
+        {/* ReviewNavLink: 누르면 목록을 받는 동안 로딩 UI를 보여요(review-navigation.tsx, 키보드 Esc도 같아요). */}
+        <ReviewNavLink ref={backRef} href="/" target="list" className="btn-line">
           <span aria-hidden="true">◀</span>목록으로
-        </Link>
+        </ReviewNavLink>
         {deletedMessage === "" && (
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          // gap-2: [공유하기] [수정] [삭제] 사이를 모두 8px로 같게 둬요. ([수정]·[삭제]는 묶음 없이 이 줄에 바로 놓여요. admin-review-actions.tsx)
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <ShareButton url={shareUrl} title={shareTitle} text={shareText} />
             <AdminReviewActions slug={slug} title={title} onDeleted={setDeletedMessage} />
           </div>

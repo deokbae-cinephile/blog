@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SiteHeader } from "./site-header";
 
 /** 처음 화면 링크의 이름: 블로그 이름 */
-const HOME = "DMB: 덕배의 영화 블로그";
+const HOME = "영화 한 줄 평 블로그";
 
 describe("SiteHeader", () => {
   afterEach(() => {
@@ -19,7 +19,7 @@ describe("SiteHeader", () => {
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("블로그 이름(DMB: 덕배의 영화 블로그)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
+  it("블로그 이름(영화 한 줄 평 블로그)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
     render(<SiteHeader />);
     expect(screen.getByRole("link", { name: HOME })).toHaveAttribute("href", "/");
     expect(screen.queryByText("평론가를 꿈꾸는 덕배의 상영 기록")).not.toBeInTheDocument();

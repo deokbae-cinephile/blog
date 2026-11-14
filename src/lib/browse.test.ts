@@ -62,12 +62,12 @@ describe("parseParams / toSearch", () => {
 });
 
 describe("matchesQuery", () => {
-  it("제목, 원제, 감독, 출연, 한줄평에서 찾는다", () => {
+  it("제목, 원제, 감독, 출연, 한 줄 평에서 찾는다", () => {
     expect(matchesQuery(winter, "정류장")).toBe(true); // 제목
     expect(matchesQuery(winter, "winter")).toBe(true); // 원제
     expect(matchesQuery(winter, "한서윤")).toBe(true); // 감독
     expect(matchesQuery(winter, "이배우")).toBe(true); // 출연(배우)
-    expect(matchesQuery(winter, "기다림")).toBe(true); // 한줄평
+    expect(matchesQuery(winter, "기다림")).toBe(true); // 한 줄 평
     expect(matchesQuery(winter, "화성")).toBe(false);
   });
 

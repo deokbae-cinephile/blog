@@ -89,6 +89,13 @@ describe("validateReviewForm", () => {
     expect(result.ok === false && result.errors[field]).toBe(FIELD_MESSAGES[field]);
   });
 
+  it("출연이 5명보다 많으면 몇 명을 지울지 알려 준다(5명까지는 받는다)", () => {
+    const five = "가배우, 나배우, 다배우, 라배우, 마배우";
+    expect(validateReviewForm({ ...valid, cast: five }, { checkSlug: true }).ok).toBe(true);
+    const result = validateReviewForm({ ...valid, cast: `${five}, 바배우` }, { checkSlug: true });
+    expect(result.ok === false && result.errors.cast).toBe("출연은 5명까지 적을 수 있습니다. 지금 6명이니 1명을 지워 주세요.");
+  });
+
   it("수정(checkSlug: false)에서는 주소를 검사하지 않는다", () => {
     expect(validateReviewForm({ ...valid, slug: "" }, { checkSlug: false }).ok).toBe(true);
     expect(validateReviewForm({ ...valid, slug: "겨울" }, { checkSlug: true }).ok).toBe(false);

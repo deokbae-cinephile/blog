@@ -248,10 +248,25 @@ describe("ReviewBrowserView (방향키로 고르기)", () => {
 
   beforeEach(() => {
     placeItems(100); // 기본: 목록이 화면에 보여요.
+    // 리뷰를 고르는 키는 제목이 링크일 때만 써요. v3 전까지는 글쓴이(로그인 표시 쿠키)에게만 링크라서 로그인한 상태로 시험해요.
+    document.cookie = "blog_admin=1; path=/";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    document.cookie = "blog_admin=; max-age=0; path=/";
+  });
+
+  it("v3 전 방문자(로그인 전)의 목록에는 링크가 없어, ▼ ▶ Home을 눌러도 가로채지 않는다(리뷰를 고르지 않는다)", async () => {
+    document.cookie = "blog_admin=; max-age=0; path=/";
+    const user = userEvent.setup();
+    render(<Harness />);
+    // 목록 항목 안에 링크가 하나도 없어요(제목은 글자로만).
+    expect(document.querySelectorAll("li a[href]")).toHaveLength(0);
+    for (const key of ["{ArrowDown}", "{ArrowRight}", "{Home}"]) {
+      await user.keyboard(key);
+      expect(document.body).toHaveFocus();
+    }
   });
 
   it("목록 밖에서 ▼를 누르면 첫 리뷰를 고르고, ▲ ▼로 오르내린다", async () => {
@@ -350,8 +365,10 @@ describe("ReviewBrowserView (무한 스크롤)", () => {
 
     await user.click(screen.getByRole("button", { name: "10편 더 보기" }));
     expect(listTitles()).toHaveLength(20);
-    // 11번째 리뷰(새로 나온 첫 리뷰)의 제목 링크에 초점이 가요. 키보드 사용자가 이어서 읽을 수 있어요.
+    // 11번째 리뷰(새로 나온 첫 리뷰)에 초점이 가요. 키보드 사용자가 이어서 읽을 수 있어요.
+    // v3 전 방문자의 목록은 제목이 링크가 아니라서, 리뷰 한 편(article, tabIndex -1)으로 초점을 옮겨요.
     expect(document.activeElement).toHaveTextContent("시험 영화 11");
+    expect(document.activeElement?.tagName).toBe("ARTICLE");
 
     // 남은 것은 3편이라 단추 글자도 3편이에요.
     await user.click(screen.getByRole("button", { name: "3편 더 보기" }));
@@ -359,6 +376,15 @@ describe("ReviewBrowserView (무한 스크롤)", () => {
     // 다 보였으면 단추가 사라지고, 안내도 "전체 23편"만 남아요.
     expect(screen.queryByRole("button", { name: /더 보기/ })).not.toBeInTheDocument();
     expect(status()).toHaveTextContent(/^전체 23편$/);
+  });
+
+  it("글쓴이(제목이 링크)라면 [더 보기]를 누른 뒤 새로 나온 첫 리뷰의 제목 링크로 초점을 옮긴다", async () => {
+    document.cookie = "blog_admin=1; path=/";
+    const user = userEvent.setup();
+    render(<Harness reviews={reviews} />);
+    await user.click(screen.getByRole("button", { name: "10편 더 보기" }));
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "시험 영화 11" }));
+    document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
   it("목록 끝의 '더 보기' 자리가 화면에 가까워지면 저절로 10편을 더 보인다", () => {

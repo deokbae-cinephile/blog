@@ -67,6 +67,16 @@ describe("checkFrontmatter", () => {
     expect(messages({ ...valid, cast: [] })).toEqual([message]);
   });
 
+  it("출연은 한 작품에 5명까지다(같은 이름은 한 번만 센다). 넘으면 몇 명을 지울지 알려 준다", () => {
+    const five = "가배우, 나배우, 다배우, 라배우, 마배우";
+    expect(parse({ ...valid, cast: five }).cast).toBe(five);
+    // 같은 이름을 두 번 적어도 한 번만 세서 5명이에요.
+    expect(parse({ ...valid, cast: `${five}, 가배우` }).cast).toBe(five);
+    expect(messages({ ...valid, cast: `${five}, 바배우, 사배우` })).toEqual([
+      "cast(출연)에는 배우를 5명까지 적습니다. 지금 7명이니 2명을 지워 주세요.",
+    ]);
+  });
+
   it("2.0.0 핫픽스에서 뺀 제작 국가(country)는 알 수 없는 항목으로 알려 준다(그 줄을 지우면 돼요)", () => {
     expect(messages({ ...valid, country: "한국" })[0]).toContain("알 수 없는 항목입니다: country");
   });
@@ -133,7 +143,7 @@ describe("checkFrontmatter", () => {
       "director(감독)를 적어 주세요. 여러 명이면 쉼표로 나눕니다. 예: director: 한서윤",
       "genres(장르)를 하나 이상 적어 주세요. 예: genres: [드라마, 로맨스]",
       "rating(평점)은 0.5부터 5까지 0.5 단위 숫자로 적습니다(0점은 없습니다). 예: rating: 4.5",
-      "oneLiner(한줄평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
+      "oneLiner(한 줄 평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
       "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
     ]);
   });

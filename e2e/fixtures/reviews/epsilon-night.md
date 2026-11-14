@@ -8,7 +8,7 @@ cast: [이배우, 최배우]
 runtime: 99
 genres: [스릴러, 범죄]
 rating: 3.5
-oneLiner: 시험용 다섯 번째 한줄평
+oneLiner: 시험용 다섯 번째 한 줄 평
 publishedAt: 2025-12-01
 ---
 

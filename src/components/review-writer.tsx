@@ -5,12 +5,13 @@
  *   글쓴이가 리뷰를 추가하고 수정하는 폼이에요. 본문은 Markdown으로 써요.
  *
  *     넓은 화면(1024px~)은 3칸: [포스터 | 영화 정보 2열 × 5행]
+ *     * 표시는 꼭 적어야 하는 칸입니다.        ← 칸 이름 옆 *의 뜻(색이 아니라 글자로 알려요)
  *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────┐
- *     │ [미리보기]     │ │ 주소(영문)        │ 제목              │
- *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도          │  ← 단추는 포스터와 같은 너비
- *     │ [포스터 빼기]  │ │ 감독              │ 출연(쉼표로 구분)  │
- *     │               │ │ 상영 시간         │ 장르(여러 개)      │
- *     │               │ │ 평점(처음 5.0)    │ 한줄평            │
+ *     │ [미리보기]     │ │ 주소 *            │ 제목 *            │
+ *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도 *        │  ← 단추는 포스터와 같은 너비
+ *     │ [포스터 빼기]  │ │ 감독 *            │ 출연              │  ← 출연은 5명까지(넘으면 저장할 때 알려요)
+ *     │               │ │ 상영 시간(분)     │ 장르 *(여러 개)    │
+ *     │               │ │ 평점 *(처음 5.0)  │ 한 줄 평 *          │
  *     └───────────────┘ └──────────────────────────────────────┘
  *     ┌ 본문 ─────────────────────────────────────────────────┐
  *     │ [장면 사진 넣기] → 커서 자리에 ![](/images/...) 줄이 들어가요 │
@@ -18,7 +19,8 @@
  *     └──────────────────────────────────────────────────────┘
  *     [리뷰 저장] [임시 저장] [취소]
  *   좁은 화면에서는 한 칸으로, 포스터 → 영화 정보 → 본문 차례로 쌓여요(코드 순서도 같아서 읽는 순서가 같아요).
- *   칸 아래 도움말은 주소(영문)에만 둬요. 나머지 칸은 이름만으로 알 수 있고, 틀리면 오류 문구가 고치는 방법을 알려 줘요.
+ *   칸 아래 도움말은 주소에만 둬요. 나머지 칸은 이름만으로 알 수 있고, 틀리면 오류 문구가 고치는 방법을 알려 줘요.
+ *   꼭 적어야 하는 칸은 이름 옆에 *를 보여요. 화면 낭독기는 *를 읽지 않고, 입력 칸의 required로 "필수"라고 알려 줘요.
  *
  * 저장하는 순서
  *   1. 칸 검사(lib/review-form.ts) — 틀린 칸이 있으면 "고칠 곳" 목록을 보여 주고 거기로 초점을 옮겨요.
@@ -136,7 +138,7 @@ const SELECT_ARROW_ROWS = ["#######", ".#####.", "..###..", "...#..."] as const;
 const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
   poster: "포스터",
   posterAlt: "포스터 설명",
-  slug: "주소(영문)",
+  slug: "주소",
   title: "제목",
   originalTitle: "원제",
   year: "개봉 연도",
@@ -145,7 +147,7 @@ const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
   runtime: "상영 시간",
   genres: "장르",
   rating: "평점",
-  oneLiner: "한줄평",
+  oneLiner: "한 줄 평",
   body: "본문",
   publishedAt: "글 쓴 날",
 };
@@ -298,7 +300,7 @@ export function ReviewWriter(props: Props) {
 
   /**
    * [포스터 고르기]로 그림을 고르면 큰 사진은 줄이고(lib/shrink-image.ts) 미리보기를 보여 주고, 저장할 때 올려요.
-   * 주소(영문)보다 먼저 골라도 돼요. 파일 이름(<주소>.jpg 등)은 주소를 적는 대로 맞춰져요(changeSlug).
+   * 주소보다 먼저 골라도 돼요. 파일 이름(<주소>.jpg 등)은 주소를 적는 대로 맞춰져요(changeSlug).
    */
   async function handlePosterChange(event: ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0];
@@ -372,7 +374,7 @@ export function ReviewWriter(props: Props) {
     // 좁은 화면에서 미리 보기를 보고 있었어도, 사진 줄은 쓰기 칸에 들어가니 쓰기 칸을 보여 줘요.
     setBodyView("input");
     if (!slugReady) {
-      setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소(영문)를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
+      setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
       document.getElementById(fieldId("slug"))?.focus();
       return;
     }
@@ -393,7 +395,7 @@ export function ReviewWriter(props: Props) {
     const { values, scenes } = latestRef.current;
     // 줄이는 사이 주소 칸을 비우거나 틀리게 고쳤으면, 사진 경로(/images/<주소>/…)를 만들 수 없어서 멈추고 알려요.
     if (!SLUG.test(values.slug)) {
-      setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소(영문)를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
+      setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
       document.getElementById(fieldId("slug"))?.focus();
       return;
     }
@@ -870,6 +872,9 @@ export function ReviewWriter(props: Props) {
         </div>
       )}
 
+      {/* 칸 이름 옆 *의 뜻. 화면에 보이는 안내라 색이 아니라 글자로 알려요(KWCAG 7.3.2 레이블 제공). */}
+      <p className="text-crt-dim">* 표시는 꼭 적어야 하는 칸입니다.</p>
+
       {/* 포스터와 영화 정보. 넓은 화면(lg, 1024px~)에서는 3칸으로 나눠 [포스터 | 영화 정보(2칸)]로 놓아요. */}
       <div className="grid gap-10 lg:grid-cols-3 lg:gap-8">
         {/* 포스터: 넓은 화면에서는 왼쪽 한 칸. 주소보다 먼저 골라도 돼요. */}
@@ -915,7 +920,7 @@ export function ReviewWriter(props: Props) {
           </p>
         </fieldset>
 
-        {/* 영화 정보: 넓은 화면에서는 오른쪽 두 칸(lg:col-span-2)을 쓰고, 칸들을 2열로 놓아요(주소~한줄평 10칸 = 2열 × 5행).
+        {/* 영화 정보: 넓은 화면에서는 오른쪽 두 칸(lg:col-span-2)을 쓰고, 칸들을 2열로 놓아요(주소~한 줄 평 10칸 = 2열 × 5행).
             content-start: 칸들이 위에서부터 놓이게 해요.
             items-start: 같은 행의 옆 칸에 도움말이 길어도 이 칸(입력 상자)이 따라 늘어나지 않고 제 높이를 지켜요. */}
         <fieldset className="grid content-start items-start gap-6 lg:col-span-2 lg:grid-cols-2 lg:gap-x-6" disabled={saving}>
@@ -936,7 +941,7 @@ export function ReviewWriter(props: Props) {
           ) : (
             // 주소는 수정할 때 바꿀 수 없어요. 괄호 안내는 다음 줄에 보여요(<br>, 화면 낭독기는 이어서 읽어요).
             <p>
-              <span className="text-crt-dim">주소(영문): </span>/reviews/{values.slug}
+              <span className="text-crt-dim">주소: </span>/reviews/{values.slug}
               <br />
               <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다)</span>
             </p>
@@ -968,11 +973,11 @@ export function ReviewWriter(props: Props) {
             value={values.director}
             onChange={(value) => setField("director", value)}
           />
-          {/* 출연: 배우 이름을 쉼표로 나눠 적어요(예: 레오나르도 디카프리오, 마크 러팔로). 칸 이름에 적는 방법을 함께 적어요("상영 시간(분)"처럼).
+          {/* 출연: 배우 이름을 쉼표로 나눠 적어요(예: 레오나르도 디카프리오, 마크 러팔로). 한 작품에 5명까지예요(넘으면 저장할 때 알려요).
               저장하면 이름마다 나눠, 상세 화면에서 이름을 누르면 그 배우로 찾은 목록으로 가요. */}
           <TextField
             id={fieldId("cast")}
-            label={`${FIELD_LABELS.cast}(쉼표로 구분)`}
+            label={FIELD_LABELS.cast}
             error={errors.cast}
             value={values.cast}
             onChange={(value) => setField("cast", value)}
@@ -991,8 +996,10 @@ export function ReviewWriter(props: Props) {
             <ChoiceGroup
               layout="aside"
               legend={
+                // 장르는 체크박스 묶음이라 required를 달 곳이 없어요. 그래서 *는 숨기고 화면 낭독기용 글자 "(필수)"를 함께 둬요.
                 <>
-                  {FIELD_LABELS.genres} <span className="text-crt-dim">(필수)</span>
+                  {FIELD_LABELS.genres} <RequiredMark />
+                  <span className="sr-only">(필수)</span>
                 </>
               }
               describedBy={errors.genres ? `${fieldId("genres")}-error` : undefined}
@@ -1164,13 +1171,24 @@ function initialState(props: Props): { values: ReviewFormValues; notice: string;
  * 3. 칸 조각들
  * ────────────────────────────────────────────────────────────── */
 
+/**
+ * 꼭 적어야 하는 칸의 표시 "*". 칸 이름과 같은 색이에요(칸 이름 뒤에 빈칸 한 칸을 두고 붙여요).
+ * aria-hidden: 화면 낭독기는 "별표"라고 읽지 않아요. 필수인지는 입력 요소의 required(또는 숨긴 글자 "(필수)")로 알려요.
+ */
+function RequiredMark() {
+  return <span aria-hidden="true">*</span>;
+}
+
 /** Field가 받는 값 */
 type FieldProps = {
   /** 입력 요소의 id(label이 가리켜요) */
   id: string;
   /** 칸 이름 */
   label: string;
-  /** 꼭 채워야 하는 칸이면 이름 옆에 "(필수)"를 글자로 보여 줘요(색만으로 알리지 않아요). */
+  /**
+   * 꼭 채워야 하는 칸이면 이름 옆에 *를 보여 줘요(색이 아닌 글자 표시예요. 뜻은 폼 위 안내 줄이 알려요).
+   * 입력 요소에도 required를 달아, 화면 낭독기가 "필수"라고 알려 줘요(*는 읽지 않아요).
+   */
   required?: boolean;
   /** 칸 아래 도움말 */
   hint?: string;
@@ -1193,7 +1211,14 @@ function Field({ id, label, required = false, hint, error, children }: FieldProp
   return (
     <div className="grid gap-2">
       <label htmlFor={id} className="glow">
-        {label} {required && <span className="text-crt-dim">(필수)</span>}
+        {label}
+        {/* 이름과 * 사이 빈칸 한 칸. */}
+        {required && (
+          <>
+            {" "}
+            <RequiredMark />
+          </>
+        )}
       </label>
       {children(describedBy)}
       {hint && (

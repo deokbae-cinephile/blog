@@ -6,7 +6,7 @@ year: 2010
 director: 시험감독6
 genres: [액션]
 rating: 4
-oneLiner: 시험용 람다 질주 한줄평
+oneLiner: 시험용 람다 질주 한 줄 평
 publishedAt: 2025-06-01
 ---
 

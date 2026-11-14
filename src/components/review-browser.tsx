@@ -19,7 +19,9 @@
  *   4. 조건을 주소(?q=&genre=&sort=)에 남겨요. 링크를 공유하거나 뒤로 가기를 해도 같은 목록이 보입니다.
  *   5. 결과가 없으면 안내하고, "검색 조건 지우기" 단추로 처음 상태로 돌아가요.
  *      리뷰가 아직 한 편도 없으면 "아직 올린 리뷰가 없습니다"만 보여요.
- *   6. 옛 DOS처럼 ▲ ▼로 리뷰를 고르고 Enter로 열어요(use-list-keys.ts).
+ *   6. 옛 DOS처럼 ▲ ▼로 리뷰를 고르고 Enter로 열어요(use-list-keys.ts). 제목이 링크일 때만이에요.
+ *      v3 전까지는 상세 화면을 방문자에게 열지 않아서(lib/site.ts의 REVIEW_DETAIL_PUBLIC) 제목이 링크가 아니에요.
+ *      글쓴이로 로그인했을 때만 제목이 링크예요(상세에서 [수정]·[삭제]를 쓰려고요).
  *   7. 무한 스크롤: 처음에는 10편만 보여 주고, 목록 끝에 가까워지면 10편씩 더 보여 줘요.
  *      키보드·화면 낭독기 사용자를 위해 목록 끝에 [n편 더 보기] 단추도 둬요(누르면 새로 나온 첫 리뷰로 초점이 가요).
  *
@@ -57,10 +59,12 @@ import {
   toSearch,
 } from "@/lib/browse";
 import type { ReviewSummary } from "@/lib/review";
+import { REVIEW_DETAIL_PUBLIC } from "@/lib/site";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
 import { ReviewListItem } from "./review-list-item";
 import { SearchBox } from "./search-box";
+import { useIsAdmin } from "./use-is-admin";
 import { useListKeys } from "./use-list-keys";
 
 /** 한 번에 보여 줄 리뷰 수. 처음에 10편, 목록 끝에 가까워지면 10편씩 더 보여 줘요. */
@@ -202,7 +206,11 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
   // useRef: 화면의 실제 요소(여기서는 검색창 <input>)를 가리키는 손잡이예요. 나중에 초점을 옮길 때 씁니다.
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 영화 목록(<ul>)의 손잡이. ▲ ▼로 리뷰를 고르는 기능(useListKeys)이 이 목록 안의 링크를 찾아요.
+  // 목록 제목을 상세 화면으로 가는 링크로 둘지: 상세를 방문자에게 열었거나(v3), 글쓴이로 로그인했을 때만이에요.
+  const isAdmin = useIsAdmin();
+  const linked = REVIEW_DETAIL_PUBLIC || isAdmin;
+
+  // 영화 목록(<ul>)의 손잡이. ▲ ▼로 리뷰를 고르는 기능(useListKeys)이 이 목록 안의 링크를 찾아요(링크가 없으면 아무 일도 하지 않아요).
   // 미리 만든 HTML(interactive가 false)에서는 아직 조작할 수 없으니 꺼 둬요.
   const listRef = useRef<HTMLUListElement>(null);
   useListKeys(listRef, interactive);
@@ -243,8 +251,9 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
     const index = focusIndexRef.current;
     if (index === null) return;
     focusIndexRef.current = null;
-    // 목록의 index번째 링크(새로 나온 첫 리뷰)로 초점을 옮겨요.
-    listRef.current?.querySelectorAll<HTMLAnchorElement>("li a[href]")[index]?.focus();
+    // 목록의 index번째 리뷰(새로 나온 첫 리뷰)로 초점을 옮겨요. 제목이 링크면 링크로, 아니면 리뷰 한 편(article)으로요.
+    const item = listRef.current?.querySelectorAll("li")[index];
+    (item?.querySelector<HTMLElement>("a[href]") ?? item?.querySelector<HTMLElement>("article"))?.focus();
   }, [shown]);
 
   // 목록 끝의 "더 보기" 자리. 이 자리가 화면에 가까워지면 10편을 더 보여 줘요.
@@ -382,7 +391,7 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
         {results.length > 0 ? (
           <ul ref={listRef} className="mt-4 grid gap-2">
             {visible.map((review) => (
-              <ReviewListItem key={review.slug} review={review} />
+              <ReviewListItem key={review.slug} review={review} linked={linked} />
             ))}
           </ul>
         ) : reviews.length === 0 ? (

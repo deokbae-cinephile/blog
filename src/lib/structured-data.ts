@@ -8,7 +8,7 @@
  *     리뷰 상세: Review(리뷰) ── itemReviewed: Movie(영화 제목·원제·개봉 연도·감독·출연·장르·상영 시간·포스터)
  *                             ├─ reviewRating: Rating(평점 0.5~5)
  *                             └─ author: Person(덕배), datePublished(글 쓴 날)
- *     처음 화면: WebSite(사이트 이름 "DMB", 다른 이름 "덕배의 영화 블로그", 주소)
+ *     처음 화면: WebSite(사이트 이름 "DMB", 다른 이름 "영화 한 줄 평 블로그", 주소)
  *
  *   검색 결과에 평점이 함께 보이거나(별점 표시), 사이트 이름이 바르게 보이는 데 도움이 돼요.
  *   (보여 줄지는 검색엔진이 정해요.)
@@ -38,7 +38,7 @@ export function reviewJsonLd(review: Review) {
     url: absolute(`/reviews/${review.slug}`),
     inLanguage: "ko-KR",
     datePublished: review.publishedAt,
-    // 한줄평을 리뷰의 짧은 설명으로 써요.
+    // 한 줄 평을 리뷰의 짧은 설명으로 써요.
     description: review.oneLiner,
     author: { "@type": "Person", name: site.author },
     // 평점: 이 블로그는 0.5점부터 5점까지예요.
@@ -66,7 +66,7 @@ export function websiteJsonLd() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: site.name,
-    alternateName: site.headerTitle.replace(/^DMB: /, ""),
+    alternateName: site.headerTitle,
     url: `${siteUrl}/`,
     inLanguage: "ko-KR",
   };

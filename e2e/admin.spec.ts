@@ -19,7 +19,7 @@ import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 
 import { E2E_ADMIN } from "./admin-account";
-import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
+import { expectNoA11yViolations, expectNoHorizontalScroll, loginAsAuthor } from "./helpers";
 
 /** 가짜 GitHub 서버 주소(playwright.config.ts와 같아요) */
 const GITHUB = `http://127.0.0.1:${process.env.MOCK_GITHUB_PORT ?? 3101}`;
@@ -50,8 +50,10 @@ test.describe("로그인 전(proxy.ts가 막기)", () => {
     expect(await response.json()).toEqual({ message: "로그인이 필요합니다. 다시 로그인한 뒤 시도하세요." });
   });
 
-  test("로그인 전에는 [+](리뷰 추가)·[수정]·[삭제]가 보이지 않는다", async ({ page }) => {
+  test("로그인 전에는 [+](리뷰 추가)·[수정]·[삭제]가 보이지 않고, 리뷰 상세에도 들어갈 수 없다(목록으로 옮김)", async ({ page }) => {
+    // v3 전까지 방문자가 상세 주소로 오면 처음 화면(목록)으로 옮겨요(proxy.ts).
     await page.goto("/reviews/alpha-station");
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("link", { name: "수정" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "삭제" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "리뷰 추가" })).toHaveCount(0);
@@ -64,7 +66,10 @@ test.describe("글쓴이 기능", () => {
   test.skip(({ isMobile }) => isMobile, "저장소를 바꾸는 시험이라 데스크톱에서 한 번만 돌려요");
   test.describe.configure({ mode: "serial" });
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ request }, testInfo) => {
+    // 위의 건너뛰기 조건(isMobile)은 시험마다 보는 값이라, 휴대폰 프로젝트에서도 이 준비는 먼저 돌 수 있어요.
+    // 그러면 데스크톱에서 저장하던 중에 저장소가 처음 모습으로 돌아가 커밋이 거절돼요(422). 그래서 데스크톱에서만 되돌려요.
+    if (testInfo.project.name !== "desktop") return;
     // 가짜 저장소를 처음 모습(시험용 원고)으로 되돌려요.
     await request.post(`${GITHUB}/__reset`);
   });
@@ -112,17 +117,21 @@ test.describe("글쓴이 기능", () => {
     await page.getByRole("button", { name: "리뷰 저장" }).click();
     await expect(page.getByRole("group", { name: /고칠 곳 \d+개/ })).toBeFocused();
 
-    await page.getByLabel(/^주소\(영문\)/).fill("e2e-new-review");
+    // 칸 이름 옆 *의 뜻을 폼 위에 글로 알려요. 칸 이름에는 "(영문)"·"(필수)" 같은 덧붙임이 없어요.
+    await expect(page.getByText("* 표시는 꼭 적어야 하는 칸입니다.")).toBeVisible();
+    await expect(page.locator("form")).not.toContainText("(영문)");
+    await expect(page.getByRole("textbox", { name: "주소", exact: true })).toHaveAttribute("required", "");
+    await page.getByLabel(/^주소/).fill("e2e-new-review");
     await page.getByLabel(/^제목/).fill("E2E 새 리뷰");
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
     // 출연: 배우 이름을 쉼표로 나눠 적어요. 빈칸이 들쭉날쭉해도 원고에는 "A, B"로 가지런히 들어가요.
-    await page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ }).fill("시험배우1,시험배우2 ");
+    await page.getByRole("textbox", { name: "출연", exact: true }).fill("시험배우1,시험배우2 ");
     await page.getByRole("checkbox", { name: "로맨스" }).check();
     // 평점은 처음에 5.0이 골라져 있어요("고르세요"가 없어요).
     await expect(page.getByLabel(/^평점/)).toHaveValue("5.0");
     await page.getByLabel(/^평점/).selectOption("3.5");
-    await page.getByLabel(/^한줄평/).fill("끝까지 저장되는지 보는 한줄평");
+    await page.getByLabel(/^한 줄 평/).fill("끝까지 저장되는지 보는 한 줄 평");
     // 포스터를 고르기 전에는 상세 화면과 같은 기본 포스터(빈 필름 그림 + NO POSTER)가 보여요.
     const posterFrame = page.getByRole("group", { name: "포스터" }).locator(".poster-frame");
     await expect(posterFrame).toContainText("NO POSTER");
@@ -189,7 +198,7 @@ test.describe("글쓴이 기능", () => {
     const body = page.getByRole("textbox", { name: "본문(Markdown)" });
 
     // 쓰다 만 글: 주소·제목·포스터·장면 사진만 넣고 [임시 저장](검사하지 않아요).
-    await page.getByLabel(/^주소\(영문\)/).fill("e2e-draft");
+    await page.getByLabel(/^주소/).fill("e2e-draft");
     await page.getByLabel(/^제목/).fill("임시 저장 시험");
     await page.getByLabel("포스터 고르기").setInputFiles(PICTURE);
     await expect(page.getByText(/포스터로 test-pattern\.png을\(를\) 골랐습니다/)).toBeVisible();
@@ -210,7 +219,7 @@ test.describe("글쓴이 기능", () => {
     await expectNoA11yViolations(page);
     await drafts.getByRole("button", { name: "불러오기" }).click();
     await expect(page.getByLabel(/^제목/)).toHaveValue("임시 저장 시험");
-    await expect(page.getByLabel(/^주소\(영문\)/)).toHaveValue("e2e-draft");
+    await expect(page.getByLabel(/^주소/)).toHaveValue("e2e-draft");
     await expect(body).toHaveValue("쓰던 문단\n\n![](/images/e2e-draft/scene-1.png)\n\n");
     await expect(page.getByRole("group", { name: "포스터" }).locator("img")).toHaveAttribute("src", /^blob:/);
     await expect(page.getByRole("region", { name: "미리 보기" }).locator("img")).toHaveAttribute("src", /^blob:/);
@@ -219,7 +228,7 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
     await page.getByRole("checkbox", { name: "드라마" }).check();
-    await page.getByLabel(/^한줄평/).fill("임시 저장에서 이어 쓴 한줄평");
+    await page.getByLabel(/^한 줄 평/).fill("임시 저장에서 이어 쓴 한 줄 평");
     await body.fill("쓰던 문단\n\n![화면 조정 무늬](/images/e2e-draft/scene-1.png)\n");
     // 저장소(가짜 GitHub)의 답을 늦춰, 저장하는 동안 단추 아래에 로딩 UI가 보이는지 확인해요.
     await request.post(`${GITHUB}/__delay?ms=700`);
@@ -261,7 +270,7 @@ test.describe("글쓴이 기능", () => {
     );
     const big = (name: string) => ({ name, mimeType: "image/png", buffer: bigPng });
 
-    await page.getByLabel(/^주소\(영문\)/).fill("e2e-big-photo");
+    await page.getByLabel(/^주소/).fill("e2e-big-photo");
     await page.getByLabel("포스터 고르기").setInputFiles(big("big-poster.png"));
     await expect(page.getByText(/포스터로 big-poster\.png을\(를\) 골랐습니다\. 큰 사진이라 .+에서 .+로 줄였습니다\./)).toBeVisible();
     // 미리보기 그림의 실제 크기가 긴 변 1600px이에요.
@@ -277,7 +286,7 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
     await page.getByRole("checkbox", { name: "액션" }).check();
-    await page.getByLabel(/^한줄평/).fill("줄여서 올라가는지 보는 한줄평");
+    await page.getByLabel(/^한 줄 평/).fill("줄여서 올라가는지 보는 한 줄 평");
     await body.fill("![초록 그러데이션](/images/e2e-big-photo/scene-1.webp)\n");
     await page.getByRole("button", { name: "리뷰 저장" }).click();
     await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused();
@@ -359,20 +368,20 @@ test.describe("글쓴이 기능", () => {
     await expect(page.getByRole("heading", { level: 1, name: "리뷰 수정: alpha-station" })).toBeVisible();
     await expect(page.getByLabel(/^제목/)).toHaveValue("알파 정거장");
     // 출연 칸에 원고의 배우들이 들어 있어요.
-    await expect(page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ })).toHaveValue("이배우, 박배우");
+    await expect(page.getByRole("textbox", { name: "출연", exact: true })).toHaveValue("이배우, 박배우");
     // 주소는 바꿀 수 없어요. "(수정할 때는 바꿀 수 없습니다)"는 주소 다음 줄에 보여요.
-    const slugLabel = (await page.getByText("주소(영문):", { exact: true }).boundingBox())!;
+    const slugLabel = (await page.getByText("주소:", { exact: true }).boundingBox())!;
     const slugNote = (await page.getByText("(수정할 때는 바꿀 수 없습니다)", { exact: true }).boundingBox())!;
     expect(slugNote.y).toBeGreaterThanOrEqual(slugLabel.y + slugLabel.height - 1);
     expect(Math.round(slugNote.x)).toBe(Math.round(slugLabel.x));
 
-    await page.getByLabel(/^한줄평/).fill("고친 한줄평");
+    await page.getByLabel(/^한 줄 평/).fill("고친 한 줄 평");
     await page.getByRole("button", { name: "수정한 내용 저장" }).click();
     await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeVisible();
 
     const commits = (await (await request.get(`${GITHUB}/__commits`)).json()) as Commit[];
     const commit = commits.find((item) => item.message === "리뷰 수정: 알파 정거장")!;
-    expect(commit.texts["content/reviews/alpha-station.md"]).toContain("oneLiner: 고친 한줄평");
+    expect(commit.texts["content/reviews/alpha-station.md"]).toContain("oneLiner: 고친 한 줄 평");
   });
 
   test("삭제: 확인 창에서 [삭제]를 누르면 로딩 UI를 보이고 원고를 지우는 커밋이 올라가며, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
@@ -392,6 +401,10 @@ test.describe("글쓴이 기능", () => {
       expect(Math.round(box.height)).toBe(44);
       expect(Math.abs(box.y + box.height / 2 - center)).toBeLessThan(1);
     }
+    // [공유하기] [수정] [삭제] 사이는 모두 8px로 같아요.
+    const [, shareBox, editBox, removeBox] = boxes as [DOMRect, DOMRect, DOMRect, DOMRect];
+    expect(Math.round(editBox.x - (shareBox.x + shareBox.width))).toBe(8);
+    expect(Math.round(removeBox.x - (editBox.x + editBox.width))).toBe(8);
     // 좁은 휴대폰(360px)에서는 [공유하기] [수정] [삭제]가 다음 줄로 내려가고, [◀ 목록으로]와 왼쪽 끝이 맞아요(안쪽으로 밀리지 않아요).
     const viewport = page.viewportSize()!;
     await page.setViewportSize({ width: 360, height: 740 });
@@ -514,9 +527,11 @@ test.describe("로그아웃 단추(왼쪽 아래에 고정)", () => {
 });
 
 test.describe("조회수(모두 지움)", () => {
-  test("목록·상세에 조회수가 없고, 조회수 API도 더는 없다(404)", async ({ page, request }) => {
+  test("목록·상세에 조회수가 없고, 조회수 API도 더는 없다(404)", async ({ page, request, baseURL }) => {
+    // v3 전까지 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요.
+    await loginAsAuthor(page, baseURL!);
     await page.goto("/reviews/theta-court");
-    await expect(page.locator("article > header")).toContainText("감독 시험감독3");
+    await expect(page.locator("article > header")).toContainText("감독: 시험감독3");
     await expect(page.locator("main")).not.toContainText("조회");
     // 2.0.0 핫픽스에서 서버의 조회수 API와 저장소까지 지웠어요.
     expect((await request.get("/api/views")).status()).toBe(404);

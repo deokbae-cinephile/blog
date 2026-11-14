@@ -102,22 +102,15 @@ describe("KeyboardHelp", () => {
     expect(toggle()).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("처음 화면에서는 목록을 고르는 키를 안내한다", () => {
+  it("처음 화면에서는 검색창 키만 안내한다(v3 전까지는 상세를 열지 않아 리뷰를 고르거나 여는 키·Enter가 없다)", () => {
     window.localStorage.setItem(STORAGE_KEY, "open");
     render(<KeyboardHelp />);
 
     // role "term": <dt>(키), role "definition": <dd>(하는 일)
     const terms = screen.getAllByRole("term").map((term) => term.textContent);
-    expect(terms).toEqual(["▲위쪽 화살표▼아래쪽 화살표", "◀왼쪽 화살표▶오른쪽 화살표", "HomeEnd", "Enter", "▲위쪽 화살표▼아래쪽 화살표", "Tab"]);
-    expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).toEqual([
-      "리뷰 고르기",
-      // ◀ ▶도 리뷰 사이를 오가요(상세 화면과 같은 키).
-      "이전·다음 리뷰",
-      "처음·끝 리뷰",
-      "고른 리뷰 열기",
-      "검색창에서 추천 검색어 고르기",
-      "다음 항목으로",
-    ]);
+    expect(terms).toEqual(["▲위쪽 화살표▼아래쪽 화살표", "Tab"]);
+    expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).toEqual(["검색창에서 추천 검색어 고르기", "다음 항목으로"]);
+    expect(screen.queryByText("Enter")).not.toBeInTheDocument();
   });
 
   it("리뷰 추가·수정 화면(/write…)에서는 키보드 조작 단추를 두지 않는다", () => {

@@ -8,12 +8,15 @@
  *     cast: 레오나르도 디카프리오, 마크 러팔로
  *
  *   이 줄을 한 사람씩 나누고(splitNames), 다시 깔끔하게 잇고(joinNames),
- *   그 사람으로 찾은 목록 주소(personSearchHref)를 만들어요.
+ *   그 사람으로 찾은 목록 주소(personSearchHref)를 만들어요. 출연은 한 작품에 5명(MAX_CAST)까지예요.
  *
  * 누가 쓰나요?
  *   lib/review-schema.ts(출연 정리), lib/browse.ts(검색 추천), lib/structured-data.ts(검색엔진 정보),
  *   components/review-article.tsx(상세의 감독·배우 이름 링크)
  */
+
+/** 한 작품에 적을 수 있는 출연 배우 수(최대). 원고 검사(lib/review-schema.ts)와 글쓰기 칸 검사(lib/review-form.ts)가 같이 써요. */
+export const MAX_CAST = 5;
 
 /**
  * "A, B" 한 줄을 사람마다 나눠요. 앞뒤 빈칸을 지우고, 빈 이름과 같은 이름(두 번 적음)은 빼요.

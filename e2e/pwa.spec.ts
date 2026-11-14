@@ -11,7 +11,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
+import { expectNoA11yViolations, expectNoHorizontalScroll, loginAsAuthor } from "./helpers";
 
 test.describe("설치형 웹 앱(PWA)", () => {
   test("설치 정보(매니페스트)와 아이콘이 있다", async ({ page, request }) => {
@@ -36,7 +36,9 @@ test.describe("설치형 웹 앱(PWA)", () => {
     await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /apple-icon/);
   });
 
-  test("한 번 본 리뷰는 오프라인에서도 열리고, 처음 보는 화면은 오프라인 안내를 보인다", async ({ page, context }) => {
+  test("한 번 본 리뷰는 오프라인에서도 열리고, 처음 보는 화면은 오프라인 안내를 보인다", async ({ page, context, baseURL }) => {
+    // v3 전까지 리뷰 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요(방문자는 목록으로 옮겨요).
+    await loginAsAuthor(page, baseURL!);
     await page.goto("/reviews/alpha-station");
 
     // 서비스 워커가 켜질 때까지 기다려요.
@@ -80,7 +82,9 @@ test.describe("설치형 웹 앱(PWA)", () => {
     await context.setOffline(false);
   });
 
-  test("목록에서 링크로 들어간 리뷰도 오프라인에서 다시 열린다", async ({ page, context }) => {
+  test("목록에서 링크로 들어간 리뷰도 오프라인에서 다시 열린다", async ({ page, context, baseURL }) => {
+    // v3 전까지 목록 제목은 글쓴이에게만 링크예요.
+    await loginAsAuthor(page, baseURL!);
     await page.goto("/");
     await page.evaluate(() => navigator.serviceWorker.ready);
 
@@ -99,9 +103,11 @@ test.describe("설치형 웹 앱(PWA)", () => {
     await context.setOffline(false);
   });
 
-  test("글쓴이 화면(로그인·글쓰기)과 API, 화면 데이터(RSC) 요청은 저장해 두지 않는다", async ({ page }) => {
+  test("글쓴이 화면(로그인·글쓰기)과 API, 화면 데이터(RSC) 요청은 저장해 두지 않는다", async ({ page, baseURL }) => {
     await page.goto("/login");
     await page.evaluate(() => navigator.serviceWorker.ready);
+    // 목록에서 링크로 상세에 들어가 화면 데이터(RSC) 요청을 만들어요. v3 전까지 목록 제목은 글쓴이에게만 링크라서 로그인해요.
+    await loginAsAuthor(page, baseURL!);
     await page.goto("/");
     await page.getByRole("link", { name: "베타 로맨스" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "베타 로맨스" })).toBeVisible();

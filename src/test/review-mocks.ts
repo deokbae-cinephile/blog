@@ -107,7 +107,7 @@ export function manyReviews(count: number): ReviewSummary[] {
       director: `감독${number}`,
       genres: ["드라마"],
       rating: 3,
-      oneLiner: `한줄평 ${number}`,
+      oneLiner: `한 줄 평 ${number}`,
       // 번호가 커질수록 하루씩 예전 날짜(2026-01-31, 2026-01-30, ...)
       publishedAt: `2026-01-${String(31 - index).padStart(2, "0")}`,
     };

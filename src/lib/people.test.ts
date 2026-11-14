@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { joinNames, personSearchHref, splitNames } from "./people";
+import { joinNames, MAX_CAST, personSearchHref, splitNames } from "./people";
 
 describe("splitNames", () => {
   it("쉼표로 나누고 앞뒤 빈칸을 지운다", () => {
@@ -42,5 +42,11 @@ describe("personSearchHref", () => {
 
   it("주소에서 뜻이 있는 글자(&, #, +)도 이름 그대로 전한다", () => {
     expect(new URLSearchParams(personSearchHref("A&B #1+").slice(2)).get("q")).toBe("A&B #1+");
+  });
+});
+
+describe("MAX_CAST", () => {
+  it("한 작품의 출연 배우는 5명까지다", () => {
+    expect(MAX_CAST).toBe(5);
   });
 });

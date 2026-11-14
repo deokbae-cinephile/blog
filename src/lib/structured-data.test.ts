@@ -70,8 +70,8 @@ describe("reviewJsonLd", () => {
 });
 
 describe("websiteJsonLd · toJsonLd", () => {
-  it("사이트 이름(DMB)과 다른 이름(덕배의 영화 블로그), 주소를 담는다", () => {
-    expect(websiteJsonLd()).toMatchObject({ "@type": "WebSite", name: "DMB", alternateName: "덕배의 영화 블로그", url: "https://deokbae.blog/" });
+  it("사이트 이름(DMB)과 다른 이름(영화 한 줄 평 블로그), 주소를 담는다", () => {
+    expect(websiteJsonLd()).toMatchObject({ "@type": "WebSite", name: "DMB", alternateName: "영화 한 줄 평 블로그", url: "https://deokbae.blog/" });
   });
 
   it("<를 \\u003c로 바꿔 </script>로 끊기지 않게 하고, 다시 읽으면 같은 값이다", () => {
