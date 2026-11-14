@@ -16,7 +16,7 @@
 
 import path from "node:path";
 
-import { expect, type Page, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
 import { E2E_ADMIN } from "./admin-account";
 import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
@@ -77,20 +77,27 @@ test.describe("글쓴이 기능", () => {
     await login(page);
     await expect(page).toHaveURL(/\/write$/);
     await expect(page.getByRole("heading", { level: 1, name: "리뷰 추가" })).toBeVisible();
-    // 글쓰기 화면에서는 떠 있는 [+](리뷰 추가)를 숨겨요.
+    // 글쓰기 화면에서는 떠 있는 [+](리뷰 추가)와 왼쪽 아래 "키보드 조작" 단추를 숨겨요.
     await expect(page.getByRole("link", { name: "리뷰 추가" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "키보드 조작" })).toHaveCount(0);
     await expectNoA11yViolations(page);
 
-    // 다른 화면에서는 화면 가운데 아래에 44 × 44px [+]가 떠 있고, 누르면 글쓰기 화면으로 가요.
+    // 다른 화면에서는 오른쪽 아래 구석에 44 × 44px [+]가 떠 있고, 누르면 글쓰기 화면으로 가요.
     await page.goto("/");
     const add = page.getByRole("link", { name: "리뷰 추가" });
     await expect(add).toBeVisible();
     const box = (await add.boundingBox())!;
     const viewport = page.viewportSize()!;
     expect([Math.round(box.width), Math.round(box.height)]).toEqual([44, 44]);
-    // 가운데: 단추의 가운데가 화면 가운데와 1px 안쪽으로 같아요. 아래: 화면 아래 끝에서 16px 위
-    expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
-    expect(Math.round(viewport.height - (box.y + box.height))).toBe(16);
+    // 오른쪽·아래 끝에서 16px 안쪽
+    expect([Math.round(viewport.width - (box.x + box.width)), Math.round(viewport.height - (box.y + box.height))]).toEqual([16, 16]);
+    // 내려 읽어 [맨 위로]가 나타나면 [+]의 왼쪽에 붙고(사이 8px), [+]는 그 자리 그대로예요.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const toTop = page.getByRole("button", { name: "맨 위로" });
+    await expect(toTop).toBeVisible();
+    const topBox = (await toTop.boundingBox())!;
+    expect(Math.round(box.x - (topBox.x + topBox.width))).toBe(8);
+    expect(Math.round((await add.boundingBox())!.x)).toBe(Math.round(box.x));
     await expectNoA11yViolations(page);
     await add.click();
     await expect(page).toHaveURL(/\/write$/);
@@ -166,6 +173,37 @@ test.describe("글쓴이 기능", () => {
     expect(commit.texts["content/reviews/e2e-new-review.md"]).toContain("![화면 조정 무늬](/images/e2e-new-review/scene-1.png)");
   });
 
+  test("본문에서 Tab으로 목록을 들여 써 중첩 목록을 만들고(미리 보기에도), Esc 다음 Tab으로 빠져나간다", async ({ page }) => {
+    await page.goto("/login?next=/write");
+    await login(page);
+    const body = page.getByRole("textbox", { name: "본문(Markdown)" });
+    await body.click();
+    await page.keyboard.type("- 가");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("- 나");
+
+    // Tab: 다음 칸(미리 보기)으로 넘어가지 않고, 목록 줄 맨 앞에 Tab 문자를 넣어 안쪽 목록으로 만들어요.
+    await page.keyboard.press("Tab");
+    await expect(body).toHaveValue("- 가\n\t- 나");
+    await expect(body).toBeFocused();
+    // 미리 보기에서도 "나"가 "가" 안쪽 목록이에요.
+    await expect(page.getByRole("region", { name: "미리 보기" }).locator("ul ul li")).toHaveText("나");
+    // 되돌리기(Ctrl·Cmd+Z)로 들여쓰기를 취소할 수 있어요(브라우저가 글을 끼워 넣어서).
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(body).toHaveValue("- 가\n- 나");
+
+    // Shift+Tab: 내어쓰기
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(body).toHaveValue("- 가\n- 나");
+
+    // Esc를 누른 다음 Tab은 원래대로 다음 칸으로 넘어가요.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Tab");
+    await expect(body).not.toBeFocused();
+    await expect(body).toHaveValue("- 가\n- 나");
+  });
+
   test("Markdown 파일을 불러오면 칸이 바로 채워진다", async ({ page }) => {
     await page.goto("/login?next=/write");
     await login(page);
@@ -238,6 +276,54 @@ test.describe("글쓴이 기능", () => {
     await expect(page.getByRole("contentinfo").getByRole("button", { name: "로그아웃" })).toHaveCount(0);
     await page.goto("/write");
     await expect(page).toHaveURL(/\/login\?next=%2Fwrite$/);
+  });
+});
+
+test.describe("조회수", () => {
+  test.skip(({ isMobile }) => isMobile, "서버의 조회수를 함께 쓰는 시험이라 데스크톱에서 한 번만 돌려요");
+  test.describe.configure({ mode: "serial" });
+
+  /** API로 리뷰 하나의 조회수를 읽어요(세지 않아요). */
+  const viewsOf = async (request: APIRequestContext, slug: string) => ((await (await request.get(`/api/views/${slug}`)).json()) as { count: number }).count;
+
+  test("로그인하지 않은 방문자가 상세를 열면 한 번 세고, 같은 탭에서 새로 고치면 다시 세지 않는다", async ({ page, request }) => {
+    const before = await viewsOf(request, "theta-court");
+    await page.goto("/reviews/theta-court");
+    // 머리 안내판의 정보 줄 끝에 " · 조회 N"
+    const header = page.locator("article > header");
+    await expect(header).toContainText(`· 조회 ${before + 1}`);
+    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
+
+    await page.reload();
+    await expect(header).toContainText(`· 조회 ${before + 1}`);
+    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
+  });
+
+  test("글쓴이로 로그인해 상세를 열면 세지 않는다", async ({ page, request }) => {
+    const before = await viewsOf(request, "theta-court");
+    await page.goto("/login?next=/reviews/theta-court");
+    await login(page);
+    await expect(page.locator("article > header")).toContainText(`· 조회 ${before}`);
+    expect(await viewsOf(request, "theta-court")).toBe(before);
+  });
+
+  test("목록에 조회수가 보이고, 조회순을 고르면 조회수가 많은 리뷰부터 보인다", async ({ page, request, baseURL }) => {
+    // 서로 다른 방문자(접속 주소가 다름)가 iota-ranch를 6번 본 것처럼 세요. 다른 사이트 요청이 아니게 Origin을 붙여요.
+    for (let index = 1; index <= 6; index += 1) {
+      await request.post("/api/views/iota-ranch", { headers: { origin: baseURL!, "x-forwarded-for": `198.51.100.${index}` } });
+    }
+    const iota = await viewsOf(request, "iota-ranch");
+    expect(iota).toBeGreaterThanOrEqual(6);
+
+    await page.goto("/");
+    const list = page.getByRole("region", { name: "영화 목록" });
+    await page.getByRole("radio", { name: "조회순" }).check();
+    await expect(page).toHaveURL(/sort=views/);
+    // 맨 위가 가장 많이 본 이오타 목장이고, 둘째 줄에 조회수가 보여요.
+    const first = list.getByRole("listitem").first();
+    await expect(first.getByRole("heading", { level: 3 })).toHaveText("이오타 목장");
+    await expect(first).toContainText(`조회 ${iota}`);
+    await expectNoA11yViolations(page);
   });
 });
 

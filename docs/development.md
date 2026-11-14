@@ -27,6 +27,7 @@ src/
 │  ├─ api/session/        로그인(POST)·로그아웃(DELETE)
 │  ├─ api/images/         사진 한 장 올리기(POST) → GitHub blob
 │  ├─ api/reviews/        리뷰 추가(POST), [slug]/ 수정(PUT)·삭제(DELETE)
+│  ├─ api/views/          조회수 모두 읽기(GET), [slug]/ 하나 읽기(GET)·세기(POST)
 │  ├─ offline/, not-found.tsx, manifest.ts, sitemap.ts, robots.ts
 │  ├─ write/loading.tsx   글쓰기 화면을 준비하는 동안의 로딩 UI + 스켈레톤
 │  └─ layout.tsx, globals.css, fonts/   공통 틀(포스터 SVG 필터 포함)·스타일·글꼴
@@ -36,19 +37,23 @@ src/
 │  ├─ review-writer.tsx   리뷰 라이터(추가·수정 폼, Markdown 불러오기, 사진 넣기)
 │  ├─ write-preview-panes.tsx, markdown-preview.tsx  본문 쓰기 칸 | 미리 보기(좁은 화면은 탭)
 │  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
-│  ├─ floating-buttons.tsx  가운데 아래 [+](리뷰 추가, 로그인했을 때만)와 오른쪽 아래 [맨 위로]
-│  ├─ loading-status.tsx, skeleton.tsx  로딩 UI("불러오는 중▮" + 16칸 막대)와 글쓰기 스켈레톤
+│  ├─ floating-buttons.tsx  오른쪽 아래 [맨 위로]와 그 오른쪽의 [+](리뷰 추가, 로그인했을 때만)
+│  ├─ loading-status.tsx, skeleton.tsx, boot-overlay.tsx  로딩 UI, 글쓰기 스켈레톤, 첫 화면 로딩 레이어
+│  ├─ review-views.tsx, use-view-counts.ts  상세의 조회수(세기), 목록의 조회수 받기
 │  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
 │  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사·HTML 바꾸기
 │  ├─ review-form.ts, review-file.ts                   글쓰기 칸 검사, 원고 ↔ 칸 값 바꾸기
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
-│  └─ browse.ts, site.ts, genres.ts …                  검색·정렬 규칙, 블로그 정보, 장르 목록
+│  ├─ view-rules.ts, view-store.ts, views-api.ts      조회수 규칙, 저장소 고르기(Durable Object·메모리), API 부르기
+│  ├─ review-slugs.ts                                  올라가 있는 리뷰 주소인지(조회수는 이 리뷰만 세요)
+│  └─ browse.ts, site.ts, version.ts, genres.ts, indent.ts …  검색·정렬, 블로그 정보·버전, 장르, 본문 Tab 들여쓰기
+worker/                   Cloudflare Worker 시작 파일(index.ts)과 조회수 저장소 Durable Object(view-counter.ts)
 e2e/                      E2E 테스트, 시험용 원고(fixtures/), 가짜 GitHub 서버(mock-github.mjs)
 scripts/                  아이콘 만들기(make-icons.mjs), 로그인 비밀 값 만들기(admin-secrets.mjs)
 open-next.config.ts       Cloudflare Workers용으로 바꾸는 설정(미리 만든 화면 캐시, 캐시 가로채기)
-wrangler.jsonc            Cloudflare Workers 설정(워커 이름, 정적 파일, 이미지 최적화, 도메인)
+wrangler.jsonc            Cloudflare Workers 설정(시작 파일, 정적 파일, 이미지 최적화, 조회수 Durable Object, 도메인)
 ```
 
 ## 3. 데이터 흐름
@@ -76,6 +81,23 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 저장하기 전에 서버가 빌드 때와 같은 규칙으로 다시 검사해요(칸, 주소 겹침, 포스터·사진 파일, 그사이 다른 곳에서 고쳤는지).
 - 수정·삭제는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
 - 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
+
+**조회수(누구나 보고, 로그인하지 않은 사람만 세요)**
+
+```
+상세 화면 ─POST /api/views/<주소>─> lib/view-store.ts ─> Durable Object "ViewCounter"(SQLite: 리뷰마다 + 총 조회수)
+목록 화면 ─GET  /api/views────────> 리뷰마다의 조회수(목록 표시, 조회순 정렬) + 총 조회수(아직 화면에 보이지 않음)
+```
+
+- 세지 않는 때:
+  - 글쓴이로 로그인함(서버가 세션 쿠키로 확인)
+  - 같은 탭에서 이미 봄(sessionStorage). 세기 요청이 받아들여지면 서버가 걸렀어도 이 탭에 기억해요.
+  - 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)이 같은 리뷰를 10분 안에 다시 봄
+  - 다른 사이트에서 보낸 요청(Origin, 403)
+  - 빌드할 때 올라가 있지 않은 주소(404). `next.config.ts`가 원고 폴더의 주소 목록을 `env`(`DMB_REVIEW_SLUGS`)로 코드에 박아 두고, `lib/review-slugs.ts`가 확인해요. 아무 주소로나 요청을 보내 저장소(처음 보는 주소 5,000개까지)를 채우지 못하게 해요.
+- 목록·상세는 미리 만든 화면이라 조회수가 들어 있지 않아요. 화면이 열린 뒤 API로 받아 오고, 받기 전에는 "조회 –"예요.
+- Durable Object는 같은 워커 안에 있어 따로 만들 것이 없어요(`wrangler.jsonc`의 `durable_objects`·`migrations`, 무료 요금제는 SQLite 방식). OpenNext가 만든 처리기(`.open-next/worker.js`)를 `worker/index.ts`가 가져다 쓰고 Durable Object를 함께 내보내요.
+- 내 컴퓨터(`pnpm dev`)와 E2E(`next start`)는 Cloudflare가 아니라서 같은 규칙의 메모리 저장소를 써요. Durable Object까지 확인하려면 `pnpm cf:preview`로 띄워요.
 
 ## 4. 로그인과 접근 막기
 
@@ -148,11 +170,19 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **글자:** Neo둥근모 16px과 32px(`text-big`)만 써요. 굵게·기울임 대신 반전과 밑줄을 써요.
 - **포스터·사진:** 원본 파일은 그대로 두고, 화면에서만 SVG 필터(`#crt-phosphor`, `app/layout.tsx`)로 흑백 → 4단계 명암 → 형광 초록으로 바꾸고 주사선을 덮어요. 포스터 상자는 늘 2:3이고, 없으면 기본 포스터를 보여요.
 - **넓은 화면(1024px~):** 목록은 [검색 칸 16~18rem | 목록], 상세는 [포스터 | 본문(오른쪽 칸 전체)], 글쓰기는 [포스터 | 영화 정보 2열 × 5행] 3칸이에요. 검색 칸과 상세의 포스터는 키가 충분한 화면에서 스크롤해도 붙어 있어요.
-- **머리글:** 왼쪽 [로고] DMB: 덕배의 영화 블로그, 오른쪽 [GitHub]. 두 쪽은 아이콘(24 × 24px)·간격·글자 모양이 같아요. 탭 제목과 설치 앱 이름은 짧게 "DMB"예요.
-- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
+- **머리글:** 왼쪽 [로고] DMB: 덕배의 영화 블로그 (v1.2.0), 오른쪽 GitHub 아이콘.
+  - 로고는 본문 왼쪽 끝, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞고, 둘 다 24 × 24px(누르는 높이 44px)예요. 휴대폰(360px 이상)에서도 한 줄이에요.
+  - GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름).
+  - 버전은 보조 글자색으로 보이고 `package.json`에서 읽어요(`lib/version.ts`).
+  - 탭 제목과 설치 앱 이름은 짧게 "DMB"예요.
+- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·조회수·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
 - **장르:** 가나다순(공포·다큐멘터리·드라마·로맨스·범죄·스릴러·스포츠·액션·재난·코미디). 목록의 장르 단추와 글쓰기 칸이 같은 순서예요.
-- **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독, 오른쪽에 큰 평점.
-- **떠 있는 단추:** 로그인했을 때 화면 가운데 아래에 44 × 44px [+](리뷰 추가), 오른쪽 아래에 [맨 위로](내려 읽었을 때). 글쓰기 화면에서는 [+]를 숨겨요.
+- **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독·조회수, 오른쪽에 큰 평점.
+- **떠 있는 단추:** 오른쪽 아래 구석에 로그인했을 때 44 × 44px [+](리뷰 추가)가 있고, 내려 읽으면 [맨 위로]가 그 왼쪽에 붙어요. 글쓰기 화면에서는 [+]와 왼쪽 아래 "키보드 조작" 단추를 숨겨요.
+- **첫 화면 로딩 레이어:** 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 보여요. 페이지와 웹 폰트(neodgm)를 받으면 걷히고(최소 0.4초, 늦어도 4초), 같은 탭에서는 다시 덮지 않아요. 자바스크립트가 꺼져 있으면 보이지 않고, 스크립트가 돌지 않아도 6초 뒤 CSS가 걷어요.
+- **검색창:** 글쓰기 화면의 입력 칸과 같은 모양(`.field`)이에요.
+- **조회수:** 목록은 둘째 줄의 "· 조회 12", 상세는 머리 안내판의 정보 줄 끝 "· 조회 12". 정렬은 최신순·평점순·조회순이에요.
+- **정보 줄의 가운뎃점:** 항목 사이 " · "의 앞 빈칸과 "감독 한서윤"·"조회 12"의 빈칸은 줄바꿈되지 않는 빈칸(NBSP, `lib/format.ts`의 `joinFacts`·`labeled`)이에요. 휴대폰에서 줄이 넘쳐도 가운뎃점으로 시작하는 줄이 생기지 않고, 이름표와 값이 떨어지지 않아요.
 - **로딩·스켈레톤:**
   - 로딩 UI는 옛 DOS 프로그램처럼 "불러오는 중▮"(1초에 한 번 깜빡이는 커서)과 칸이 하나씩 차오르는 16칸 막대예요(`role="status"`).
   - 글쓰기 화면을 준비하는 동안(`app/write/loading.tsx`) 글쓰기 모양의 스켈레톤을 그리고, 제목 자리에 로딩 UI를 놓아 내용이 들어와도 화면이 밀리지 않아요. 저장소에서 원고를 읽는 수정 화면에서 자주 보여요.
@@ -171,6 +201,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 상세: ◀▶ 이전·다음 리뷰, Esc 목록으로. 한 글자 단축키는 쓰지 않아요(KWCAG 6.1.4).
 - 무한 스크롤은 [n편 더 보기] 단추와 함께 써요. 단추로 불러오면(또는 단추에 초점이 있을 때 저절로 불러오면) 새로 나온 첫 리뷰로 초점이 가요.
 - 폼: 칸마다 보이는 이름과 "(필수)", 틀린 칸에 `aria-invalid` + 오류 문구(`aria-describedby`·`aria-errormessage`), 저장할 때 "고칠 곳" 목록으로 초점 이동.
+- 본문 글상자: Tab은 다음 칸으로 넘어가지 않고 들여쓰기(목록 줄이면 줄 맨 앞, 아니면 커서 자리에 Tab 문자), Shift+Tab은 내어쓰기예요. Markdown은 Tab을 4칸으로 읽어 `-`·`1.` 목록 모두 한 번에 안쪽 목록이 돼요. 글상자에서 빠져나갈 때는 Esc를 누른 다음 Tab이에요.
 - 본문 탭(좁은 화면): APG 탭 패턴(`tablist`·`tab`·`tabpanel`, ← → Home End, roving tabindex). 넓은 화면의 미리 보기는 키보드로 스크롤할 수 있는 이름 있는 영역(`region`)이에요.
 - 삭제 확인은 네이티브 `<dialog>`(`role="alertdialog"`)이고, 처음 초점은 [취소]예요.
 

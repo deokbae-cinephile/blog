@@ -156,9 +156,10 @@ export function SearchBox({ id, value, onValueChange, onSearch, reviews, disable
         enterKeyHint="search"
         // 맞춤법 검사 빨간 줄을 꺼요(영화 제목은 고유명사가 많아요).
         spellCheck={false}
-        // min-h-11: 높이 44px 이상으로 손가락으로 누르기 쉽게. border-dotted: 밑줄 점선(프롬프트 느낌).
+        // field: 글쓰기 화면의 입력 칸(원제·제작 국가 등)과 같은 모양이에요(globals.css). 높이 44px, 2px 테두리,
+        //   초점이 오면 테두리가 밝아져요.
         // placeholder:text-crt-dim: 안내 글자는 보조 글자색(바탕과의 명도 대비 10:1 이상)으로 또렷하게 보여요.
-        className="min-h-11 w-full border-0 border-b-2 border-dotted border-crt-line bg-transparent px-1 caret-crt-fg placeholder:text-crt-dim focus-visible:border-solid focus-visible:border-crt-fg"
+        className="field w-full caret-crt-fg placeholder:text-crt-dim"
       />
 
       {/* 추천 층. 닫혀 있으면 hidden으로 숨기지만 요소는 남겨 둬서 aria-controls가 늘 가리킬 수 있어요. */}

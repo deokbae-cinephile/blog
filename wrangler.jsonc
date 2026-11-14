@@ -14,8 +14,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // 워커 이름. 대시보드에 보이는 이름이자 기본 주소(blog.<계정 이름>.workers.dev)가 돼요.
   "name": "blog",
-  // 워커의 시작 파일. `opennextjs-cloudflare build`가 만들어요.
-  "main": ".open-next/worker.js",
+  // 워커의 시작 파일. OpenNext가 만든 처리기(.open-next/worker.js)를 가져다 쓰고,
+  //   조회수 저장소(Durable Object)를 함께 내보내는 우리 파일이에요(worker/index.ts).
+  "main": "worker/index.ts",
   // 이 날짜 기준의 Workers 런타임 동작을 써요. 날짜를 올리면 동작이 바뀔 수 있어서, 올릴 때는 미리 띄워 보고 올려요.
   "compatibility_date": "2026-11-01",
   "compatibility_flags": [
@@ -36,6 +37,14 @@
   "images": {
     "binding": "IMAGES"
   },
+  // 조회수 저장소: Durable Object(worker/view-counter.ts). 코드에서는 env.VIEW_COUNTER로 불러요(lib/view-store.ts).
+  //   같은 워커 안에 있어서 따로 만들 것이 없어요. 무료 요금제에서는 SQLite 방식만 쓸 수 있어요(아래 migrations).
+  "durable_objects": {
+    "bindings": [{ "name": "VIEW_COUNTER", "class_name": "ViewCounter" }]
+  },
+  // Durable Object 클래스를 처음 만들거나 바꿀 때의 기록이에요. 한 번 올린 tag는 고치지 않고, 바뀔 때 새 tag를 더해요.
+  //   new_sqlite_classes: SQLite 저장소를 쓰는 클래스로 만들어요.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ViewCounter"] }],
   // 도메인: deokbae.blog와 www.deokbae.blog를 이 워커에 바로 붙여요(Custom Domain).
   //   배포할 때 Cloudflare가 두 주소의 DNS 기록과 HTTPS 인증서를 알아서 만들어요.
   //   도메인(영역)은 이 Cloudflare 계정에 있어야 해요(docs/development.md "도메인 연결").

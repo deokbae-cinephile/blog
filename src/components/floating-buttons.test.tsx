@@ -3,8 +3,8 @@
  *
  * 화면 아래쪽에 떠 있는 단추들이
  *   - 글쓴이로 로그인했을 때만 "+"(리뷰 추가)를 보이고, 글쓰기 화면에서는 숨기는지
- *   - "+"의 이름·주소와 꾸밈 그림, "맨 위로"가 "+"와 따로 있는지
- * 확인해요. 실제 크기(44 × 44px)와 자리(가운데 아래, 오른쪽 아래)는 진짜 브라우저 E2E에서 재요(e2e/admin.spec.ts, e2e/blog.spec.ts).
+ *   - "+"의 이름·주소와 꾸밈 그림, "맨 위로" 다음(오른쪽)에 "+"가 오는지
+ * 확인해요. 실제 크기(44 × 44px)와 자리(오른쪽 아래, 맨 위로의 오른쪽)는 진짜 브라우저 E2E에서 재요(e2e/admin.spec.ts, e2e/blog.spec.ts).
  *
  * Next.js의 훅(usePathname)을 쓰는 컴포넌트는 어떻게 테스트할까요?
  *   테스트 환경에는 진짜 Next.js 라우터가 없어서 usePathname이 동작하지 않아요.
@@ -62,12 +62,16 @@ describe("FloatingButtons", () => {
     }
   });
 
-  it("맨 위로 단추는 + 단추와 따로 있다(+ 링크 안에 들어 있지 않다)", () => {
+  it("맨 위로 단추 다음(오른쪽)에 + 단추가 오고, 둘은 따로 있다", () => {
     document.cookie = "blog_admin=1; path=/";
     // 맨 위로는 내려 읽었을 때만 보여서(hidden) 이름으로는 찾을 수 없어, 글자로 찾아요.
     render(<FloatingButtons />);
     const toTop = screen.getByText("맨 위로");
+    const add = screen.getByRole("link", { name: "리뷰 추가" });
     expect(toTop.tagName).toBe("BUTTON");
-    expect(screen.getByRole("link", { name: "리뷰 추가" })).not.toContainElement(toTop);
+    expect(add).not.toContainElement(toTop);
+    // 코드 순서 = 화면 순서(왼쪽 → 오른쪽)이고, Tab 순서도 같아요.
+    expect(toTop.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(toTop.parentElement).toBe(add.parentElement);
   });
 });

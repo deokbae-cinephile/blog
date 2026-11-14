@@ -44,5 +44,5 @@
   // 검사할 파일
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
   // 검사하지 않을 폴더
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "worker"]
 }
