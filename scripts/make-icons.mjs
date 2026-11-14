@@ -93,7 +93,7 @@ for (const [file, size, cell] of pngs) {
   console.log(`${file} (${size}×${size})`);
 }
 
-// 3) 공유 미리 보기 그림: 1200×630. [큰 로고 | DMB / 덕배의 영화 블로그 / deokbae.blog]
+// 3) 공유 미리 보기 그림: 1200×630. [큰 로고 | DMB / 영화 한 줄 평 블로그 / deokbae.blog]
 //    글자는 사이트와 같은 Neo둥근모예요. 글꼴 파일을 base64 글자로 바꿔 페이지 안에 넣어(@font-face) 바로 써요.
 //    글자 크기는 16의 배수(픽셀 글꼴이 또렷한 크기)로, 형광 번짐(text-shadow)과 주사선도 사이트처럼 그려요.
 const font = readFileSync("src/app/fonts/neodgm.woff2").toString("base64");
@@ -118,7 +118,7 @@ svg { filter: drop-shadow(0 0 12px rgb(57 255 20 / 0.45)); }
 </style></head><body><div class="frame">
 <svg xmlns="http://www.w3.org/2000/svg" width="${logoWidth * ogLogoCell}" height="${logoHeight * ogLogoCell}" shape-rendering="crispEdges">
 <path fill="${GREEN}" transform="scale(${ogLogoCell})" d="${pixelPath(LOGO_ROWS, "#")}"/></svg>
-<div class="text"><div class="name">${site.name}</div><div class="title">${site.headerTitle.replace(/^DMB: /, "")}</div><div class="url">deokbae.blog</div></div>
+<div class="text"><div class="name">${site.name}</div><div class="title">${site.headerTitle}</div><div class="url">deokbae.blog</div></div>
 </div></body></html>`;
 await page.setViewportSize({ width: 1200, height: 630 });
 await page.setContent(ogHtml);

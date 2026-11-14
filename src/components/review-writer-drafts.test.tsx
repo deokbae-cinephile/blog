@@ -177,7 +177,7 @@ describe("ReviewWriter 임시 저장", () => {
     confirm.mockReturnValue(true);
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
     await waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
-    expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveValue("winter-stop");
+    expect(screen.getByLabelText(/^주소/)).toHaveValue("winter-stop");
     expect(screen.getByLabelText(/^평점/)).toHaveValue("4.5");
     expect(screen.getByRole("textbox", { name: "본문(Markdown)" })).toHaveValue("![](/images/winter-stop/scene-1.png)");
     expect(screen.getByText(/임시 저장한 글을 불러왔습니다/)).toHaveAttribute("role", "status");
@@ -294,7 +294,7 @@ describe("ReviewWriter 임시 저장", () => {
     const first = new File(["a"], "first.png", { type: "image/png" });
     const second = new File(["b"], "second.png", { type: "image/png" });
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
 
     await user.upload(screen.getByLabelText("포스터 고르기"), first);
     // 줄이는 동안: 두 저장 단추가 막혀요.
@@ -318,12 +318,12 @@ describe("ReviewWriter 임시 저장", () => {
     shrink.fn = () => job.promise;
     const scene = new File(["png"], "scene.png", { type: "image/png" });
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), scene);
     // 줄이는 사이 주소를 지워요.
-    await user.clear(screen.getByLabelText(/^주소\(영문\)/));
+    await user.clear(screen.getByLabelText(/^주소/));
     job.resolve({ file: scene, shrunk: false });
-    await waitFor(() => expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(/사진을 넣기 전에 주소\(영문\)를 먼저 적어 주세요/));
+    await waitFor(() => expect(screen.getByLabelText(/^주소/)).toHaveAccessibleDescription(/사진을 넣기 전에 주소를 먼저 적어 주세요/));
     expect(screen.getByRole("textbox", { name: "본문(Markdown)" })).toHaveValue("");
   });
 
@@ -334,7 +334,7 @@ describe("ReviewWriter 임시 저장", () => {
     shrink.fn = () => job.promise;
     render(<ReviewWriter mode="create" />);
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), new File(["png"], "scene.png", { type: "image/png" }));
     expect(within(list).getByRole("button", { name: "불러오기" })).toBeDisabled();
     job.resolve({ file: new File(["png"], "scene.png", { type: "image/png" }), shrunk: false });
@@ -369,7 +369,7 @@ describe("ReviewWriter 임시 저장", () => {
   it("임시 저장본에는 본문에 남아 있는 장면 사진만 담는다(본문에서 지운 사진 파일은 담지 않는다)", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), [
       new File(["a"], "a.png", { type: "image/png" }),
       new File(["b"], "b.png", { type: "image/png" }),

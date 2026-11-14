@@ -11,7 +11,8 @@
  *
  * 누가 쓰나요?
  *   app/layout.tsx(탭 제목·검색 설명), app/manifest.ts(설치 앱 이름), components/site-header.tsx(이름·GitHub 링크),
- *   lib/github.ts(글을 저장할 저장소), app/sitemap.ts·robots.ts(전체 주소)
+ *   lib/github.ts(글을 저장할 저장소), app/sitemap.ts·robots.ts(전체 주소),
+ *   proxy.ts·components/review-browser.tsx·keyboard-help.tsx(상세를 방문자에게 열지, REVIEW_DETAIL_PUBLIC)
  */
 
 /**
@@ -25,12 +26,15 @@ export const site = {
   name: "DMB",
   /** 짧은 이름. 홈 화면에 설치한 앱 아이콘 아래에 보여요(길면 잘려서 짧게 둬요). */
   shortName: "DMB",
-  /** 머리글 왼쪽에 보이는 이름. 탭 제목과 설치 앱 이름은 위의 짧은 이름(DMB)을 그대로 써요. */
-  headerTitle: "DMB: 덕배의 영화 블로그",
+  /**
+   * 머리글 왼쪽에 보이는 이름. 탭 제목과 설치 앱 이름은 위의 짧은 이름(DMB)을 그대로 써요.
+   * 검색엔진용 사이트 정보의 다른 이름(alternateName)과 공유 미리 보기 그림(public/og.png, pnpm icons)에도 써요.
+   */
+  headerTitle: "영화 한 줄 평 블로그",
   /** 글쓴이 이름. 검색엔진용 리뷰 정보(lib/structured-data.ts)의 글쓴이로 써요. */
   author: "덕배",
   /** 검색엔진과 설치 화면에 쓰이는 설명 */
-  description: "본 영화마다 평점과 한줄평, 몇 줄의 감상을 남기는 가벼운 영화 리뷰 블로그입니다.",
+  description: "본 영화마다 평점과 한 줄 평, 몇 줄의 감상을 남기는 가벼운 영화 리뷰 블로그입니다.",
   /**
    * 소스 코드와 리뷰 원고가 함께 들어 있는 GitHub 저장소예요.
    *   - 머리글 오른쪽의 [GitHub] 링크가 이 주소로 가요(components/site-header.tsx).
@@ -69,3 +73,16 @@ export const siteUrl = (process.env.SITE_URL || "https://deokbae.blog").replace(
  * 포스터가 있는 리뷰는 포스터를 대신 써요(app/reviews/[slug]/page.tsx).
  */
 export const DEFAULT_SHARE_IMAGE = { url: "/og.png", width: 1200, height: 630, alt: site.headerTitle } as const;
+
+/**
+ * 리뷰 상세 화면(/reviews/<주소>)을 방문자에게 열지 정해요. v3에서 true로 바꿔 다시 열어요.
+ *
+ * v3 전까지(false)는 "한 줄 평" 위주의 목록 블로그예요.
+ *   - 목록의 제목은 링크가 아니에요(components/review-browser.tsx·review-list-item.tsx).
+ *   - 방문자가 상세 주소로 들어오면 처음 화면(목록)으로 보내요(proxy.ts, 307 잠시 옮김).
+ *   - 사이트맵에서 상세 주소를 빼요(app/sitemap.ts). 키보드 안내에서 리뷰 고르기·열기를 빼요(components/keyboard-help.tsx).
+ *   - 글쓴이(로그인)는 그대로 들어가요. 목록 제목도 링크로 보이고, 상세의 [수정]·[삭제]를 써요.
+ *
+ * v3에서 열 때: 이 값을 true로 바꾸고, proxy.ts의 matcher에서 "/reviews/:path*"를 빼요(방문자 요청이 문지기를 거치지 않게).
+ */
+export const REVIEW_DETAIL_PUBLIC: boolean = false;

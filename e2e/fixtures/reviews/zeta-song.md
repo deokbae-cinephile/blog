@@ -6,7 +6,7 @@ year: 2015
 director: 시험감독1
 genres: [로맨스]
 rating: 2
-oneLiner: 시험용 제타의 노래 한줄평
+oneLiner: 시험용 제타의 노래 한 줄 평
 publishedAt: 2025-11-01
 ---
 

@@ -43,9 +43,11 @@ describe("Poster", () => {
     expect(container.querySelector("[aria-hidden='true']")).toBeInTheDocument();
   });
 
-  it("상자는 가로 2 : 세로 3 비율이고, 썸네일은 목록 글 세 줄 높이에 맞게(56~64px) 그린다", () => {
-    const { container } = render(<Poster alt="" size="thumb" />);
-    expect(container.firstElementChild).toHaveClass("aspect-[2/3]", "w-14", "sm:w-16");
+  it("상자는 가로 2 : 세로 3 비율이고, 썸네일은 휴대폰 56px, 넓은 화면 70px(예전 64px의 약 1.1배)로 그린다", () => {
+    const { container } = render(<Poster src="/posters/a.jpg" alt="" size="thumb" />);
+    expect(container.firstElementChild).toHaveClass("aspect-[2/3]", "w-14", "sm:w-[4.375rem]");
+    // 화면 크기에 맞는 작은 파일을 고르도록 실제 크기를 알려 줘요.
+    expect(container.querySelector("img")).toHaveAttribute("sizes", "(min-width: 640px) 70px, 56px");
   });
 
   it("그림을 받지 못하면 기본 포스터로 바뀌고, 다른 리뷰의 포스터로 바뀌면 그 그림을 다시 받는다", async () => {

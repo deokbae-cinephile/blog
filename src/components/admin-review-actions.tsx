@@ -38,12 +38,13 @@ export function AdminReviewActions({ slug, title, onDeleted }: Props) {
   if (!isAdmin) return null;
 
   return (
+    // 묶음 없이(<>…</>) 맨 윗줄 오른쪽 묶음에 바로 놓여요. 그래서 [공유하기] [수정] [삭제] 사이가 모두 같은 간격(8px)이에요.
     // 옆의 [공유하기]와 같은 높이(btn-line, 44px)의 단추들이라, 한 줄에 가운데를 맞춰 놓여요.
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       <Link href={`/write/${slug}`} className="btn-line">
         수정
       </Link>
       <DeleteReview slug={slug} title={title} onDeleted={onDeleted} />
-    </div>
+    </>
   );
 }

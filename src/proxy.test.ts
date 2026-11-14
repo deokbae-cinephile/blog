@@ -6,6 +6,7 @@
  * 문지기(proxy)가 로그인하지 않은 요청을 막고, 로그인한 요청만 통과시키는지 확인해요.
  *   - 글쓰기 화면: 로그인 화면으로 보내기(원래 주소를 next에 적어서)
  *   - 저장 API: 401 JSON으로 답하기
+ *   - 리뷰 상세: v3 전까지 방문자는 처음 화면(목록)으로 보내기, 글쓴이는 통과
  *   - 로그인했으면: 그대로 통과(NextResponse.next()는 x-middleware-next 머리글로 알 수 있어요)
  */
 
@@ -29,8 +30,23 @@ describe("proxy", () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("글쓰기 화면·저장 API만 지킨다(목록·상세·로그인 화면은 거치지 않는다)", () => {
-    expect(config.matcher).toEqual(["/write/:path*", "/api/reviews/:path*", "/api/images/:path*"]);
+  it("글쓰기 화면·저장 API와 리뷰 상세만 지킨다(목록·로그인 화면은 거치지 않는다)", () => {
+    expect(config.matcher).toEqual(["/write/:path*", "/api/reviews/:path*", "/api/images/:path*", "/reviews/:path*"]);
+  });
+
+  it("v3 전까지 방문자가 리뷰 상세에 오면 처음 화면(목록)으로 잠시 옮기고(307), 남은 로그인 표시 쿠키를 지운다", async () => {
+    for (const path of ["/reviews/winter-stop", "/reviews/winter-stop?_rsc=abc"]) {
+      const response = await proxy(request(path, "blog_admin=1"));
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toBe("http://localhost/");
+      expect(response.headers.get("set-cookie")).toContain("blog_admin=;");
+    }
+  });
+
+  it("글쓴이(올바른 표)는 리뷰 상세에 그대로 들어간다", async () => {
+    const token = await createSessionToken("deokbae", SECRET);
+    const response = await proxy(request("/reviews/winter-stop", `blog_session=${token}`));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
   it("로그인하지 않고 글쓰기 화면에 오면 로그인 화면으로 보내고, 원래 주소를 next에 적는다", async () => {

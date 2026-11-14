@@ -16,6 +16,7 @@
  *   여기서는 칸에 입력하는 사람용으로 "제목을 입력하세요"처럼 칸 이름으로 말해요.
  */
 
+import { MAX_CAST, splitNames } from "./people";
 import type { ReviewFormValues } from "./review-values";
 import { checkFrontmatter, imageRefProblems, type ReviewFrontmatter, SLUG } from "./review-schema";
 
@@ -33,7 +34,7 @@ export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
   runtime: "상영 시간은 1 이상의 분 단위 숫자로 입력하세요. 모르면 비워 둡니다. 예: 112",
   genres: "장르를 하나 이상 고르세요.",
   rating: "평점을 고르세요. 0.5점부터 5점까지 0.5점 단위입니다.",
-  oneLiner: "한줄평을 입력하세요. 예: 버스는 오지 않아도, 기다림은 끝내 도착한다.",
+  oneLiner: "한 줄 평을 입력하세요. 예: 버스는 오지 않아도, 기다림은 끝내 도착한다.",
   poster: "포스터 파일 이름이 올바르지 않습니다. 포스터를 다시 골라 주세요.",
   posterAlt: "포스터 설명은 글자로 입력하세요. 없으면 비워 둡니다.",
   publishedAt:
@@ -121,7 +122,7 @@ function toFrontmatterInput(values: ReviewFormValues, publishedAt: string): Reco
  * 글쓰기 칸을 모두 검사해요.
  *
  * @param values 칸 값
- * @param options.checkSlug 주소(영문)도 검사할지. 새 글이면 true(수정 화면은 주소를 바꾸지 않아요)
+ * @param options.checkSlug 주소도 검사할지. 새 글이면 true(수정 화면은 주소를 바꾸지 않아요)
  * @param options.now "글 쓴 날"이 비어 있을 때(새 리뷰) 넣을 날짜·시각. 기본은 지금(한국 시간, 시각까지)
  * @returns 통과하면 { ok: true, frontmatter }, 아니면 { ok: false, errors }
  * @example
@@ -136,6 +137,13 @@ export function validateReviewForm(
 
   // 1) 주소: 파일 이름이 되는 값이라 원고 파일 이름 규칙(SLUG)을 따라요.
   if (checkSlug && !SLUG.test(values.slug)) errors.slug = FIELD_MESSAGES.slug;
+
+  // 출연은 한 작품에 5명(MAX_CAST)까지예요(원고 검사와 같은 기준, 같은 이름은 한 번만 세요). 넘으면 몇 명을 지울지 알려 줘요.
+  // (아래 2)의 칸별 문구보다 먼저 넣어서, 출연 칸에는 이 문구가 보여요.)
+  const castCount = splitNames(values.cast).length;
+  if (castCount > MAX_CAST) {
+    errors.cast = `출연은 ${MAX_CAST}명까지 적을 수 있습니다. 지금 ${castCount}명이니 ${castCount - MAX_CAST}명을 지워 주세요.`;
+  }
 
   // 2) 정보 칸: 빌드할 때와 같은 규칙(checkFrontmatter)으로 검사하고, 틀린 칸에는 칸 이름으로 된 문구를 달아요.
   const parsed = checkFrontmatter(toFrontmatterInput(values, values.publishedAt.trim() || now));

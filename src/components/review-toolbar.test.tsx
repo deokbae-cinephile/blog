@@ -13,6 +13,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReviewToolbar } from "./review-toolbar";
 
+// [◀ 목록으로](ReviewNavLink)가 옮겨 갈 때 쓰는 Next.js 라우터를 흉내 내요. 진짜 라우터는 Next.js 앱 안에서만 있어요.
+const push = vi.fn();
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push, prefetch: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+}));
+
 const props = {
   slug: "winter-stop",
   title: "겨울 정류장",
@@ -56,6 +63,11 @@ describe("ReviewToolbar", () => {
       expect(row).toContainElement(control);
       expect(control).toHaveClass("btn-line");
     }
+    // [공유하기] [수정] [삭제] 사이는 모두 같은 간격(8px)이에요. [수정]·[삭제]도 묶음 없이 오른쪽 묶음에 바로 놓여요.
+    const actions = edit.parentElement!;
+    expect(actions).toHaveClass("gap-2");
+    expect(actions).toContainElement(share);
+    expect(remove.parentElement).toBe(actions);
     // 예전에는 비어 있는 안내 칸이 [수정]·[삭제] 묶음 아래에 한 줄을 더 만들어, 묶음 높이가 달라지며 [공유하기]만 내려가 보였어요.
     // 이제 안내 칸은 줄 밖에 있고, 비어 있으면 상자 모양도 여백도 없어요.
     const status = toolbarStatus();

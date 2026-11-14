@@ -36,6 +36,7 @@ import { usePathname } from "next/navigation";
 import { Fragment, useId, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 
 import { isPlainKeyPress, keepsOwnKeys } from "@/lib/keyboard";
+import { REVIEW_DETAIL_PUBLIC } from "@/lib/site";
 import { createStoredValue } from "@/lib/stored-value";
 
 /* ──────────────────────────────────────────────────────────────
@@ -54,15 +55,24 @@ const DOWN: Key = { glyph: "▼", name: "아래쪽 화살표" };
 const LEFT: Key = { glyph: "◀", name: "왼쪽 화살표" };
 const RIGHT: Key = { glyph: "▶", name: "오른쪽 화살표" };
 
-/** 목록(처음 화면)에서 쓰는 키. 목록은 components/use-list-keys.ts, 검색창 추천은 components/search-box.tsx가 맡아요. */
-const LIST_KEYS: Shortcut[] = [
-  { keys: [UP, DOWN], action: "리뷰 고르기" },
-  // ◀ ▶도 리뷰 사이를 오가요(목록 순서대로 위·아래 리뷰). 상세 화면의 ◀ ▶와 같은 "리뷰 사이 이동" 키예요.
-  { keys: [LEFT, RIGHT], action: "이전·다음 리뷰" },
-  { keys: [{ glyph: "Home" }, { glyph: "End" }], action: "처음·끝 리뷰" },
-  { keys: [{ glyph: "Enter" }], action: "고른 리뷰 열기" },
-  { keys: [UP, DOWN], action: "검색창에서 추천 검색어 고르기" },
-];
+/** 검색창 추천을 고르는 키(components/search-box.tsx) */
+const SEARCH_KEYS: Shortcut[] = [{ keys: [UP, DOWN], action: "검색창에서 추천 검색어 고르기" }];
+
+/**
+ * 목록(처음 화면)에서 쓰는 키. 목록은 components/use-list-keys.ts, 검색창 추천은 components/search-box.tsx가 맡아요.
+ * 리뷰를 고르고 여는 키는 상세 화면을 방문자에게 열었을 때(v3, lib/site.ts의 REVIEW_DETAIL_PUBLIC)만 안내해요.
+ * v3 전까지는 목록 제목이 링크가 아니라 고르거나 열 리뷰가 없어서 검색창 키만 안내해요.
+ */
+const LIST_KEYS: Shortcut[] = REVIEW_DETAIL_PUBLIC
+  ? [
+      { keys: [UP, DOWN], action: "리뷰 고르기" },
+      // ◀ ▶도 리뷰 사이를 오가요(목록 순서대로 위·아래 리뷰). 상세 화면의 ◀ ▶와 같은 "리뷰 사이 이동" 키예요.
+      { keys: [LEFT, RIGHT], action: "이전·다음 리뷰" },
+      { keys: [{ glyph: "Home" }, { glyph: "End" }], action: "처음·끝 리뷰" },
+      { keys: [{ glyph: "Enter" }], action: "고른 리뷰 열기" },
+      ...SEARCH_KEYS,
+    ]
+  : SEARCH_KEYS;
 
 /** 리뷰 상세 화면에서 쓰는 키. components/review-keys.tsx가 맡아요. */
 const REVIEW_KEYS: Shortcut[] = [

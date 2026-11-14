@@ -5,7 +5,7 @@ year: 2019
 director: 이시험
 genres: 코미디
 rating: 3
-oneLiner: 시험용 두 번째 한줄평
+oneLiner: 시험용 두 번째 한 줄 평
 publishedAt: 2026-02-01
 ---
 

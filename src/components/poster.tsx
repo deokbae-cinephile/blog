@@ -64,9 +64,10 @@ type Props = {
 /** 형광 초록으로 바꿔 보이는 포스터 */
 export function Poster({ src, alt, size, preload = false, className = "" }: Props) {
   // 크기별 너비. 높이는 포스터 비율(가로 2 : 세로 3)로 정해져요(aspect-[2/3]).
-  //  - thumb: 휴대폰 3.5rem(56px), 넓은 화면 4rem(64px). 목록 한 편의 글 세 줄(제목·정보·한줄평) 높이에 맞춰요.
+  //  - thumb: 휴대폰 3.5rem(56px), 넓은 화면(640px~) 4.375rem(70px). 목록에서 포스터가 잘 보이게 넓은 화면은 약 1.1배로 키웠어요
+  //    (64px의 110%는 70.4px이지만, 픽셀 글꼴·테두리가 흐려지지 않게 정수 70px로 맞췄어요. 2:3이라 높이도 정수 105px예요).
   //  - large의 lg:w-full: 넓은 화면(1024px~)의 상세 화면에서는 왼쪽 칸(16~18rem)을 꽉 채워요.
-  const width = size === "thumb" ? "w-14 sm:w-16" : "w-48 sm:w-56 lg:w-full";
+  const width = size === "thumb" ? "w-14 sm:w-[4.375rem]" : "w-48 sm:w-56 lg:w-full";
 
   return (
     // relative: 안의 이미지를 상자 크기에 꽉 채우기(fill) 위한 기준이에요.
@@ -82,7 +83,7 @@ export function Poster({ src, alt, size, preload = false, className = "" }: Prop
           // fill: 부모 상자(relative) 크기에 맞춰 꽉 채워요. 너비·높이를 따로 몰라도 돼요.
           fill
           // sizes: 화면에 그려질 실제 크기 힌트. Next.js가 이 크기에 맞게 줄인 파일을 골라 줘서 썸네일이 가벼워요.
-          sizes={size === "thumb" ? "64px" : "(min-width: 1024px) 288px, 224px"}
+          sizes={size === "thumb" ? "(min-width: 640px) 70px, 56px" : "(min-width: 1024px) 288px, 224px"}
           preload={preload}
           // object-cover: 비율이 조금 달라도 상자를 꽉 채우고 넘치는 부분을 잘라요.
           // poster-image: 형광 초록 필터(globals.css)

@@ -89,7 +89,7 @@ describe("개발 서버·시험: 원고 폴더를 바로 읽기", () => {
     vi.stubEnv("REVIEWS_DIR", path.join(dir, "reviews"));
     await mkdir(path.join(dir, "reviews"));
     const manuscript = (title: string, publishedAt: string) =>
-      `---\ntitle: ${title}\nyear: 2024\ndirector: 한서윤\ngenres: [드라마]\nrating: 4\noneLiner: 한줄평\npublishedAt: ${publishedAt}\n---\n\n본문\n`;
+      `---\ntitle: ${title}\nyear: 2024\ndirector: 한서윤\ngenres: [드라마]\nrating: 4\noneLiner: 한 줄 평\npublishedAt: ${publishedAt}\n---\n\n본문\n`;
     await writeFile(path.join(dir, "reviews", "older.md"), manuscript("예전 글", "2026-11-13"));
     await writeFile(path.join(dir, "reviews", "newer.md"), manuscript("최근 글", "2026-11-14T09:00:00+09:00"));
     const data = await import("./review-data");

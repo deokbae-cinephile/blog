@@ -47,13 +47,13 @@ const bodyBox = () => screen.getByRole("textbox", { name: "본문(Markdown)" });
 
 /** 꼭 필요한 칸을 모두 채워요. */
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+  await user.type(screen.getByLabelText(/^주소/), "winter-stop");
   await user.type(screen.getByLabelText(/^제목/), "겨울 정류장");
   await user.type(screen.getByLabelText(/^개봉 연도/), "2024");
   await user.type(screen.getByLabelText(/^감독/), "한서윤");
   await user.click(screen.getByRole("checkbox", { name: "드라마" }));
   await user.selectOptions(screen.getByLabelText(/^평점/), "4.5");
-  await user.type(screen.getByLabelText(/^한줄평/), "기다림은 끝내 도착한다.");
+  await user.type(screen.getByLabelText(/^한 줄 평/), "기다림은 끝내 도착한다.");
 }
 
 describe("ReviewWriter(리뷰 추가)", () => {
@@ -69,7 +69,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
     render(<ReviewWriter mode="create" />);
     await user.click(screen.getByRole("button", { name: "리뷰 저장" }));
 
-    // 평점은 처음부터 5.0이 골라져 있어서 고칠 곳에 없어요(주소·제목·개봉 연도·감독·장르·한줄평 6개).
+    // 평점은 처음부터 5.0이 골라져 있어서 고칠 곳에 없어요(주소·제목·개봉 연도·감독·장르·한 줄 평 6개).
     const summary = await screen.findByRole("group", { name: "고칠 곳 6개" });
     expect(within(summary).queryByRole("link", { name: /^평점/ })).not.toBeInTheDocument();
     await vi.waitFor(() => expect(summary).toHaveFocus());
@@ -86,9 +86,9 @@ describe("ReviewWriter(리뷰 추가)", () => {
     const picture = new File(["png"], "Scene.PNG", { type: "image/png" });
 
     await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
-    expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(expect.stringContaining("사진을 넣기 전에 주소(영문)를 먼저"));
+    expect(screen.getByLabelText(/^주소/)).toHaveAccessibleDescription(expect.stringContaining("사진을 넣기 전에 주소를 먼저"));
 
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
     await user.type(bodyBox(), "첫 문단");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
     expect(bodyBox()).toHaveValue("첫 문단\n\n![](/images/winter-stop/scene-1.png)\n\n");
@@ -102,7 +102,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
     const picture = new File(["png"], "scene.png", { type: "image/png" });
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
 
     await user.upload(screen.getByLabelText("장면 사진 넣기"), picture);
     const region = await screen.findByText("사진 1장을 본문에 넣었습니다.");
@@ -129,7 +129,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(posterGroup.compareDocumentPosition(infoGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(posterGroup.parentElement).toHaveClass("lg:grid-cols-3");
     expect(infoGroup).toHaveClass("lg:col-span-2", "lg:grid-cols-2");
-    // 주소(영문)~한줄평 10칸이 영화 정보 안에 있어요(2열 × 5행).
+    // 주소~한 줄 평 10칸이 영화 정보 안에 있어요(2열 × 5행).
     expect(infoGroup.querySelectorAll(":scope > div, :scope > p").length).toBe(10);
     expect(screen.queryByLabelText(/포스터 설명/)).not.toBeInTheDocument();
     expect(bodyBox()).not.toHaveAccessibleDescription(expect.stringContaining("빈 줄로 문단"));
@@ -152,12 +152,36 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(within(frame).queryByText("고른 포스터 없음")).not.toBeInTheDocument();
   });
 
-  it("칸 아래 도움말은 주소(영문)에만 있고(예: shutter-island), 다른 칸에는 없다", () => {
+  it("꼭 적어야 하는 칸은 이름 옆에 *를 보이고(화면 낭독기는 *를 읽지 않고 required로 '필수'를 알린다), 폼 위에 *의 뜻을 글로 알린다", () => {
+    render(<ReviewWriter mode="create" />);
+    expect(screen.getByText("* 표시는 꼭 적어야 하는 칸입니다.")).toBeInTheDocument();
+    // 꼭 적어야 하는 칸: 이름 + " *"(보이는 글자), 접근 이름은 이름만, 입력 칸에는 required
+    for (const name of ["주소", "제목", "개봉 연도", "감독", "평점", "한 줄 평"]) {
+      // 접근 이름(화면 낭독기가 읽는 이름)에는 *가 없어요. 평점은 고르기 칸(combobox), 나머지는 글자 칸(textbox)이에요.
+      const field = screen.getByRole(name === "평점" ? "combobox" : "textbox", { name });
+      expect(field).toBeRequired();
+      const label = document.querySelector(`label[for="${field.id}"]`)!;
+      expect(label).toHaveTextContent(`${name} *`);
+      expect(label.querySelector("[aria-hidden='true']")).toHaveTextContent("*");
+    }
+    // 적지 않아도 되는 칸: *도 required도 없어요. "(영문)"·"(쉼표로 구분)" 같은 덧붙임도 없어요.
+    for (const name of ["원제", "출연", "상영 시간(분)"]) {
+      const field = screen.getByRole("textbox", { name });
+      expect(field).not.toBeRequired();
+      expect(document.querySelector(`label[for="${field.id}"]`)).not.toHaveTextContent("*");
+    }
+    // 장르는 체크박스 묶음이라 required 대신 화면 낭독기용 "(필수)"를 묶음 이름에 넣어요.
+    expect(screen.getByRole("group", { name: "장르 (필수)" })).toBeInTheDocument();
+    // 보이는 "(필수)" 글자는 없어요(장르의 화면 낭독기용 글자만 있어요).
+    for (const node of screen.queryAllByText("(필수)")) expect(node).toHaveClass("sr-only");
+  });
+
+  it("칸 아래 도움말은 주소에만 있고(예: shutter-island), 다른 칸에는 없다", () => {
     const { container } = render(<ReviewWriter mode="create" />);
-    expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(
+    expect(screen.getByLabelText(/^주소/)).toHaveAccessibleDescription(
       "리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. (예: shutter-island → /reviews/shutter-island)",
     );
-    for (const label of [/^제목/, /^원제/, /^개봉 연도/, /^감독/, /^출연\(쉼표로 구분\)/, /^상영 시간/, /^평점/, /^한줄평/]) {
+    for (const label of [/^제목/, /^원제/, /^개봉 연도/, /^감독/, /^출연$/, /^상영 시간/, /^평점/, /^한 줄 평/]) {
       expect(screen.getByLabelText(label)).not.toHaveAccessibleDescription();
     }
     expect(screen.getByRole("group", { name: /^장르/ })).not.toHaveAccessibleDescription();
@@ -182,7 +206,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
   it("본문 미리 보기: 쓴 글을 저장한 뒤의 모습(같은 변환)으로 보여 주고, 아직 올리지 않은 사진은 임시 주소로 보여 준다", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
     await user.type(bodyBox(), "## 좋았던 점{enter}{enter}첫 장면");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), new File(["png"], "scene.png", { type: "image/png" }));
 
@@ -239,9 +263,9 @@ describe("ReviewWriter(리뷰 추가)", () => {
   it("주소를 바꾸면 이미 넣은 사진 주소도 따라 바뀐다", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter");
+    await user.type(screen.getByLabelText(/^주소/), "winter");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), new File(["png"], "a.png", { type: "image/png" }));
-    await user.type(screen.getByLabelText(/^주소\(영문\)/), "-stop");
+    await user.type(screen.getByLabelText(/^주소/), "-stop");
     expect(bodyBox()).toHaveValue("![](/images/winter-stop/scene-1.png)\n\n");
   });
 
@@ -251,9 +275,9 @@ describe("ReviewWriter(리뷰 추가)", () => {
     fakeServer(undefined, new Promise<void>((resolve) => (open = resolve)));
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    // 주소(영문)를 적기 전에 포스터를 먼저 골라도 돼요. 막거나 주소부터 적으라고 하지 않아요.
+    // 주소를 적기 전에 포스터를 먼저 골라도 돼요. 막거나 주소부터 적으라고 하지 않아요.
     await user.upload(screen.getByLabelText("포스터 고르기"), new File(["jpg"], "poster.jpeg", { type: "image/jpeg" }));
-    expect(screen.getByLabelText(/^주소\(영문\)/)).not.toHaveAccessibleDescription(expect.stringContaining("먼저"));
+    expect(screen.getByLabelText(/^주소/)).not.toHaveAccessibleDescription(expect.stringContaining("먼저"));
     // 주소를 적으면 포스터 파일 이름이 <주소>.jpg로 맞춰져요(아래 저장 요청에서 확인).
     await fillRequired(user);
 
@@ -284,7 +308,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: "리뷰 저장" }));
 
-    expect(await screen.findByRole("group", { name: "고칠 곳 1개" })).toHaveTextContent("주소(영문): 이미 같은 주소의 리뷰가 있습니다.");
+    expect(await screen.findByRole("group", { name: "고칠 곳 1개" })).toHaveTextContent("주소: 이미 같은 주소의 리뷰가 있습니다.");
     expect(screen.getByRole("button", { name: "리뷰 저장" })).toBeEnabled();
   });
 });
@@ -303,18 +327,18 @@ describe("ReviewWriter(리뷰 수정)", () => {
   it("저장소의 원고로 칸을 채우고, 주소는 바꿀 수 없다(괄호 안내는 다음 줄)", () => {
     render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsedOf(SOURCE)} baseSha="base" />);
     expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장");
-    expect(screen.queryByLabelText(/^주소\(영문\)/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^주소/)).not.toBeInTheDocument();
     const note = screen.getByText("(수정할 때는 바꿀 수 없습니다)");
     // 주소 줄 바로 다음에 줄바꿈(<br>)이 있어, 괄호 안내가 다음 줄에 보여요.
     expect(note.previousElementSibling?.tagName).toBe("BR");
-    expect(note.parentElement).toHaveTextContent("주소(영문): /reviews/winter-stop(수정할 때는 바꿀 수 없습니다)");
+    expect(note.parentElement).toHaveTextContent("주소: /reviews/winter-stop(수정할 때는 바꿀 수 없습니다)");
   });
 
   it("수정한 내용을 처음 원고 sha와 함께 PUT으로 저장한다(글 쓴 날은 그대로)", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsedOf(SOURCE)} baseSha="base" />);
-    await user.clear(screen.getByLabelText(/^한줄평/));
-    await user.type(screen.getByLabelText(/^한줄평/), "고친 한줄평");
+    await user.clear(screen.getByLabelText(/^한 줄 평/));
+    await user.type(screen.getByLabelText(/^한 줄 평/), "고친 한 줄 평");
     await user.click(screen.getByRole("button", { name: "수정한 내용 저장" }));
 
     await screen.findByRole("heading", { name: "저장했습니다" });
@@ -323,6 +347,6 @@ describe("ReviewWriter(리뷰 수정)", () => {
     expect(init!.method).toBe("PUT");
     const body = JSON.parse(String(init!.body));
     expect(body.baseSha).toBe("base");
-    expect(body.values).toMatchObject({ oneLiner: "고친 한줄평", publishedAt: "2026-11-08" });
+    expect(body.values).toMatchObject({ oneLiner: "고친 한 줄 평", publishedAt: "2026-11-08" });
   });
 });

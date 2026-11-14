@@ -9,7 +9,7 @@ cast: 이배우, 박배우
 runtime: 101
 genres: [드라마, 재난]
 rating: 4.5
-oneLiner: 시험용 첫 번째 한줄평
+oneLiner: 시험용 첫 번째 한 줄 평
 publishedAt: 2026-03-01
 poster: test-pattern.png
 posterAlt: 일곱 빛깔 세로 띠가 있는 화면 조정 무늬

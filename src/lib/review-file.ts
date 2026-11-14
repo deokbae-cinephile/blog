@@ -145,7 +145,7 @@ export function parseReviewFile(text: string): ParsedReviewFile {
 /**
  * 글자 하나를 YAML 값으로 안전하게 적어요.
  * 대부분은 그대로(따옴표 없이) 적고, 콜론이나 # 같은 특별한 글자가 있거나 숫자·true처럼 보이면 따옴표로 감싸요.
- * lineWidth: 0 — 긴 한줄평을 여러 줄로 접지 않아요.
+ * lineWidth: 0 — 긴 한 줄 평을 여러 줄로 접지 않아요.
  * blockQuote: false — 줄바꿈이 든 글자도 "첫 줄\n둘째 줄"처럼 한 줄 따옴표로 적어요.
  *   (기본값으로는 "|-" 아래에 줄을 나눠 적는데, 그 줄들이 들여 쓰이지 않아 "이름: 값" 줄 안에서는 틀린 YAML이 돼요.)
  */

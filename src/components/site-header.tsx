@@ -10,7 +10,7 @@
  *   버전은 머리글에 보이지 않아요(2.0.0 핫픽스에서 뺐어요). 버전은 package.json과 GitHub 릴리스에서 확인해요.
  *
  *   왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)이고, 누르는 높이도 44px로 같아요.
- *   로고와 이름 사이(22px)는 점선 끝과 GitHub 아이콘 사이와 같아요.
+ *   로고와 이름 사이는 12px로 붙이고, 점선 양쪽(이름 끝 ↔ 점선, 점선 끝 ↔ GitHub 아이콘)은 22px로 같게 둬요.
  *   로고는 본문 왼쪽 끝에, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞춰요. 휴대폰에서도 줄을 바꾸지 않고 첫 줄 오른쪽 끝에 있어요.
  *   GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름).
  *
@@ -52,18 +52,19 @@ export function SiteHeader() {
     >
       {/* 로고와 블로그 이름이 처음 화면으로 가는 링크 하나예요.
           min-h-11: 누르는 높이 44px(오른쪽 GitHub 링크와 같아요).
-          gap-5.5: 로고와 이름 사이 22px. 오른쪽 점선 끝과 GitHub 아이콘 사이(점선 옆 간격 12px + 링크 안쪽 여백 10px)와 같아서
-            양쪽 아이콘 옆 간격이 같아 보여요. (두 그림 모두 가장자리 칸까지 색칠돼 있어 그림 끝 = 요소 끝이에요.)
+          gap-3: 로고와 이름 사이 12px(머리글 항목 사이 간격과 같아요). 로고 그림은 가장자리 칸까지 색칠돼 있어 그림 끝 = 요소 끝이에요.
           min-w-0: 아주 좁은 화면에서도 오른쪽 GitHub 아이콘을 밀어내지 않아요.
           왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. */}
-      <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-5.5 no-underline hover:underline">
+      <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-3 no-underline hover:underline">
         {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
         <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
         <span>{site.headerTitle}</span>
       </Link>
 
-      {/* 이름과 링크 사이의 점선. 꾸밈이라 읽지 않아요. 휴대폰에서는 숨겨요. */}
-      <span aria-hidden="true" className="leader hidden sm:block" />
+      {/* 이름과 링크 사이의 점선. 꾸밈이라 읽지 않아요. 휴대폰에서는 숨겨요.
+          ml-2.5: 점선 왼쪽에 10px를 더 띄워, 이름 끝 ↔ 점선(사이 12px + 10px = 22px)이
+          점선 끝 ↔ GitHub 아이콘(사이 12px + 링크 안쪽 여백 10px = 22px)과 같아요. */}
+      <span aria-hidden="true" className="leader ml-2.5 hidden sm:block" />
 
       {/* 소스 코드 저장소 링크(새 창). 화면에는 GitHub 아이콘만 보이고, 가리키거나 초점이 가면 "(새 창)" 안내 말풍선이 떠요.
           말풍선을 여닫는 작은 브라우저 코드라 따로 두었어요(github-link.tsx). */}

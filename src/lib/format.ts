@@ -34,13 +34,14 @@ export const NBSP = "\u00a0";
 export const FACT_SEPARATOR = `${NBSP}· `;
 
 /**
- * 이름표가 붙은 정보 항목을 만들어요. 이름표와 값 사이를 NBSP로 붙여, 줄바꿈으로 둘이 떨어지지 않게 해요.
+ * 이름표가 붙은 정보 항목을 만들어요. 이름표 뒤에 쌍점(:)을 붙이고, 값과의 사이를 NBSP로 붙여 줄바꿈으로 둘이 떨어지지 않게 해요.
+ * (상세 화면의 "감독: …·출연: …"도 같은 모양이에요. components/review-article.tsx)
  *
  * @example
- * labeled("감독", "한서윤"); // "감독 한서윤"(가운데 빈칸은 NBSP)
+ * labeled("감독", "한서윤"); // "감독: 한서윤"(쌍점 뒤 빈칸은 NBSP)
  */
 export function labeled(label: string, value: string): string {
-  return `${label}${NBSP}${value}`;
+  return `${label}:${NBSP}${value}`;
 }
 
 /**

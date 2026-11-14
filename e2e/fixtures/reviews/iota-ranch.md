@@ -6,7 +6,7 @@ year: 2012
 director: 시험감독4
 genres: [스포츠]
 rating: 1.5
-oneLiner: 시험용 이오타 목장 한줄평
+oneLiner: 시험용 이오타 목장 한 줄 평
 publishedAt: 2025-08-01
 ---
 

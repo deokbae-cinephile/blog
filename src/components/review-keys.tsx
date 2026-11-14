@@ -10,6 +10,7 @@
  *     Esc             : 목록(처음 화면)으로
  *
  *   화면 아래의 "◀ 이전 리뷰 / 다음 리뷰 ▶" 링크, 위의 "◀ 목록으로" 링크와 같은 곳으로 가요.
+ *   키로 옮겨 갈 때도 링크를 누를 때처럼 새 화면을 받는 동안 로딩 UI를 보여요(review-navigation.tsx).
  *   ▲ ▼는 건드리지 않아서 평소처럼 글을 위아래로 스크롤해요.
  *
  * 화면에는 아무것도 그리지 않아요
@@ -27,12 +28,12 @@
 
 "use client";
 
-// useRouter: 코드에서 다른 주소로 이동할 때 쓰는 Next.js 훅이에요. router.push("/주소")는 <Link>를 누른 것과 같아요.
-import { useRouter } from "next/navigation";
 // useLayoutEffect: 화면을 바꾼 "바로 그 순간"(브라우저가 그리기 전)에 할 일을 맡기는 React 훅이에요.
 import { useLayoutEffect } from "react";
 
 import { isPlainKeyPress, keepsOwnKeys } from "@/lib/keyboard";
+
+import { useReviewNavigate } from "./review-navigation";
 
 /** ReviewKeys가 받는 값 */
 type Props = {
@@ -44,7 +45,8 @@ type Props = {
 
 /** 상세 화면의 키보드 조작(◀ ▶ Esc). 화면에는 아무것도 그리지 않아요. */
 export function ReviewKeys({ previousHref, nextHref }: Props) {
-  const router = useRouter();
+  // 이동 함수: 새 화면을 받는 동안 로딩 UI를 보여요(review-navigation.tsx).
+  const navigate = useReviewNavigate();
 
   // 왜 useEffect가 아니라 useLayoutEffect일까요?
   //   useEffect는 화면을 그린 "뒤" 조금 있다가 실행돼요. 그래서 새 리뷰가 화면에 보인 직후 아주 짧은 틈에는
@@ -56,13 +58,21 @@ export function ReviewKeys({ previousHref, nextHref }: Props) {
       // 우리 차례가 아니면(다른 키와 함께 눌렀거나, 입력란·표 상자 안이거나, 이미 처리된 키) 그냥 둬요.
       if (!isPlainKeyPress(event) || keepsOwnKeys(event.target)) return;
 
-      // 누른 키(event.key)에 따라 갈 곳을 정해요. 해당하지 않는 키면 null이에요.
-      const href = event.key === "ArrowLeft" ? previousHref : event.key === "ArrowRight" ? nextHref : event.key === "Escape" ? "/" : null;
-      if (href === null) return;
+      // 누른 키(event.key)에 따라 갈 곳을 정해요. ◀ ▶는 이전·다음 리뷰가 있을 때만, Esc는 목록(처음 화면)이에요.
+      // 해당하지 않는 키(또는 갈 리뷰가 없는 ◀ ▶)면 move가 null이에요.
+      const move =
+        event.key === "ArrowLeft"
+          ? { href: previousHref, target: "previous" as const }
+          : event.key === "ArrowRight"
+            ? { href: nextHref, target: "next" as const }
+            : event.key === "Escape"
+              ? { href: "/", target: "list" as const }
+              : null;
+      if (!move?.href) return;
 
-      // 브라우저의 원래 동작(가로 스크롤 등)을 막고, 우리가 처리했다고 표시해요.
+      // 브라우저의 원래 동작(가로 스크롤 등)을 막고, 우리가 처리했다고 표시해요. 로딩 UI를 보이며 옮겨 가요.
       event.preventDefault();
-      router.push(href);
+      navigate(move.href, move.target);
     }
 
     // document(문서 전체)에 키 듣기를 걸어요. 어디에 초점이 있든 키 누름은 결국 document까지 올라와요(이벤트 버블링).
@@ -70,7 +80,7 @@ export function ReviewKeys({ previousHref, nextHref }: Props) {
     // 정리 함수: 다른 화면으로 가서 이 컴포넌트가 사라지면 키 듣기를 떼어 내요. 안 떼면 다른 화면에서도 ◀ ▶가 동작해 버려요.
     return () => document.removeEventListener("keydown", handleKeyDown);
     // [ ] 안의 값이 바뀌면(다른 리뷰로 넘어가면) 정리한 뒤 새 주소로 다시 걸어요.
-  }, [router, previousHref, nextHref]);
+  }, [navigate, previousHref, nextHref]);
 
   return null;
 }

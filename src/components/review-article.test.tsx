@@ -41,7 +41,8 @@ describe("ReviewArticle", () => {
     const facts = heading.nextElementSibling!.cloneNode(true) as HTMLElement;
     facts.querySelectorAll("[hidden]").forEach((node) => node.remove());
     // \u00a0: 줄바꿈되지 않는 빈칸(NBSP). 이름표와 이름, 가운뎃점 앞을 붙여요.
-    expect(facts.textContent).toBe("Winter Stop\u00a0· 2024\u00a0· 112분\u00a0· 감독\u00a0한서윤\u00a0· 출연\u00a0김배우, 이배우");
+    // 감독·출연 뒤에는 쌍점(:)을 붙여요.
+    expect(facts.textContent).toBe("Winter Stop\u00a0· 2024\u00a0· 112분\u00a0· 감독:\u00a0한서윤\u00a0· 출연:\u00a0김배우, 이배우");
   });
 
   it("감독·배우 이름은 한 사람씩 그 이름으로 찾은 목록(/?q=이름)으로 가는 링크다", () => {
@@ -69,7 +70,7 @@ describe("ReviewArticle", () => {
     const facts = screen.getByRole("heading", { level: 1 }).nextElementSibling!;
     expect(facts).not.toHaveTextContent("출연");
     // toHaveTextContent는 NBSP도 보통 빈칸으로 바꿔 비교해요.
-    expect(facts).toHaveTextContent(/^2024 · 감독 한서윤/);
+    expect(facts).toHaveTextContent(/^2024 · 감독: 한서윤/);
   });
 
   it("포스터가 있으면 제목으로 만든 대체 텍스트와 함께 크게 보인다", () => {
@@ -108,10 +109,10 @@ describe("ReviewArticle", () => {
     expect(screen.getByRole("link", { name: "로맨스" })).toHaveAttribute("href", "/?genre=romance");
   });
 
-  it("한줄평은 화면 낭독기에 '한줄평:'을 붙여 읽히고, 본문 HTML도 보인다", () => {
+  it("한 줄 평은 화면 낭독기에 '한 줄 평:'을 붙여 읽히고, 본문 HTML도 보인다", () => {
     renderAlone();
     // 정규식(/버스는 오지 않아도/)으로 찾으면 글자 일부만 맞아도 찾아져요.
-    expect(screen.getByText(/버스는 오지 않아도/)).toHaveTextContent("한줄평: “버스는 오지 않아도, 기다림은 끝내 도착한다.”");
+    expect(screen.getByText(/버스는 오지 않아도/)).toHaveTextContent("한 줄 평: “버스는 오지 않아도, 기다림은 끝내 도착한다.”");
     expect(screen.getByRole("heading", { level: 2, name: "좋았던 점" })).toBeInTheDocument();
   });
 

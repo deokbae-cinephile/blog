@@ -985,8 +985,36 @@ body::after {
     }
   }
 
+  /*
+   * 리뷰 상세에서 이전·다음 리뷰나 목록으로 옮겨 가는 동안의 로딩 레이어(components/review-navigation.tsx)
+   * 화면 전체를 어둡게 덮고(주사선 포함) 가운데에 로딩 상자를 보여요.
+   * 미리 받아 둔 화면이라 0.1초 안에 끝나면 번쩍이지 않게, 0.1초 뒤부터 보여요(0초 동안 바뀌는 것이라 움직임은 없어요).
+   * 누름은 막지 않아요(pointer-events: none). 옮겨 가는 동안 다른 단추를 눌러도 돼요.
+   */
+  .nav-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 3px, rgb(0 0 0 / 0.22) 3px 4px),
+      rgb(0 0 0 / 0.7);
+    opacity: 0;
+    animation: nav-loading-show 0s linear 0.1s forwards;
+  }
+
+  @keyframes nav-loading-show {
+    to {
+      opacity: 1;
+    }
+  }
+
   @media print {
-    .boot-overlay {
+    .boot-overlay,
+    .nav-loading {
       display: none;
     }
   }

@@ -24,7 +24,7 @@
  */
 
 import { GENRES, type Genre } from "./genres.ts";
-import { joinNames, splitNames } from "./people.ts";
+import { joinNames, MAX_CAST, splitNames } from "./people.ts";
 
 /**
  * 원고 맨 위에 쓸 수 있는 항목 이름들.
@@ -61,7 +61,7 @@ const MESSAGE = {
   genres: "genres(장르)를 하나 이상 적어 주세요. 예: genres: [드라마, 로맨스]",
   genresDuplicate: "genres(장르)에 같은 장르를 두 번 적었습니다. 하나만 남겨 주세요.",
   rating: "rating(평점)은 0.5부터 5까지 0.5 단위 숫자로 적습니다(0점은 없습니다). 예: rating: 4.5",
-  oneLiner: "oneLiner(한줄평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
+  oneLiner: "oneLiner(한 줄 평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
   publishedAt:
     "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
   poster:
@@ -213,9 +213,13 @@ export function checkFrontmatter(input: unknown): FrontmatterResult {
   if (director === null) fail("director", MESSAGE.director);
 
   // 출연: 목록([A, B])이든 "A, B" 한 줄이든 받아, 사람마다 나눠 다듬은 뒤 "A, B" 한 줄로 맞춰요(같은 이름은 한 번만).
-  // 적었는데 이름이 하나도 없으면(빈칸, 숫자 등) 고치는 방법을 알려 줘요.
+  // 적었는데 이름이 하나도 없으면(빈칸, 숫자 등) 고치는 방법을 알려 줘요. 한 작품에 5명(MAX_CAST)까지예요.
   const cast = has("cast") ? castText(data.cast) : undefined;
+  const castCount = cast ? splitNames(cast).length : 0;
   if (cast === null) fail("cast", MESSAGE.cast);
+  else if (castCount > MAX_CAST) {
+    fail("cast", `cast(출연)에는 배우를 ${MAX_CAST}명까지 적습니다. 지금 ${castCount}명이니 ${castCount - MAX_CAST}명을 지워 주세요.`);
+  }
 
   const runtime = has("runtime") ? (isIntIn(data.runtime, 1) ? data.runtime : null) : undefined;
   if (runtime === null) fail("runtime", MESSAGE.runtime);
