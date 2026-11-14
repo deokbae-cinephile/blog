@@ -5,7 +5,9 @@
  * - POST /api/views/<주소>: 로그인하지 않은 사람이면 세고, 글쓴이(세션 쿠키)면 세지 않는지
  * - 같은 사람(접속 주소 + 브라우저)이 곧바로 다시 보면 세지 않고, 다른 사람이면 세는지
  * - 다른 사이트에서 보낸 요청(403)과 틀린 주소(400)를 막는지
+ * - 빌드할 때 올라가 있지 않은 주소(404)는 세지 않고, 저장소에 줄도 만들지 않는지
  * 확인해요. 저장소는 내 컴퓨터처럼 메모리 저장소를 써요(lib/view-store.ts). 시험마다 다른 리뷰 주소를 써요.
+ * 올라가 있는 리뷰 목록(DMB_REVIEW_SLUGS, 빌드할 때 next.config.ts가 넣어 줘요)은 vi.stubEnv로 정해요.
  */
 
 import { NextRequest } from "next/server";
@@ -17,6 +19,9 @@ import { GET as getOne, POST } from "./[slug]/route";
 import { GET as getAll } from "./route";
 
 const SECRET = "test-secret-0123456789-abcdefghij-klmnop";
+
+/** 올라가 있는 것으로 볼 리뷰 주소들(시험마다 다른 주소를 써요) */
+const PUBLISHED = ["api-alpha", "api-beta", "api-gamma", "api-delta", "api-epsilon", "api-zeta"];
 
 /** 조회수를 세는 요청. who: 접속 주소, login: 글쓴이 세션 쿠키를 붙일지, origin: 보낸 곳 */
 async function countRequest(slug: string, { who = "203.0.113.1", login = false, origin = "http://localhost" } = {}) {
@@ -34,6 +39,7 @@ describe("조회수 API", () => {
   beforeEach(() => {
     vi.stubEnv("SESSION_SECRET", SECRET);
     vi.stubEnv("ADMIN_ID", "deokbae");
+    vi.stubEnv("DMB_REVIEW_SLUGS", PUBLISHED.join(","));
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -61,6 +67,14 @@ describe("조회수 API", () => {
   it("POST: 다른 사이트에서 보낸 요청은 403, 틀린 주소는 400으로 막는다", async () => {
     expect((await POST(await countRequest("api-delta", { origin: "https://evil.example" }), ctx("api-delta"))).status).toBe(403);
     expect((await POST(await countRequest("Bad_Slug"), ctx("Bad_Slug"))).status).toBe(400);
+  });
+
+  it("POST: 올라가 있지 않은 주소는 404로 막고, 저장소에 새 줄을 만들지 않는다", async () => {
+    const response = await POST(await countRequest("not-published"), ctx("not-published"));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ message: "없는 리뷰입니다." });
+    const body = (await (await getAll()).json()) as { counts: Record<string, number> };
+    expect(body.counts).not.toHaveProperty("not-published");
   });
 
   it("GET /api/views/<주소>: 세지 않고 읽기만 한다", async () => {

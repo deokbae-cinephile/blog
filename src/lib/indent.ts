@@ -57,7 +57,8 @@ export type IndentResult = {
  */
 export function indentText(value: string, start: number, end: number, outdent: boolean): IndentResult {
   // 고른 범위가 닿은 줄들: 첫 줄의 시작부터 마지막 줄의 끝까지.
-  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  // start가 0이면 첫 줄이에요. (lastIndexOf("\n", -1)은 0번 자리부터 찾아서, 글이 줄바꿈으로 시작하면 1을 돌려줘요.)
+  const lineStart = start > 0 ? value.lastIndexOf("\n", start - 1) + 1 : 0;
   // 범위 끝이 줄 맨 앞이면(다음 줄 첫 글자 바로 앞) 그 줄은 고르지 않은 것으로 봐요.
   const lastIndex = end > start && value[end - 1] === "\n" ? end - 1 : end;
   const nextBreak = value.indexOf("\n", lastIndex);
@@ -86,9 +87,17 @@ export function indentText(value: string, start: number, end: number, outdent: b
   });
   const replacement = changed.join("\n");
 
-  // 커서 범위 옮기기: 들여쓰기는 첫 줄 앞에 1글자, 끝은 줄 수만큼 뒤로. 내어쓰기는 지운 만큼 앞으로(줄 맨 앞보다는 앞으로 가지 않게).
+  // 커서 범위 옮기기: 들여쓰기는 첫 줄 앞에 1글자, 끝은 줄 수만큼 뒤로.
+  // 내어쓰기는 범위 끝(시작) "앞에서" 지운 글자 수만큼만 앞으로 가요. 끝이 마지막 줄의 들여쓰기 한가운데였다면
+  // 그 뒤에서 지운 칸은 빼지 않아서, 끝이 그 줄 맨 앞에 남아요(여러 줄을 고른 상태가 접히지 않아요).
   const firstShift = outdent ? -Math.min(removed[0] ?? 0, start - lineStart) : INDENT.length;
-  const totalShift = outdent ? -removed.reduce((sum, cut) => sum + cut, 0) : INDENT.length * lines.length;
+  let lineOffset = lineStart; // 지금 줄이 원래 글에서 시작하는 자리
+  let removedBeforeEnd = 0;
+  lines.forEach((line, index) => {
+    if (outdent) removedBeforeEnd += Math.min(removed[index] ?? 0, Math.max(0, end - lineOffset));
+    lineOffset += line.length + 1; // 줄 길이 + 줄바꿈 1글자
+  });
+  const totalShift = outdent ? -removedBeforeEnd : INDENT.length * lines.length;
   const selectionStart = start + firstShift;
   const selectionEnd = start === end ? selectionStart : Math.max(selectionStart, end + totalShift);
 

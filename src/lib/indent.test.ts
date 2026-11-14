@@ -73,4 +73,19 @@ describe("indentText", () => {
     expect(result.value).toBe("- 가\n\t- 나\n- 다");
     expect([result.selectionStart, result.selectionEnd]).toEqual([0, value.length - 2]);
   });
+
+  it("글이 줄바꿈으로 시작하고 커서가 맨 앞(0)이면, 첫 줄(빈 줄)을 다룬다(다음 줄을 건드리거나 줄바꿈을 늘리지 않는다)", () => {
+    const outdented = indentText("\n\t- 가", 0, 0, true);
+    expect(outdented.value).toBe("\n\t- 가");
+    expect([outdented.selectionStart, outdented.selectionEnd]).toEqual([0, 0]);
+    // 들여쓰기는 빈 첫 줄의 커서 자리에 Tab을 넣어요.
+    expect(indentText("\n- 가", 0, 0, false).value).toBe("\t\n- 가");
+  });
+
+  it("Shift+Tab: 고른 범위 끝이 마지막 줄의 들여쓰기 한가운데면, 끝은 그 줄 맨 앞에 남는다(고른 범위가 접히지 않는다)", () => {
+    // 끝(5)은 둘째 줄 "    B"의 띄어쓰기 4칸 중 2칸 뒤예요. 지운 뒤에는 둘째 줄 맨 앞(2)이에요.
+    const result = indentText("\tA\n    B", 0, 5, true);
+    expect(result.value).toBe("A\nB");
+    expect([result.selectionStart, result.selectionEnd]).toEqual([0, 2]);
+  });
 });

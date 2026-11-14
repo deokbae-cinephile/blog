@@ -47,6 +47,7 @@ src/
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
 │  ├─ view-rules.ts, view-store.ts, views-api.ts      조회수 규칙, 저장소 고르기(Durable Object·메모리), API 부르기
+│  ├─ review-slugs.ts                                  올라가 있는 리뷰 주소인지(조회수는 이 리뷰만 세요)
 │  └─ browse.ts, site.ts, version.ts, genres.ts, indent.ts …  검색·정렬, 블로그 정보·버전, 장르, 본문 Tab 들여쓰기
 worker/                   Cloudflare Worker 시작 파일(index.ts)과 조회수 저장소 Durable Object(view-counter.ts)
 e2e/                      E2E 테스트, 시험용 원고(fixtures/), 가짜 GitHub 서버(mock-github.mjs)
@@ -88,7 +89,12 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 목록 화면 ─GET  /api/views────────> 리뷰마다의 조회수(목록 표시, 조회순 정렬) + 총 조회수(아직 화면에 보이지 않음)
 ```
 
-- 세지 않는 때: 글쓴이로 로그인함(서버가 세션 쿠키로 확인), 같은 탭에서 이미 셈(sessionStorage), 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)이 같은 리뷰를 10분 안에 다시 봄, 다른 사이트에서 보낸 요청(Origin).
+- 세지 않는 때:
+  - 글쓴이로 로그인함(서버가 세션 쿠키로 확인)
+  - 같은 탭에서 이미 봄(sessionStorage). 세기 요청이 받아들여지면 서버가 걸렀어도 이 탭에 기억해요.
+  - 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)이 같은 리뷰를 10분 안에 다시 봄
+  - 다른 사이트에서 보낸 요청(Origin, 403)
+  - 빌드할 때 올라가 있지 않은 주소(404). `next.config.ts`가 원고 폴더의 주소 목록을 `env`(`DMB_REVIEW_SLUGS`)로 코드에 박아 두고, `lib/review-slugs.ts`가 확인해요. 아무 주소로나 요청을 보내 저장소(처음 보는 주소 5,000개까지)를 채우지 못하게 해요.
 - 목록·상세는 미리 만든 화면이라 조회수가 들어 있지 않아요. 화면이 열린 뒤 API로 받아 오고, 받기 전에는 "조회 –"예요.
 - Durable Object는 같은 워커 안에 있어 따로 만들 것이 없어요(`wrangler.jsonc`의 `durable_objects`·`migrations`, 무료 요금제는 SQLite 방식). OpenNext가 만든 처리기(`.open-next/worker.js`)를 `worker/index.ts`가 가져다 쓰고 Durable Object를 함께 내보내요.
 - 내 컴퓨터(`pnpm dev`)와 E2E(`next start`)는 Cloudflare가 아니라서 같은 규칙의 메모리 저장소를 써요. Durable Object까지 확인하려면 `pnpm cf:preview`로 띄워요.
