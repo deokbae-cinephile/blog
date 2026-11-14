@@ -17,6 +17,7 @@
  *   - 기억하기: 열어 둔 채로 다른 화면에 가거나 다시 방문해도 열린 채로 있어요(브라우저 저장소 localStorage).
  *   - 처음 방문하면 닫혀 있어요. 화면을 가리지 않게요.
  *   - 휴대폰처럼 좁은 화면(640px 미만)에서는 키보드를 거의 쓰지 않아 숨겨요.
+ *   - 리뷰 추가·수정 화면(/write…)에서는 단추를 두지 않아요.
  *
  * 접근성: "디스클로저(펼침) 단추" 패턴
  *   - <button aria-expanded="true|false">: 화면 낭독기가 "키보드 조작, 단추, 펼쳐짐/접힘"으로 읽어요.
@@ -135,6 +136,10 @@ export function KeyboardHelp() {
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, []);
+
+  // 리뷰 추가·수정 화면(/write, /write/<주소>)에서는 키보드 조작 단추를 두지 않아요. 안내할 화면 키가 없고,
+  // 왼쪽 아래 자리를 글쓰기에 비워 줘요. (훅은 모두 부른 다음에 돌아가야 해서 여기에 둬요.)
+  if (pathname.startsWith("/write")) return null;
 
   return (
     // fixed bottom-4 left-4: 화면 왼쪽 아래에 떠 있어요. z-[52]: CRT 화면 효과 막(z-index 50, 51)보다 위라서 또렷해요.

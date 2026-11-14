@@ -230,6 +230,30 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(bodyBox()).toHaveFocus();
   });
 
+  it("본문에서 Tab은 다음 칸으로 넘어가지 않고 목록을 들여 쓰고, Shift+Tab은 내어 쓰며, Esc 다음 Tab은 다음 칸으로 넘어간다", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWriter mode="create" />);
+    const body = bodyBox();
+    await user.click(body);
+    await user.paste("- 가\n- 나");
+
+    // 목록 줄에서 Tab: 커서가 줄 끝에 있어도 줄 맨 앞에 Tab이 들어가 안쪽 목록이 돼요. 초점은 본문 칸에 그대로예요.
+    await user.keyboard("{Tab}");
+    expect(body).toHaveValue("- 가\n\t- 나");
+    expect(body).toHaveFocus();
+    expect((body as HTMLTextAreaElement).selectionStart).toBe("- 가\n\t- 나".length);
+
+    // Shift+Tab: 내어 써서 원래대로
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(body).toHaveValue("- 가\n- 나");
+    expect(body).toHaveFocus();
+
+    // Esc를 누른 바로 다음 Tab은 들여 쓰지 않고 다음 칸으로 넘어가요(글상자에서 빠져나갈 길).
+    await user.keyboard("{Escape}{Tab}");
+    expect(body).toHaveValue("- 가\n- 나");
+    expect(body).not.toHaveFocus();
+  });
+
   it("주소를 바꾸면 이미 넣은 사진 주소도 따라 바뀐다", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);

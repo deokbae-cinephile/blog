@@ -943,11 +943,55 @@ body::after {
     background-color: rgb(var(--glow-rgb) / 0.06);
   }
 
-  /* 동작 줄이기: 커서는 켜 둔 채, 막대는 흐리게 다 찬 모양으로 멈춰요. */
+  /*
+   * 첫 화면 로딩 레이어(components/boot-overlay.tsx)
+   * 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 놓아요. 스크립트가 <html data-booted>를 붙이면 0.3초 동안 흐려지며 걷혀요.
+   * z-index 55: 떠 있는 단추(52)와 CRT 효과 막(50, 51)보다 위. 그래서 레이어에도 같은 주사선 무늬를 직접 그려요.
+   * (본문 바로가기 링크는 60이라 레이어 위에 보여요.)
+   */
+  .boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: grid;
+    place-items: center;
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 3px, rgb(0 0 0 / 0.22) 3px 4px),
+      var(--screen);
+    transition:
+      opacity 0.3s ease,
+      visibility 0.3s;
+    /* 안전장치: 스크립트가 돌지 않아도 6초 뒤에는 저절로 걷혀요(0초 동안 바뀌는 것이라 움직임은 없어요). */
+    animation: boot-timeout 0s linear 6s forwards;
+  }
+
+  html[data-booted] .boot-overlay {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  @keyframes boot-timeout {
+    to {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+
+  @media print {
+    .boot-overlay {
+      display: none;
+    }
+  }
+
+  /* 동작 줄이기: 커서는 켜 둔 채, 막대는 흐리게 다 찬 모양으로 멈춰요. 첫 화면 레이어도 흐려지지 않고 바로 걷혀요. */
   @media (prefers-reduced-motion: reduce) {
     .loading-cursor,
     .loading-bar > span {
       animation: none;
+    }
+
+    .boot-overlay {
+      transition: none;
     }
 
     .loading-bar > span {

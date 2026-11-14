@@ -33,6 +33,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
+import { BOOT_NOSCRIPT_STYLE, BOOT_SCRIPT, BootOverlay } from "@/components/boot-overlay";
 import { ServiceWorker } from "@/components/service-worker";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -122,10 +123,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // lang="ko": 이 페이지의 기본 언어는 한국어예요. 화면 낭독기가 한국어 발음으로 읽어요.
     // neodgm.variable: --font-neodgm 변수를 정의하는 클래스를 붙여요.
-    <html lang="ko" className={neodgm.variable}>
+    // suppressHydrationWarning: 첫 화면 로딩 레이어를 걷는 스크립트가 <html>에 data-booted 표시를 붙여요.
+    //   React가 그린 것과 달라도 괜찮다는 뜻이에요(이 요소 한 단계에만 적용돼요).
+    <html lang="ko" className={neodgm.variable} suppressHydrationWarning>
+      <head>
+        {/* 첫 화면 로딩 레이어를 걷는 스크립트. 화면을 그리기 전에 바로 돌아요(components/boot-overlay.tsx). */}
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+        {/* 자바스크립트가 꺼져 있으면 레이어를 처음부터 숨겨요. */}
+        <noscript dangerouslySetInnerHTML={{ __html: BOOT_NOSCRIPT_STYLE }} />
+      </head>
       {/* flex flex-col: 머리글·본문·바닥글을 세로로 쌓아요. 본문(main)이 남는 높이를 모두 차지해서(flex-1),
           글이 짧은 화면(404 등)에서도 바닥글이 화면 맨 아래에 붙어요. */}
       <body className="flex flex-col">
+        {/* 첫 화면 로딩 레이어: 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 보여 줘요. 웹 폰트를 받으면 걷혀요. */}
+        <BootOverlay />
         {/* 본문 바로가기: 키보드 Tab을 처음 누르면 나타나는 링크예요. 머리글을 건너뛰고 본문으로 바로 가요.
             평소에는 화면 위로 숨겨 두었다가(-translate-y-[200%]) 초점을 받으면 내려와요(focus-visible:translate-y-0).
             z-[60]: 화면 효과 막(globals.css의 z-index 50, 51)보다 위에 둬서 어두운 그늘에 가리지 않게 해요. */}

@@ -6,8 +6,7 @@
  *   (로그인 링크는 두지 않아요. 글쓴이는 /login 주소로 직접 가요. session-controls.tsx 참고)
  *   화면 아래쪽에 떠 있는 단추들도 여기에 둬요.
  *     - 왼쪽 아래: 키보드 조작 안내(keyboard-help.tsx)
- *     - 가운데 아래: 로그인했을 때 리뷰 추가(+) 단추(floating-buttons.tsx)
- *     - 오른쪽 아래: 맨 위로(back-to-top.tsx)
+ *     - 오른쪽 아래: 맨 위로(back-to-top.tsx)와, 로그인했을 때 그 오른쪽의 리뷰 추가(+) 단추(floating-buttons.tsx)
  *   떠 있는 단추는 화면 어디에 보이든 코드에서는 바닥글의 마지막이라, Tab으로 옮겨 다닐 때도 맨 끝에 와요.
  *
  * <footer> 태그
@@ -34,7 +33,7 @@ export function SiteFooter() {
       {/* 로그인했을 때만: 점선 아래 [로그아웃] */}
       <SessionControls />
       {/* 화면 아래쪽에 떠 있는 단추들(position: fixed). 바닥글 안에 있어도 화면 위치는 아래쪽에 고정돼요.
-          왼쪽 아래: 키보드 조작 안내, 가운데 아래: 리뷰 추가(+), 오른쪽 아래: 맨 위로 */}
+          왼쪽 아래: 키보드 조작 안내, 오른쪽 아래: 맨 위로와 그 오른쪽의 리뷰 추가(+) */}
       <KeyboardHelp />
       <FloatingButtons />
     </footer>

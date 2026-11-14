@@ -22,10 +22,15 @@
  *   - await expect(요소).toBeVisible() : 보일 때까지 잠깐 기다렸다가 확인(자동 재시도)
  */
 
+import { readFileSync } from "node:fs";
+
 import { expect, type Page, test } from "@playwright/test";
 
 // 접근성 검사(axe)와 가로 넘침 검사는 다른 테스트 파일과 함께 쓰려고 helpers.ts에 두었어요.
 import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
+
+/** 지금 버전(package.json). E2E는 저장소 맨 위 폴더에서 돌아서 그 자리의 package.json을 읽어요. */
+const { version } = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
 
 /** 긴 제목 원고의 제목(gamma-long.md) */
 const LONG_TITLE = "끝없이이어지는아주아주긴제목이화면을넘치지않는지살펴보는감마영화";
@@ -71,38 +76,56 @@ test.describe("처음 화면(목록)", () => {
     await expect(page.locator("#intro-title")).toHaveCount(0);
   });
 
-  test("머리글 왼쪽 이름(DMB: 덕배의 영화 블로그)과 오른쪽 GitHub 링크는 아이콘 크기·간격·글자 모양이 같다", async ({ page }) => {
+  test("머리글 오른쪽에는 GitHub 아이콘만 보이고, 왼쪽 로고와 같은 크기로 본문 양 끝·같은 줄에 붙는다(좁은 휴대폰 포함)", async ({ page }) => {
     await page.goto("/");
     const banner = page.getByRole("banner");
-    const home = banner.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
-    await expect(home).toHaveAttribute("href", "/");
-    // 링크마다 아이콘 크기, 아이콘과 글자 사이 간격, 글자 크기·형광 번짐을 재요.
-    const measure = (link: typeof home) =>
-      link.evaluate((element) => {
-        const icon = element.querySelector("svg")!.getBoundingClientRect();
-        // 링크 안의 첫 글자 마디(빈칸 아닌 것)를 찾아 그 글자가 차지한 상자를 재요.
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-        let text: Text | null = null;
-        while (walker.nextNode()) {
-          if (walker.currentNode.textContent!.trim()) {
-            text = walker.currentNode as Text;
-            break;
-          }
-        }
-        const range = document.createRange();
-        range.selectNodeContents(text!);
-        const style = getComputedStyle(text!.parentElement!);
+    await expect(banner.getByRole("link", { name: "DMB: 덕배의 영화 블로그" })).toHaveAttribute("href", "/");
+    // 글자 "GitHub"는 화면 낭독기용으로만 남아요(화면에는 아이콘만).
+    await expect(banner.getByRole("link", { name: "GitHub", exact: true }).locator(".sr-only")).toHaveText("GitHub");
+    // 머리글의 본문 칸(안쪽 여백을 뺀 자리) 양 끝과 두 아이콘의 위치·크기, GitHub 링크의 누르는 영역을 재요.
+    const measure = () =>
+      banner.evaluate((header) => {
+        const box = header.getBoundingClientRect();
+        const style = getComputedStyle(header);
+        const [logo, mark] = [...header.querySelectorAll("a svg")].map((svg) => svg.getBoundingClientRect());
+        const github = header.querySelector('a[href^="https://github.com/"]')!.getBoundingClientRect();
+        const home = header.querySelector('a[href="/"]')!.getBoundingClientRect();
+        const version = [...header.querySelectorAll("span")].find((span) => /^\(v\d/.test(span.textContent!))!.getBoundingClientRect();
+        const middle = (rect: DOMRect) => Math.round(rect.top + rect.height / 2);
         return {
-          icon: [icon.width, icon.height],
-          gap: Math.round(range.getBoundingClientRect().left - icon.right),
-          fontSize: style.fontSize,
-          textShadow: style.textShadow,
-          height: Math.round(element.getBoundingClientRect().height),
+          icons: [
+            [logo.width, logo.height],
+            [mark.width, mark.height],
+          ],
+          // 로고 왼쪽 끝 = 본문 왼쪽 끝, 아이콘 오른쪽 끝 = 본문 오른쪽 끝(둘 다 0이면 딱 맞아요)
+          leftGap: Math.round(logo.left - (box.left + parseFloat(style.paddingLeft))),
+          rightGap: Math.round(box.right - parseFloat(style.paddingRight) - mark.right),
+          // 같은 줄(첫 줄)에 있는지: 두 아이콘의 위쪽 끝이 같고, 버전도 이름과 같은 줄이에요.
+          sameRow: Math.round(logo.top) === Math.round(mark.top) && middle(version) === middle(home),
+          hit: [Math.round(github.width), Math.round(github.height)],
+          // 가로 스크롤이 생기지 않아요.
+          overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
         };
       });
-    const [left, right] = await Promise.all([measure(home), measure(banner.getByRole("link", { name: "GitHub", exact: true }))]);
-    expect(left.icon).toEqual([24, 24]);
-    expect(left).toEqual(right);
+    const expected = { icons: [[24, 24], [24, 24]], leftGap: 0, rightGap: 0, sameRow: true, hit: [44, 44], overflow: false };
+    expect(await measure()).toEqual(expected);
+    // 좁은 휴대폰(360px)에서도 버전까지 한 줄에 들어가고, 아이콘은 첫 줄 오른쪽 끝에 있어요.
+    await page.setViewportSize({ width: 360, height: 780 });
+    expect(await measure()).toEqual(expected);
+  });
+
+  test("머리글 이름 옆에 지금 버전(package.json)을 보인다", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("banner").getByText(/^\(v\d+\.\d+\.\d+\)$/)).toHaveText(`(v${version})`);
+  });
+
+  test("검색창은 글쓰기 화면의 입력 칸과 같은 모양(2px 실선 테두리, 높이 44px)이다", async ({ page }) => {
+    await openHome(page);
+    const style = await searchBox(page).evaluate((input) => {
+      const css = getComputedStyle(input);
+      return [css.borderTopStyle, css.borderTopWidth, css.borderBottomStyle, css.borderLeftWidth, css.minHeight];
+    });
+    expect(style).toEqual(["solid", "2px", "solid", "2px", "44px"]);
   });
 
   test("픽셀 글꼴(Neo둥근모)을 받아서 쓴다", async ({ page }) => {
@@ -304,7 +327,8 @@ test.describe("리뷰 상세", () => {
     // 머리 안내판: 장르(제목 위), 감독까지 이어 쓴 정보 줄, 큰 평점. 예전 정보표(dl)와 본 날·쓴 날은 없어요.
     const header = page.locator("article > header");
     await expect(header.getByRole("list", { name: "장르" })).toHaveText("[드라마][재난]");
-    await expect(header.getByText(/· 감독 /)).toBeVisible();
+    // 정보 줄의 빈칸 일부는 줄바꿈되지 않는 빈칸(NBSP)이라 정규식은 \s(NBSP 포함)로 찾아요.
+    await expect(header.getByText(/·\s감독\s/)).toBeVisible();
     await expect(header.getByText("평점 5점 만점에 4.5점")).toBeAttached();
     await expect(page.getByRole("term")).toHaveCount(0);
     // 본문 제목과 사이트 안 링크
@@ -401,6 +425,37 @@ test.describe("리뷰 상세", () => {
     await page.goto("/reviews/gamma-long");
     await expect(page.getByRole("heading", { level: 1, name: LONG_TITLE })).toBeVisible();
     await expectNoHorizontalScroll(page);
+  });
+});
+
+test.describe("첫 화면 로딩 레이어", () => {
+  test("처음 열면 웹 폰트를 받는 동안 화면을 덮고, 받으면 걷히며, 같은 탭에서 다시 열면 덮지 않는다", async ({ page }) => {
+    // 웹 폰트(.woff2) 요청을 잠깐 붙잡아, 글꼴을 받는 동안의 모습을 봐요.
+    let releaseFont: () => void = () => {};
+    const fontHeld = new Promise<void>((resolve) => (releaseFont = resolve));
+    await page.route("**/*.woff2", async (route) => {
+      await fontHeld;
+      await route.continue();
+    });
+
+    await page.goto("/", { waitUntil: "commit" });
+    const overlay = page.locator(".boot-overlay");
+    await expect(overlay).toBeVisible();
+    await expect(overlay.getByRole("status")).toHaveText("불러오는 중");
+    // 레이어는 화면 전체를 덮어요.
+    const box = (await overlay.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect([Math.round(box.width), Math.round(box.height)]).toEqual([viewport.width, viewport.height]);
+
+    // 글꼴을 받으면 걷혀요.
+    releaseFont();
+    await expect(overlay).toBeHidden();
+    await expectNoA11yViolations(page);
+
+    // 같은 탭에서 다시 열면 처음부터 걷혀 있어요(sessionStorage).
+    await page.reload({ waitUntil: "commit" });
+    await expect(page.locator("html")).toHaveAttribute("data-booted", "");
+    await expect(overlay).toBeHidden();
   });
 });
 

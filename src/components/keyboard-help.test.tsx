@@ -120,6 +120,15 @@ describe("KeyboardHelp", () => {
     ]);
   });
 
+  it("리뷰 추가·수정 화면(/write…)에서는 키보드 조작 단추를 두지 않는다", () => {
+    for (const path of ["/write", "/write/winter-stop"]) {
+      pathname.current = path;
+      const { unmount } = render(<KeyboardHelp />);
+      expect(screen.queryByRole("button", { name: "키보드 조작" })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("화면마다 다른 키를 안내한다", () => {
     expect(shortcutsFor("/reviews/winter-stop").map(({ action }) => action)).toEqual(["이전·다음 리뷰", "목록으로", "다음 항목으로"]);
     expect(shortcutsFor("/offline").map(({ action }) => action)).toEqual(["다음 항목으로"]);

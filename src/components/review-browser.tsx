@@ -9,12 +9,13 @@
  *     ┌ 검색 칸(상세 화면 왼쪽 칸 너비) ┐   영화 목록 ·················· 전체 15편
  *     │ 검색  [__________] [찾기]       │   [포스터] 겨울 정류장 ·········· 4.5
  *     │ 장르  [▶전체 15편] [드라마 5편] │   [포스터] ...
- *     │ 정렬  [▶최신순] [평점순]        │   (처음 10편, 내려가면 10편씩 더)
+ *     │ 정렬  [▶최신순] [평점순] [조회순] │   (처음 10편, 내려가면 10편씩 더)
  *     └─────────────────────────────────┘
  *
  * 맡은 기능
  *   1. 검색: 글자를 치면 추천 층이 뜨고(search-box.tsx), Enter(또는 찾기 단추)를 누르면 적용해요.
- *   2. 장르 필터, 정렬(최신순·평점순): 고르는 즉시 적용해요.
+ *   2. 장르 필터, 정렬(최신순·평점순·조회순): 고르는 즉시 적용해요.
+ *      조회수는 목록이 열린 뒤 따로 받아 와서(use-view-counts.ts) 항목마다 보여 주고, 조회순 정렬에 써요.
  *   3. 결과 편수 안내: "15편 중 3편"을 화면 낭독기도 읽어 줘요(role="status").
  *   4. 조건을 주소(?q=&genre=&sort=)에 남겨요. 링크를 공유하거나 뒤로 가기를 해도 같은 목록이 보입니다.
  *   5. 결과가 없으면 안내하고, "검색 조건 지우기" 단추로 처음 상태로 돌아가요.
@@ -60,6 +61,7 @@ import type { ReviewSummary } from "@/lib/review";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
 import { ReviewListItem } from "./review-list-item";
+import { useViewCounts } from "./use-view-counts";
 import { SearchBox } from "./search-box";
 import { useListKeys } from "./use-list-keys";
 
@@ -149,7 +151,10 @@ function UrlBoundBrowser({ reviews }: Props) {
     window.history.replaceState(null, "", `${window.location.pathname}${toSearch(next)}`);
   }
 
-  return <ReviewBrowserView reviews={reviews} params={params} onParamsChange={handleChange} />;
+  // 조회수: 화면이 열린 뒤 API로 받아 와요. 받기 전에는 null이라 "조회 –"로 보여요.
+  const views = useViewCounts();
+
+  return <ReviewBrowserView reviews={reviews} params={params} onParamsChange={handleChange} views={views?.counts ?? null} />;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -166,12 +171,15 @@ type ViewProps = {
   onParamsChange: (next: BrowseParams) => void;
   /** false면 검색창·버튼을 사용할 수 없게(disabled) 그려요. 미리 만든 HTML(fallback)에서 써요. 기본 true */
   interactive?: boolean;
+  /** 리뷰 주소 → 조회수. 아직 받지 못했으면 null(목록에는 "조회 –", 조회순은 최신순처럼) */
+  views?: Readonly<Record<string, number>> | null;
 };
 
 /** 정렬 버튼 목록. value는 주소에 쓰는 값, label은 화면에 보이는 이름이에요. */
 const SORTS: { value: SortKey; label: string }[] = [
   { value: "latest", label: "최신순" },
   { value: "rating", label: "평점순" },
+  { value: "views", label: "조회순" },
 ];
 
 /**
@@ -181,7 +189,7 @@ const SORTS: { value: SortKey; label: string }[] = [
  * 검색어까지 글자를 칠 때마다 적용하면, 화면 낭독기가 결과 편수를 계속 읽어 시끄러워지거든요.
  * (글자를 칠 때는 목록 대신 추천 층만 바뀌어요.)
  */
-export function ReviewBrowserView({ reviews, params, onParamsChange, interactive = true }: ViewProps) {
+export function ReviewBrowserView({ reviews, params, onParamsChange, interactive = true, views = null }: ViewProps) {
   // 조건을 하나씩 꺼내 둬요.
   const { q, genre, sort } = params;
   // 사용할 수 없게 둘지(disabled). 입력란·단추·라디오 단추에 똑같이 넘겨요.
@@ -212,7 +220,7 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
 
   // useMemo: 계산 결과를 기억해 두고, [ ] 안의 값이 바뀔 때만 다시 계산해요.
   // 리뷰가 많아져도 상관없는 일(예: 검색창에 글자 치기)로 다시 그릴 때 목록 계산을 건너뛸 수 있어요.
-  const results = useMemo(() => browse(reviews, { q, genre, sort }), [reviews, q, genre, sort]);
+  const results = useMemo(() => browse(reviews, { q, genre, sort }, views), [reviews, q, genre, sort, views]);
   const genres = useMemo(() => countGenres(reviews, genre), [reviews, genre]);
 
   // 검색어나 장르로 거르고 있는지(= "검색 조건 지우기" 단추를 보일지)
@@ -382,7 +390,7 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
         {results.length > 0 ? (
           <ul ref={listRef} className="mt-4 grid gap-2">
             {visible.map((review) => (
-              <ReviewListItem key={review.slug} review={review} />
+              <ReviewListItem key={review.slug} review={review} views={views ? (views[review.slug] ?? 0) : null} />
             ))}
           </ul>
         ) : reviews.length === 0 ? (

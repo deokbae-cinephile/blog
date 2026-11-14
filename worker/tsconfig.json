@@ -1,0 +1,17 @@
+{
+  // Cloudflare Worker 쪽 코드(worker/)의 타입 검사 설정이에요.
+  // Next.js 쪽(tsconfig.json)은 브라우저 타입(DOM)을 쓰고, 여기는 Cloudflare Workers 타입을 써서 따로 나눠요.
+  // pnpm typecheck가 두 설정을 모두 검사해요.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["./**/*.ts", "../src/lib/view-rules.ts"]
+}

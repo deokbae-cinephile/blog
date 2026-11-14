@@ -42,12 +42,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 // flushSync: 화면 바꾸기를 바로 끝내게 하는 React 기능이에요. 숨어 있던 본문 칸을 보인 "다음"에 초점을 옮길 때 써요.
 import { flushSync } from "react-dom";
 
 import { type ApiResult, createReview, updateReview, uploadImage } from "@/lib/admin-api";
 import { GENRES, type Genre } from "@/lib/genres";
+import { indentText } from "@/lib/indent";
 import { EMPTY_VALUES, parseReviewFile, type ReviewFormValues } from "@/lib/review-file";
 import { type FieldErrors, validateReviewForm } from "@/lib/review-form";
 import { SLUG } from "@/lib/review-schema";
@@ -159,8 +160,10 @@ export function ReviewWriter(props: Props) {
   const summaryRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const savedRef = useRef<HTMLHeadingElement>(null);
-  // 본문에 사진 줄을 넣은 뒤 커서를 둘 자리(다음 그리기에서 맞춰요)
-  const caretRef = useRef<number | null>(null);
+  // 본문을 바꾼 뒤 커서(고른 범위)를 둘 자리 [시작, 끝]. 다음 그리기에서 맞춰요(사진 줄 넣기, Tab 들여쓰기).
+  const selectionRef = useRef<[number, number] | null>(null);
+  // 본문 칸에서 Esc를 누른 바로 다음 Tab은 들여쓰지 않고 원래대로 다음 칸으로 넘어가요(글상자에서 빠져나갈 길).
+  const tabLeavesRef = useRef(false);
 
   // 칸 id들의 앞부분. useId로 겹치지 않게 만들어요.
   const baseId = useId();
@@ -343,21 +346,59 @@ export function ReviewWriter(props: Props) {
       setScenes(nextScenes);
       setField("body", `${before}${insert}${values.body.slice(end).replace(/^\s*/, "")}`);
       // 커서는 첫 사진의 ![ 바로 뒤(설명을 적을 자리)에 둬요.
-      caretRef.current = before.length + (before ? 2 : 0) + 2;
+      const caret = before.length + (before ? 2 : 0) + 2;
+      selectionRef.current = [caret, caret];
       // 화면에는 안내 글을 띄우지 않아요. 본문에 넣은 줄이 바로 보이니까요. 화면 낭독기에만 짧게 알려요.
       announceQuietly(`사진 ${lines.length}장을 본문에 넣었습니다.`);
     }
     if (problems.length > 0) setErrors((current) => ({ ...current, body: problems.join(" ") }));
   }
 
-  // 사진 줄을 넣은 뒤, 화면이 바뀐 바로 그 순간에 본문 칸으로 초점과 커서를 옮겨요.
+  // 본문을 바꾼 뒤(사진 줄 넣기, Tab 들여쓰기), 화면이 바뀐 바로 그 순간에 본문 칸으로 초점과 커서를 옮겨요.
   useLayoutEffect(() => {
-    const caret = caretRef.current;
-    if (caret === null || !bodyRef.current) return;
-    caretRef.current = null;
+    const selection = selectionRef.current;
+    if (selection === null || !bodyRef.current) return;
+    selectionRef.current = null;
     bodyRef.current.focus();
-    bodyRef.current.setSelectionRange(caret, caret);
+    bodyRef.current.setSelectionRange(selection[0], selection[1]);
   }, [values.body]);
+
+  /**
+   * 본문 칸의 Tab·Shift+Tab: 다음 칸으로 넘어가지 않고 들여쓰기·내어쓰기를 해요(목록 안의 목록 만들기, lib/indent.ts).
+   * Esc를 누른 바로 다음 Tab은 원래대로 다음 칸으로 넘어가요.
+   */
+  function handleBodyKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape") {
+      tabLeavesRef.current = true;
+      return;
+    }
+    // Tab이 아니거나, 다른 키와 함께 누르거나, 한글을 조합하는 중이면 건드리지 않아요.
+    const isTab = event.key === "Tab" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.nativeEvent.isComposing;
+    const leave = tabLeavesRef.current;
+    tabLeavesRef.current = false;
+    if (!isTab || leave) return;
+
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const result = indentText(textarea.value, textarea.selectionStart, textarea.selectionEnd, event.shiftKey);
+    if (result.value === textarea.value) return;
+
+    // 되돌리기(Ctrl·Cmd+Z)가 되게, 브라우저가 글상자에 직접 글을 끼워 넣게 해요(execCommand "insertText").
+    // 끼워 넣으면 input 이벤트가 나서 칸 값(onChange)도 따라 바뀌어요. 지원하지 않는 곳에서는 칸 값을 직접 바꿔요.
+    textarea.setSelectionRange(result.from, result.to);
+    let inserted = false;
+    try {
+      inserted = document.execCommand("insertText", false, result.replacement);
+    } catch {
+      inserted = false;
+    }
+    if (inserted) {
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+    } else {
+      selectionRef.current = [result.selectionStart, result.selectionEnd];
+      setField("body", result.value);
+    }
+  }
 
   /* ── 저장 ── */
 
@@ -739,11 +780,14 @@ export function ReviewWriter(props: Props) {
                   rows={18}
                   value={values.body}
                   onChange={(event) => setField("body", event.target.value)}
+                  // Tab·Shift+Tab: 들여쓰기·내어쓰기(Esc 다음 Tab은 다음 칸으로)
+                  onKeyDown={handleBodyKeyDown}
                   aria-invalid={errors.body ? true : undefined}
                   aria-describedby={describedBy}
                   aria-errormessage={errors.body ? `${fieldId("body")}-error` : undefined}
                   spellCheck={false}
-                  className="field w-full resize-y leading-7"
+                  // [tab-size:2]: Tab 문자를 2칸 너비로 보여요(Markdown은 4칸으로 읽어 중첩 목록이 돼요).
+                  className="field w-full resize-y leading-7 [tab-size:2]"
                 />
               )}
             </Field>
