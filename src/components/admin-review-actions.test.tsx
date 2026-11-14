@@ -81,10 +81,15 @@ describe("AdminReviewActions", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith("/api/reviews/winter-stop", expect.objectContaining({ method: "DELETE" }));
 
-    // 답을 기다리는 동안: 안내 칸에 로딩 UI가 보이고, 두 단추는 막혀요.
+    // 답을 기다리는 동안: 안내 칸에 로딩 UI가 보이고, 두 단추는 막혀요(aria-disabled: 초점은 누른 [삭제]에 그대로 있어요).
     expect(status).toHaveTextContent("리뷰를 삭제하는 중");
-    expect(confirm).toBeDisabled();
-    expect(within(dialog).getByRole("button", { name: "취소" })).toBeDisabled();
+    const cancel = within(dialog).getByRole("button", { name: "취소" });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    expect(cancel).toHaveAttribute("aria-disabled", "true");
+    expect(confirm).toHaveFocus();
+    // 막힌 [취소]를 눌러도 창은 닫히지 않아요.
+    await user.click(cancel);
+    expect(dialog).toHaveAttribute("open");
     // Esc(취소 이벤트)로도 창을 닫지 못해요. fireEvent는 막혔으면(preventDefault) false를 돌려줘요.
     expect(fireEvent(dialog, new Event("cancel", { cancelable: true }))).toBe(false);
 
@@ -107,7 +112,9 @@ describe("AdminReviewActions", () => {
     await user.click(confirm);
 
     expect(await screen.findByText("GitHub가 잠시 응답하지 않습니다. 잠시 뒤 다시 시도해 주세요.")).toHaveAttribute("role", "alert");
-    expect(confirm).toBeEnabled();
+    // 다시 누를 수 있어요(막힘 표시가 없어지고, 초점도 [삭제]에 그대로예요).
+    expect(confirm).not.toHaveAttribute("aria-disabled");
+    expect(confirm).toHaveFocus();
     // 로딩 UI는 사라지고, 창은 열린 채라 다시 누르거나 [취소]·Esc로 닫을 수 있어요.
     const dialog = screen.getByRole("alertdialog");
     expect(within(dialog).getByRole("status")).toBeEmptyDOMElement();

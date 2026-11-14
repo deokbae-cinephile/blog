@@ -48,13 +48,18 @@ const OWN_KEYS_SELECTOR = 'input, textarea, select, [contenteditable]:not([conte
 
 /**
  * 키를 받은 곳(target)이 방향키·Esc를 스스로 쓰는 요소이거나 그 안쪽인지 알려 줘요.
+ * 화면 위에 창(<dialog>)이 떠 있으면 초점이 어디에 있든 true예요. 창이 떠 있는 동안 뒤 화면은 쓸 수 없어서,
+ * 화면 단축키(◀ ▶ Esc 목록으로)도 쉬어요. (예: 삭제하는 동안 막힌 단추에서 초점이 빠져 문서 전체로 갔을 때,
+ * 또는 창의 글자를 눌러 초점이 빠졌을 때 Esc를 눌러도 목록으로 가지 않아요.)
  *
  * closest(선택자): 자기 자신부터 부모 쪽으로 올라가며 선택자에 맞는 첫 요소를 찾아요. 없으면 null이에요.
  *
  * @param target 키보드 이벤트가 일어난 곳(event.target)
- * @returns 스스로 쓰는 곳이면 true(우리는 손대지 않아요)
+ * @returns 스스로 쓰는 곳이거나 창이 떠 있으면 true(우리는 손대지 않아요)
  */
 export function keepsOwnKeys(target: EventTarget | null): boolean {
+  // dialog[open]: 열려 있는 창. 이 블로그의 창은 모두 showModal()로 띄우는 창이에요(삭제 확인).
+  if (document.querySelector("dialog[open]") !== null) return true;
   // target이 화면의 요소(Element)가 아닐 수도 있어서 먼저 확인해요. (예: window, document)
   if (!(target instanceof Element)) return false;
   return target.closest(OWN_KEYS_SELECTOR) !== null;

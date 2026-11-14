@@ -104,6 +104,14 @@ export function parseReviewFile(text: string): ParsedReviewFile {
   const record = data as Record<string, unknown>;
   // 쓸 수 있는 항목 이름 목록에 없는 것은 뺀 항목으로 알려 줘요.
   const ignoredKeys = Object.keys(record).filter((key) => !(FRONTMATTER_KEYS as readonly string[]).includes(key));
+  // 출연 목록에 이름(글자)이 아닌 칸(숫자·true 등)이 있으면, 빌드 검사(lib/review-schema.ts)처럼 고치는 방법을 알려요.
+  // 숫자를 이름으로 바꾸거나 말없이 빼면, 원고와 다른 출연이 칸에 들어가 그대로 저장될 수 있어서예요.
+  if (Array.isArray(record.cast) && !record.cast.every((name) => typeof name === "string")) {
+    return {
+      ok: false,
+      message: "cast(출연) 목록에 이름이 아닌 값(숫자 등)이 있습니다. 배우 이름만 쉼표로 나눠 적어 주세요. 예: cast: 레오나르도 디카프리오, 마크 러팔로",
+    };
+  }
 
   return {
     ok: true,
@@ -114,6 +122,7 @@ export function parseReviewFile(text: string): ParsedReviewFile {
       year: asText(record.year),
       // 감독·출연을 [A, B] 목록으로 적었으면 "A, B"로 이어요.
       director: Array.isArray(record.director) ? record.director.map(asText).filter(Boolean).join(", ") : asText(record.director),
+      // (출연 목록은 위에서 모두 글자인지 확인했어요.)
       cast: Array.isArray(record.cast) ? record.cast.map(asText).filter(Boolean).join(", ") : asText(record.cast),
       runtime: asText(record.runtime),
       genres: asGenres(record.genres),

@@ -117,7 +117,7 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
     // 출연: 배우 이름을 쉼표로 나눠 적어요. 빈칸이 들쭉날쭉해도 원고에는 "A, B"로 가지런히 들어가요.
-    await page.getByLabel(/^출연\(쉼표로 구분\)/).fill("시험배우1,시험배우2 ");
+    await page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ }).fill("시험배우1,시험배우2 ");
     await page.getByRole("checkbox", { name: "로맨스" }).check();
     // 평점은 처음에 5.0이 골라져 있어요("고르세요"가 없어요).
     await expect(page.getByLabel(/^평점/)).toHaveValue("5.0");
@@ -359,7 +359,7 @@ test.describe("글쓴이 기능", () => {
     await expect(page.getByRole("heading", { level: 1, name: "리뷰 수정: alpha-station" })).toBeVisible();
     await expect(page.getByLabel(/^제목/)).toHaveValue("알파 정거장");
     // 출연 칸에 원고의 배우들이 들어 있어요.
-    await expect(page.getByLabel(/^출연/)).toHaveValue("이배우, 박배우");
+    await expect(page.getByRole("textbox", { name: /^출연\(쉼표로 구분\)/ })).toHaveValue("이배우, 박배우");
     // 주소는 바꿀 수 없어요. "(수정할 때는 바꿀 수 없습니다)"는 주소 다음 줄에 보여요.
     const slugLabel = (await page.getByText("주소(영문):", { exact: true }).boundingBox())!;
     const slugNote = (await page.getByText("(수정할 때는 바꿀 수 없습니다)", { exact: true }).boundingBox())!;
@@ -413,13 +413,17 @@ test.describe("글쓴이 기능", () => {
     // 느린 GitHub 흉내(0.8초): 삭제하는 동안 창 안에 로딩 UI가 보이고, 두 단추는 막혀요.
     await request.post(`${GITHUB}/__delay?ms=800`);
     try {
-      await dialog.getByRole("button", { name: "삭제" }).click();
+      const confirm = dialog.getByRole("button", { name: "삭제" });
+      await confirm.click();
       await expect(dialog.getByRole("status")).toHaveText(/리뷰를 삭제하는 중/);
-      await expect(dialog.getByRole("button", { name: "취소" })).toBeDisabled();
-      await expect(dialog.getByRole("button", { name: "삭제" })).toBeDisabled();
-      // Esc로도 닫히지 않아요(끝날 때까지 결과를 기다려요).
+      await expect(dialog.getByRole("button", { name: "취소" })).toHaveAttribute("aria-disabled", "true");
+      await expect(confirm).toHaveAttribute("aria-disabled", "true");
+      // 막아도 초점은 누른 [삭제]에 그대로 있어요(문서 전체로 빠지지 않아요).
+      await expect(confirm).toBeFocused();
+      // Esc로도 닫히지 않고, 상세 화면의 "Esc = 목록으로"도 쉬어요(창이 떠 있는 동안). 끝날 때까지 결과를 기다려요.
       await page.keyboard.press("Escape");
       await expect(dialog).toBeVisible();
+      await expect(page).toHaveURL(/\/reviews\/epsilon-night$/);
 
       // 다 지우면 창이 닫히고, 맨 윗줄 아래에 화면 너비로 안내가 보이며, 초점은 [목록으로]에 있어요.
       const notice = page.getByRole("status").filter({ hasText: "리뷰를 삭제했습니다" });

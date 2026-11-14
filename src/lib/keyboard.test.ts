@@ -53,6 +53,17 @@ describe("keepsOwnKeys", () => {
     expect(keepsOwnKeys(document.querySelector("button"))).toBe(true);
   });
 
+  it("창이 떠 있으면 초점이 창 밖(문서 전체·링크)에 있어도 화면 단축키를 쉰다", () => {
+    // 예: 삭제하는 동안 막힌 단추에서 초점이 빠지면 키는 문서 전체(body)에서 일어나요. 이때 Esc로 목록에 가면 안 돼요.
+    document.body.innerHTML = '<a href="/">링크</a><dialog open><button type="button">닫기</button></dialog>';
+    expect(keepsOwnKeys(document.body)).toBe(true);
+    expect(keepsOwnKeys(document.querySelector("a"))).toBe(true);
+    expect(keepsOwnKeys(document)).toBe(true);
+    // 창을 닫으면 다시 화면 단축키를 써요.
+    document.querySelector("dialog")!.removeAttribute("open");
+    expect(keepsOwnKeys(document.querySelector("a"))).toBe(false);
+  });
+
   it("링크·단추·본문은 키를 스스로 쓰지 않는다", () => {
     document.body.innerHTML = '<a href="/">링크</a><button type="button">단추</button>';
     expect(keepsOwnKeys(document.querySelector("a"))).toBe(false);

@@ -665,9 +665,10 @@ body::after {
       background: rgb(0 0 0 / 0.85);
     }
 
-    /* 삭제하는 동안 막힌 [취소]·[삭제]는 흐리게 보이고, 마우스를 올려도 반전되지 않아요(pointer-events: none).
-       글자 대비는 낮아지지만, 쓸 수 없는 단추라 명도 대비 기준에서 빠져요. 진행은 바로 위 로딩 UI가 알려 줘요. */
-    & button:disabled {
+    /* 삭제하는 동안 막힌 [취소]·[삭제](aria-disabled="true")는 흐리게 보이고, 마우스를 올려도 반전되지 않아요(pointer-events: none).
+       글자 대비는 낮아지지만, 쓸 수 없는 단추라 명도 대비 기준에서 빠져요. 진행은 바로 위 로딩 UI가 알려 줘요.
+       (disabled 대신 aria-disabled로 막아 초점이 단추에 남아요. components/delete-review.tsx) */
+    & button[aria-disabled="true"] {
       opacity: 0.6;
       pointer-events: none;
     }

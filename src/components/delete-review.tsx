@@ -17,6 +17,11 @@
  *   [삭제]를 아주 빠르게 두 번 눌러도 요청은 한 번만 가요. useState는 다음 그리기에야 바뀌어서
  *   useRef 잠금을 함께 써요. 삭제에 성공하면 잠금을 풀지 않아요(이미 삭제한 리뷰를 또 삭제할 일이 없으니까요).
  *
+ * 삭제하는 동안
+ *   창 안에 로딩 UI를 보이고, [취소]·[삭제]는 aria-disabled로 막아요(흐리게 보여요). disabled로 막으면 누른 단추에서
+ *   초점이 빠져 문서 전체로 가 버려요. aria-disabled는 초점을 그 자리에 두고 "쓸 수 없음"만 알려요(누름은 코드가 무시해요).
+ *   Esc로도 창을 닫지 못해요(onCancel). 결과가 나올 때까지 기다려요.
+ *
  * 누가 쓰나요?
  *   components/admin-review-actions.tsx(상세 화면, 로그인했을 때만)
  */
@@ -109,12 +114,22 @@ export function DeleteReview({ slug, title, onDeleted }: Props) {
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             {/* autoFocus: 창이 열리면 [취소]에 먼저 초점이 가요(되돌리기 어려운 [삭제]가 아니라). */}
-            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- 확인 창의 처음 초점은 덜 위험한 단추에 두는 것이 APG 권장이에요. */}
-            <button type="button" autoFocus onClick={() => dialogRef.current?.close()} disabled={deleting} className="btn-line">
+            {/* 삭제하는 동안에는 두 단추를 모두 막아요(로딩 UI가 진행을 알려요). aria-disabled: 초점은 남기고 "쓸 수 없음"만 알려요.
+                `deleting || undefined`: 막지 않을 때는 속성을 아예 달지 않아요. */}
+            <button
+              type="button"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- 확인 창의 처음 초점은 덜 위험한 단추에 두는 것이 APG 권장이에요.
+              autoFocus
+              onClick={() => {
+                if (!deleting) dialogRef.current?.close();
+              }}
+              aria-disabled={deleting || undefined}
+              className="btn-line"
+            >
               취소
             </button>
-            {/* 삭제하는 동안에는 두 단추를 모두 막아요(로딩 UI가 진행을 알려요). */}
-            <button type="button" onClick={handleConfirm} disabled={deleting} className="btn-inverse">
+            {/* 삭제 중에 다시 눌러도 handleConfirm의 잠금(lockRef)이 막아요. */}
+            <button type="button" onClick={handleConfirm} aria-disabled={deleting || undefined} className="btn-inverse">
               삭제
             </button>
           </div>
