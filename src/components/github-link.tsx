@@ -21,7 +21,8 @@
  *   - role="tooltip" 글을 링크의 설명(aria-describedby)으로 이어요. 화면 낭독기는 "GitHub, 링크, 이 블로그의 소스 코드 저장소(새 창)"로 읽어요.
  *   - 숨겨 둔 동안에도(hidden) 설명으로는 늘 읽혀요. aria-describedby로 직접 가리킨 글은 숨어 있어도 읽어 줘요.
  *   - 마우스를 말풍선 위로 옮겨도 닫히지 않아요(말풍선이 링크와 같은 묶음 안에 있어요).
- *   - Esc를 누르면 초점은 그대로 둔 채 닫혀요. 이때 이 Esc는 "처리했어요"(preventDefault) 표시를 해서,
+ *   - 마우스와 초점을 따로 기억해서, 둘 다 떠났을 때만 닫혀요. 초점이 남아 있으면 마우스를 치워도, 마우스가 남아 있으면 초점이 떠나도 그대로예요.
+ *   - Esc를 누르면 초점은 그대로 둔 채 닫혀요. 다시 가리키거나 초점이 새로 오면 또 보여요. 이때 이 Esc는 "처리했어요"(preventDefault) 표시를 해서,
  *     상세 화면의 Esc(목록으로 가기, review-keys.tsx)는 이번에는 쉬어요(위에 덮인 것부터 닫기).
  *
  * 머리글(site-header.tsx)은 브라우저 코드가 없는 서버 컴포넌트이고, 브라우저에서 도는 건 이 작은 링크뿐이에요.
@@ -39,7 +40,12 @@ const TIP_ID = "github-link-tip";
 
 /** 머리글 오른쪽 끝의 GitHub 아이콘 링크(새 창) + 안내 말풍선 */
 export function GitHubLink() {
-  const [open, setOpen] = useState(false);
+  // 마우스가 묶음 위에 있는지, 초점이 링크에 있는지 따로 기억해요(하나만 떠나도 닫히지 않게).
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  // Esc로 닫았는지. 다시 가리키거나 초점이 새로 오면 풀려요.
+  const [dismissed, setDismissed] = useState(false);
+  const open = (hovered || focused) && !dismissed;
 
   // 말풍선이 떠 있을 때만 Esc를 들어요. 마우스로 가리키기만 하고 초점은 다른 데 있어도 닫을 수 있게 document에서 들어요.
   // capture: true — 다른 곳(상세 화면의 Esc)보다 먼저 받아서, 닫았다는 표시(preventDefault)를 먼저 남겨요.
@@ -48,7 +54,7 @@ export function GitHubLink() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      setOpen(false);
+      setDismissed(true);
     }
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
@@ -62,10 +68,16 @@ export function GitHubLink() {
     // self-start: 아주 좁은 화면에서 왼쪽 묶음이 두 줄이 되어도 아이콘은 첫 줄(오른쪽 위)에 있어요.
     <span
       className="relative -mr-2.5 ml-auto shrink-0 self-start"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
+      onMouseEnter={() => {
+        setHovered(true);
+        setDismissed(false);
+      }}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => {
+        setFocused(true);
+        setDismissed(false);
+      }}
+      onBlur={() => setFocused(false)}
     >
       {/* 링크 이름은 화면 낭독기용 글자(sr-only) "GitHub"예요. 아이콘은 이 이름과 같은 뜻이라 꾸밈으로 둬요(읽지 않음).
           target="_blank": 새 창으로 열어요. rel="noopener noreferrer": 새 창이 이 블로그 창을 건드리지 못하게 하고, 어디서 왔는지 알리지 않아요.

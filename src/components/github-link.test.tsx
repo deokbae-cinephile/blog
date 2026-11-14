@@ -62,6 +62,52 @@ describe("GitHubLink", () => {
     expect(fireEvent.keyDown(link, { key: "Escape" })).toBe(true);
   });
 
+  it("초점이 남아 있으면 마우스를 치워도, 마우스가 남아 있으면 초점이 떠나도 그대로이고, 둘 다 떠나야 닫힌다", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <GitHubLink />
+        <button type="button">다음</button>
+      </>,
+    );
+    const link = screen.getByRole("link", { name: "GitHub" });
+
+    // 초점(Tab) + 마우스 → 마우스만 치워요: 초점이 남아 있으니 그대로예요.
+    await user.tab();
+    await user.hover(link);
+    await user.unhover(link);
+    expect(link).toHaveFocus();
+    expect(screen.getByRole("tooltip")).toBeVisible();
+
+    // 마우스를 다시 올리고 초점만 다음 단추로 옮겨요: 마우스가 남아 있으니 그대로예요.
+    await user.hover(link);
+    await user.tab();
+    expect(screen.getByRole("button", { name: "다음" })).toHaveFocus();
+    expect(screen.getByRole("tooltip")).toBeVisible();
+
+    // 둘 다 떠나면 닫혀요.
+    await user.unhover(link);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("Esc로 닫은 뒤 마우스를 치워도 닫힌 그대로이고, 다시 가리키면 또 보인다", async () => {
+    const user = userEvent.setup();
+    render(<GitHubLink />);
+    const link = screen.getByRole("link", { name: "GitHub" });
+
+    await user.tab();
+    await user.hover(link);
+    fireEvent.keyDown(link, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    // 초점은 남아 있지만 사용자가 닫았으니 다시 열지 않아요.
+    await user.unhover(link);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    // 새로 가리키면 다시 보여요.
+    await user.hover(link);
+    expect(screen.getByRole("tooltip")).toBeVisible();
+  });
+
   it("마우스로 가리키기만 해도(초점은 다른 곳) Esc로 닫힌다", async () => {
     const user = userEvent.setup();
     render(<GitHubLink />);
