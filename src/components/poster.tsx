@@ -74,6 +74,9 @@ export function Poster({ src, alt, size, preload = false, className = "" }: Prop
     <span className={`poster-frame relative block aspect-[2/3] shrink-0 ${width} ${className}`}>
       {src ? (
         <PosterImage
+          // key: 포스터 주소가 바뀌면(다른 리뷰로 옮겨 갈 때) 새 조각으로 다시 시작해요.
+          // 그래야 앞 포스터의 "받지 못함"·"다 옴" 상태가 다음 포스터에 남지 않아요.
+          key={src}
           src={src}
           alt={alt}
           // fill: 부모 상자(relative) 크기에 맞춰 꽉 채워요. 너비·높이를 따로 몰라도 돼요.

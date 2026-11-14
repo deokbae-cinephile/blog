@@ -12,11 +12,17 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownPreview } from "./markdown-preview";
 
 describe("MarkdownPreview", () => {
+  // 미리 보기는 변환 도구(lib/markdown.ts)를 처음 쓸 때 따로 받아 와요(import()). 시험을 여럿 함께 돌리면
+  // 처음 받는 데 1초를 넘길 때가 있어서, 시작하기 전에 한 번 받아 둬요. 두 번째부터는 바로 쓰여요.
+  beforeAll(async () => {
+    await import("@/lib/markdown");
+  });
+
   beforeEach(() => {
     URL.createObjectURL = vi.fn(() => "blob:scene");
     URL.revokeObjectURL = vi.fn();

@@ -7,9 +7,10 @@
  *   3. 대체 텍스트: 상세 화면은 읽히고, 목록 썸네일(alt="")은 꾸밈으로 숨는지
  *   4. 포스터가 없으면 기본 포스터를 보이는지(상세 화면에서는 "포스터 없음"이라고 읽어요)
  *   5. 상자는 늘 가로 2 : 세로 3 비율인지
+ *   6. 그림을 받지 못하면 기본 포스터로 바뀌고, 다른 포스터로 바뀌면 그 그림을 다시 받는지
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { Poster } from "./poster";
@@ -45,5 +46,16 @@ describe("Poster", () => {
   it("상자는 가로 2 : 세로 3 비율이고, 썸네일은 목록 글 세 줄 높이에 맞게(56~64px) 그린다", () => {
     const { container } = render(<Poster alt="" size="thumb" />);
     expect(container.firstElementChild).toHaveClass("aspect-[2/3]", "w-14", "sm:w-16");
+  });
+
+  it("그림을 받지 못하면 기본 포스터로 바뀌고, 다른 리뷰의 포스터로 바뀌면 그 그림을 다시 받는다", async () => {
+    const { container, rerender } = render(<Poster src="/posters/a.jpg" alt="영화 ‘가’ 포스터" size="large" />);
+    fireEvent.error(container.querySelector("img")!);
+    expect(await screen.findByRole("img", { name: "영화 ‘가’ 포스터(포스터 없음)" })).toHaveTextContent("NO POSTER");
+
+    // 다른 리뷰로 옮겨 가 같은 자리에 다른 포스터가 오면, 앞의 "받지 못함"이 남지 않고 새 그림과 스켈레톤으로 다시 시작해요.
+    rerender(<Poster src="/posters/b.jpg" alt="영화 ‘나’ 포스터" size="large" />);
+    await waitFor(() => expect(screen.getByRole("img", { name: "영화 ‘나’ 포스터" }).tagName).toBe("IMG"));
+    expect(container.querySelector(".skeleton")).not.toBeNull();
   });
 });
