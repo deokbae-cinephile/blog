@@ -368,6 +368,12 @@ export function ReviewWriter(props: Props) {
     setNotice("");
     // 줄이는 동안 바뀐 본문·사진도 반영하려고 최신 값으로 이어 가요.
     const { values, scenes } = latestRef.current;
+    // 줄이는 사이 주소 칸을 비우거나 틀리게 고쳤으면, 사진 경로(/images/<주소>/…)를 만들 수 없어서 멈추고 알려요.
+    if (!SLUG.test(values.slug)) {
+      setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소(영문)를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
+      document.getElementById(fieldId("slug"))?.focus();
+      return;
+    }
 
     // 받을 수 없는 파일은 이유를 모아 알려 주고(형식이 틀렸거나, 줄여도 4MB가 넘는 사진), 받을 수 있는 것만 넣어요.
     const problems = [
@@ -599,6 +605,8 @@ export function ReviewWriter(props: Props) {
    * 불러오기로 고르면 지금 원고 번호로 저장해요(알고 고른 덮어쓰기). 예전 번호로 저장하면 늘 "그사이 바뀜"으로 막혀서요.
    */
   async function handleDraftLoad(id: string) {
+    // 사진을 줄이는 중이면 불러오지 않아요(줄이던 사진이 불러온 글에 섞이지 않게). 단추도 막혀 있어요.
+    if (photoJobsRef.current > 0) return;
     if (dirty && !window.confirm("지금 쓰던 내용을 지우고 임시 저장한 글을 불러올까요?")) return;
     // 읽는 동안 입력이 바뀌었는지 알아보려고, 읽기 전의 값을 기억해요.
     const before = latestRef.current;
@@ -772,7 +780,7 @@ export function ReviewWriter(props: Props) {
                       type="button"
                       aria-describedby={labelId}
                       onClick={() => void handleDraftLoad(draft.id)}
-                      disabled={saving || draftBusy}
+                      disabled={saving || draftBusy || photoBusy}
                       className="btn-line"
                     >
                       불러오기

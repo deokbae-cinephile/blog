@@ -133,11 +133,62 @@ function jpegHasFrame(bytes: Uint8Array): boolean {
   return false;
 }
 
-/** 글자(4글자)가 파일 앞부분(처음 limit바이트) 어딘가에 있는지 */
-function containsAscii(bytes: Uint8Array, text: string, limit = 64 * 1024): boolean {
-  const end = Math.min(bytes.length, limit) - text.length;
-  for (let at = 0; at <= end; at += 1) if (ascii(bytes, at, text)) return true;
+/**
+ * WebP의 첫 덩어리(12번째 바이트부터)를 읽어 가로·세로가 있는지 봐요.
+ *   VP8 (손실 압축)   : 시작 표시 9D 01 2A 뒤에 가로·세로(14비트씩)가 0보다 커요.
+ *   VP8L(무손실 압축) : 서명 바이트 2F가 있어요(뒤의 가로·세로는 "값 - 1"로 적혀 늘 1 이상이에요).
+ *   VP8X(확장)        : 캔버스 가로·세로("값 - 1", 3바이트씩)까지 다 들어 있어요.
+ */
+function webpHasSize(bytes: Uint8Array): boolean {
+  if (ascii(bytes, 12, "VP8 ")) {
+    return bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a && (u16le(bytes, 26) & 0x3fff) > 0 && (u16le(bytes, 28) & 0x3fff) > 0;
+  }
+  if (ascii(bytes, 12, "VP8L")) return bytes.length >= 25 && bytes[20] === 0x2f;
+  // VP8X: 캔버스 가로·세로는 "값 - 1"(3바이트씩, 24·27번째부터)로 적혀 늘 1 이상이라, 머리가 다 들어 있는지만 봐요.
+  if (ascii(bytes, 12, "VP8X")) return bytes.length >= 30;
   return false;
+}
+
+/** ISO 상자(AVIF 등) 하나: 이름, 내용이 시작하는 자리, 끝 자리 */
+type Box = { type: string; body: number; end: number };
+
+/**
+ * start~end 사이의 상자들을 차례로 읽어요. 상자는 [크기 4바이트][이름 4글자][내용] 모양이에요.
+ * 크기 1은 "뒤의 8바이트가 진짜 크기", 0은 "끝까지"라는 뜻이에요. 모양이 틀어지면(잘린 파일 등) 거기서 멈춰요.
+ */
+function readBoxes(bytes: Uint8Array, start: number, end: number): Box[] {
+  const boxes: Box[] = [];
+  let at = start;
+  while (at + 8 <= end) {
+    let size = u32be(bytes, at);
+    let header = 8;
+    if (size === 1) {
+      if (at + 16 > end) break;
+      size = u32be(bytes, at + 8) * 2 ** 32 + u32be(bytes, at + 12);
+      header = 16;
+    } else if (size === 0) {
+      size = end - at;
+    }
+    if (size < header || at + size > end) break;
+    boxes.push({ type: String.fromCharCode(...bytes.subarray(at + 4, at + 8)), body: at + header, end: at + size });
+    at += size;
+  }
+  return boxes;
+}
+
+/**
+ * AVIF 안의 그림 크기 상자(ispe)를 상자 구조를 따라 찾아, 가로·세로가 0보다 큰지 봐요.
+ *   meta(앞 4바이트는 판 번호·표시) → iprp → ipco → ispe(앞 4바이트 판 번호·표시, 가로 4바이트, 세로 4바이트)
+ * 글자 "ispe"만 찾지 않고 구조를 따라가서, 상표 목록 같은 엉뚱한 곳의 글자에 속지 않아요.
+ */
+function avifHasSize(bytes: Uint8Array): boolean {
+  const child = (box: Box | undefined, type: string, skip = 0) => (box ? readBoxes(bytes, box.body + skip, box.end).find((item) => item.type === type) : undefined);
+  const meta = readBoxes(bytes, 0, bytes.length).find((box) => box.type === "meta");
+  const ipco = child(child(meta, "iprp", 4), "ipco");
+  if (!ipco) return false;
+  return readBoxes(bytes, ipco.body, ipco.end).some(
+    (box) => box.type === "ispe" && box.end - box.body >= 12 && u32be(bytes, box.body + 4) > 0 && u32be(bytes, box.body + 8) > 0,
+  );
 }
 
 /**
@@ -146,9 +197,9 @@ function containsAscii(bytes: Uint8Array, text: string, limit = 64 * 1024): bool
  *
  *   PNG  : 첫 덩어리가 IHDR이고 가로·세로가 0보다 커요.
  *   GIF  : 서명 뒤 가로·세로가 0보다 커요.
- *   WebP : RIFF 머리 뒤 첫 덩어리가 VP8·VP8L·VP8X예요.
+ *   WebP : 첫 덩어리(VP8·VP8L·VP8X)의 머리를 읽어 가로·세로가 있어요.
  *   JPEG : 그림 틀(SOF)이 있고 가로·세로가 0보다 커요.
- *   AVIF : 그림 크기 상자(ispe)가 있어요.
+ *   AVIF : 상자 구조(meta → iprp → ipco → ispe)를 따라간 그림 크기 상자의 가로·세로가 0보다 커요.
  *
  * @param bytes 파일 내용 전체
  * @returns 진짜 그림이면 형식, 아니면 undefined
@@ -158,8 +209,8 @@ export function checkImage(bytes: Uint8Array): ImageType | undefined {
   let ok = false;
   if (type === "png") ok = bytes.length >= 33 && ascii(bytes, 12, "IHDR") && u32be(bytes, 16) > 0 && u32be(bytes, 20) > 0;
   else if (type === "gif") ok = bytes.length >= 13 && u16le(bytes, 6) > 0 && u16le(bytes, 8) > 0;
-  else if (type === "webp") ok = bytes.length >= 30 && ["VP8 ", "VP8L", "VP8X"].some((chunk) => ascii(bytes, 12, chunk));
+  else if (type === "webp") ok = webpHasSize(bytes);
   else if (type === "jpg") ok = jpegHasFrame(bytes);
-  else if (type === "avif") ok = containsAscii(bytes, "ispe");
+  else if (type === "avif") ok = avifHasSize(bytes);
   return ok ? type : undefined;
 }

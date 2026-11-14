@@ -310,4 +310,33 @@ describe("ReviewWriter 임시 저장", () => {
     expect(screen.queryByText(/포스터로 first\.png을\(를\) 골랐습니다/)).not.toBeInTheDocument();
     expect(URL.createObjectURL).toHaveBeenLastCalledWith(second);
   });
+
+  it("장면 사진을 줄이는 사이 주소 칸을 비우면, 사진 줄을 넣지 않고 주소를 먼저 적으라고 알린다", async () => {
+    const user = userEvent.setup();
+    const job = deferred<{ file: File; shrunk: boolean }>();
+    shrink.fn = () => job.promise;
+    const scene = new File(["png"], "scene.png", { type: "image/png" });
+    render(<ReviewWriter mode="create" />);
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), scene);
+    // 줄이는 사이 주소를 지워요.
+    await user.clear(screen.getByLabelText(/^주소\(영문\)/));
+    job.resolve({ file: scene, shrunk: false });
+    await waitFor(() => expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(/사진을 넣기 전에 주소\(영문\)를 먼저 적어 주세요/));
+    expect(screen.getByRole("textbox", { name: "본문(Markdown)" })).toHaveValue("");
+  });
+
+  it("사진을 줄이는 동안에는 임시 저장본을 불러오지 못한다(줄이던 사진이 섞이지 않게)", async () => {
+    const user = userEvent.setup();
+    putDraft({ id: "d1", values: { ...EMPTY_VALUES, title: "임시 저장본" } });
+    const job = deferred<{ file: File; shrunk: boolean }>();
+    shrink.fn = () => job.promise;
+    render(<ReviewWriter mode="create" />);
+    const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), new File(["png"], "scene.png", { type: "image/png" }));
+    expect(within(list).getByRole("button", { name: "불러오기" })).toBeDisabled();
+    job.resolve({ file: new File(["png"], "scene.png", { type: "image/png" }), shrunk: false });
+    await waitFor(() => expect(within(list).getByRole("button", { name: "불러오기" })).toBeEnabled());
+  });
 });
