@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { EMPTY_VALUES, type ReviewFormValues } from "./review-file";
+import { EMPTY_VALUES, type ReviewFormValues } from "./review-values";
 import { FIELD_MESSAGES, findBodyImages, todayInSeoul, validateReviewForm } from "./review-form";
 
 /** 꼭 필요한 칸을 모두 채운 올바른 값 */

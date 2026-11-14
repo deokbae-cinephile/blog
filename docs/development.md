@@ -7,16 +7,17 @@
 - **무엇을 만드나요?** 글쓴이 한 사람이 영화 리뷰를 쓰고 고치고 지우는 가벼운 블로그예요. 리뷰는 저장소의 Markdown 파일입니다.
 - **어떻게 가볍나요?** 목록·상세 화면은 빌드할 때 HTML로 미리 만들어 둡니다(정적 생성). 방문자에게는 만든 화면을 캐시에서 그대로 주고, 서버 코드는 로그인·글쓰기·저장에만 돌아요.
 - **어디서 도나요?** Cloudflare Workers예요. OpenNext 어댑터가 Next.js 앱을 Workers용으로 바꿔요(5장).
-- **쓰는 기술:** Next.js 16(App Router, Proxy, Route Handler) · React 19 · TypeScript 6 · Tailwind CSS 4 · zod · unified(remark·rehype) · yaml · image-size · OpenNext Cloudflare 어댑터 · Wrangler
+- **쓰는 기술:** Next.js 16(App Router, Proxy, Route Handler) · React 19 · TypeScript 6 · Tailwind CSS 4 · unified(remark·rehype) · yaml · image-size(빌드할 때만) · OpenNext Cloudflare 어댑터 · Wrangler
+- **가볍게 지키는 규칙:** 새 라이브러리는 꼭 필요할 때만 더해요. 원고·요청 검사는 손으로 짠 함수예요(2.0.0에서 zod를 뺐어요). 워커는 올리기 전에 줄여요(`wrangler.jsonc`의 `minify`).
 - **검사 도구:** ESLint(jsx-a11y) · Vitest + Testing Library · Playwright + axe
 
 ## 2. 폴더 구조
 
 ```
 content/reviews/          리뷰 원고(.md). 파일 이름이 주소가 됩니다. _로 시작하는 파일은 읽지 않아요
-content/templates/        원고 틀(review.md). 글쓰기 화면의 [Markdown 파일 불러오기]도 이 모양을 읽어요
+content/templates/        원고 틀(review.md). 저장소에서 원고를 손으로 쓸 때 이 모양을 따라요
 public/                   포스터(posters/), 본문 사진(images/<주소>/), 앱 아이콘(icons/), 서비스 워커(sw.js),
-                          Cloudflare가 정적 파일에 붙일 헤더(_headers)
+                          공유 미리 보기 기본 그림(og.png, 1200×630), Cloudflare가 정적 파일에 붙일 헤더(_headers)
 src/
 ├─ proxy.ts               문지기: /write·/api/reviews·/api/images를 로그인 전에 막아요
 ├─ app/                   폴더 구조가 곧 주소예요
@@ -34,16 +35,20 @@ src/
 ├─ components/            화면 조각. 각 파일 옆에 *.test.tsx
 │  ├─ review-browser.tsx  검색·장르·정렬과 목록(10편씩 무한 스크롤)
 │  ├─ search-box.tsx      자동완성 검색창(콤보박스)
-│  ├─ review-writer.tsx   리뷰 라이터(추가·수정 폼, Markdown 불러오기, 사진 넣기)
+│  ├─ review-writer.tsx   리뷰 라이터(추가·수정 폼, 사진 넣기, 임시 저장)
 │  ├─ write-preview-panes.tsx, markdown-preview.tsx  본문 쓰기 칸 | 미리 보기(좁은 화면은 탭)
 │  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
 │  ├─ floating-buttons.tsx  오른쪽 아래 [맨 위로]와 그 오른쪽의 [+](리뷰 추가, 로그인했을 때만)
 │  ├─ loading-status.tsx, skeleton.tsx, boot-overlay.tsx  로딩 UI, 글쓰기 스켈레톤, 첫 화면 로딩 레이어
 │  ├─ review-views.tsx, use-view-counts.ts  상세의 조회수(세기), 목록의 조회수 받기
+│  ├─ intent-link.tsx     마우스를 올리거나 초점이 갈 때만 다음 화면을 미리 받는 링크(목록의 리뷰, 상세의 장르)
 │  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
-│  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사·HTML 바꾸기
-│  ├─ review-form.ts, review-file.ts                   글쓰기 칸 검사, 원고 ↔ 칸 값 바꾸기
+│  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사(손으로 짠 checkFrontmatter)·HTML 바꾸기
+│  ├─ review-form.ts, review-values.ts                 글쓰기 칸 검사, 칸 값 모양(화면·서버가 함께 써요)
+│  ├─ review-file.ts                                   원고 ↔ 칸 값 바꾸기(YAML, 서버에서만)
+│  ├─ drafts.ts, shrink-image.ts                       임시 저장(이 브라우저의 IndexedDB), 사진 줄이기(올리기 전 브라우저에서)
+│  ├─ structured-data.ts, upload-rules.ts              검색엔진용 정보(JSON-LD), 사진 올리기 규칙(파일 앞부분으로 형식 알아내기)
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
 │  ├─ view-rules.ts, view-store.ts, views-api.ts      조회수 규칙, 저장소 고르기(Durable Object·메모리), API 부르기
@@ -51,9 +56,9 @@ src/
 │  └─ browse.ts, site.ts, version.ts, genres.ts, indent.ts …  검색·정렬, 블로그 정보·버전, 장르, 본문 Tab 들여쓰기
 worker/                   Cloudflare Worker 시작 파일(index.ts)과 조회수 저장소 Durable Object(view-counter.ts)
 e2e/                      E2E 테스트, 시험용 원고(fixtures/), 가짜 GitHub 서버(mock-github.mjs)
-scripts/                  아이콘 만들기(make-icons.mjs), 로그인 비밀 값 만들기(admin-secrets.mjs)
+scripts/                  아이콘·공유 그림 만들기(make-icons.mjs), 로그인 비밀 값 만들기(admin-secrets.mjs)
 open-next.config.ts       Cloudflare Workers용으로 바꾸는 설정(미리 만든 화면 캐시, 캐시 가로채기)
-wrangler.jsonc            Cloudflare Workers 설정(시작 파일, 정적 파일, 이미지 최적화, 조회수 Durable Object, 도메인)
+wrangler.jsonc            Cloudflare Workers 설정(시작 파일, 코드 줄이기, 정적 파일, 이미지 최적화, 조회수 Durable Object, 도메인)
 ```
 
 ## 3. 데이터 흐름
@@ -73,11 +78,21 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 ```
 /login ─(아이디·비밀번호)─> /api/session ─> 세션 쿠키(httpOnly) + 표시 쿠키
 /write ─proxy.ts 확인─> 리뷰 라이터
-   [저장] ─> /api/images(사진 한 장씩 → blob) ─> /api/reviews(검사 → 커밋 하나) ─> GitHub main
+   사진 고르기 ─> 브라우저에서 줄이기(긴 변 1600px, 포스터 JPG·장면 사진 WebP)
+   [임시 저장] ─> 이 브라우저의 IndexedDB(칸 값 + 사진 파일) ─> [불러오기]로 이어 쓰기
+   [리뷰 저장] ─> /api/images(사진 한 장씩 → blob) ─> /api/reviews(검사 → 커밋 하나) ─> GitHub main
                                                        └─> GitHub Actions가 검사한 뒤 Cloudflare에 배포(몇 분)
 ```
 
-- 사진은 요청 하나가 하는 일(CPU·메모리)을 작게 나누려고 한 장씩(최대 4MB) 먼저 올리고, 리뷰를 저장할 때 원고와 함께 커밋 하나로 묶어요.
+- 사진은 고르는 순간 브라우저에서 줄여요(`lib/shrink-image.ts`). 긴 변 1600px보다 크거나 1MB보다 크면 다시 만들고, GIF(움직이는 그림)와 이미 작은 사진은 그대로예요.
+  - 포스터는 JPG예요. 공유 미리 보기(카카오톡 등)에서 WebP를 못 보여 주는 곳이 있어서요(화면의 포스터는 이미지 최적화를 거쳐요).
+  - 장면 사진은 본문에 그대로 보여서 가장 가벼운 WebP예요. WebP를 만들 줄 모르는 브라우저면 PNG·JPG로 만들어요.
+- 사진은 요청 하나가 하는 일(CPU·메모리)을 작게 나누려고 한 장씩(최대 4MB) 먼저 올리고, 리뷰를 저장할 때 원고와 함께 커밋 하나로 묶어요. 사진 올리기 API는 파일 앞부분(서명 바이트)으로 실제 형식을 확인해요(`sniffImageType`).
+- 임시 저장(`lib/drafts.ts`)은 검사 없이 지금 칸 값과 고른 사진을 이 브라우저에 저장해요. 서버 코드를 늘리지 않고, 공개 저장소에 쓰다 만 글을 올리지 않으려고요.
+  - 이 브라우저에서만 다시 불러올 수 있어요(다른 기기·브라우저에는 없어요). 저장할 때 "오래 보관"을 부탁해요(`navigator.storage.persist`).
+  - 새 글 화면에는 새 글의 임시 저장본만, 수정 화면에는 그 리뷰의 임시 저장본만 보여요. 리뷰를 저장하면 불러온 임시 저장본은 지워요.
+  - 떠날 때 묻는 경고(beforeunload)는 마지막으로 임시 저장·불러온 뒤에 바뀐 것이 있을 때만 나와요.
+- 수정 화면은 서버가 저장소의 원고를 칸 값으로 바꿔 넘겨줘요. YAML 도구가 커서 브라우저로 보내지 않아요.
 - 저장하기 전에 서버가 빌드 때와 같은 규칙으로 다시 검사해요(칸, 주소 겹침, 포스터·사진 파일, 그사이 다른 곳에서 고쳤는지).
 - 수정·삭제는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
 - 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
@@ -85,8 +100,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 **조회수(누구나 보고, 로그인하지 않은 사람만 세요)**
 
 ```
-상세 화면 ─POST /api/views/<주소>─> lib/view-store.ts ─> Durable Object "ViewCounter"(SQLite: 리뷰마다 + 총 조회수)
-목록 화면 ─GET  /api/views────────> 리뷰마다의 조회수(목록 표시, 조회순 정렬) + 총 조회수(아직 화면에 보이지 않음)
+상세 화면 ─POST /api/views/<주소>─> lib/view-store.ts ─> Durable Object "ViewCounter"(SQLite: 리뷰마다의 조회수)
+목록 화면 ─GET  /api/views────────> 리뷰마다의 조회수(목록 표시)
 ```
 
 - 세지 않는 때:
@@ -94,7 +109,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
   - 같은 탭에서 이미 봄(sessionStorage). 세기 요청이 받아들여지면 서버가 걸렀어도 이 탭에 기억해요.
   - 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)이 같은 리뷰를 10분 안에 다시 봄
   - 다른 사이트에서 보낸 요청(Origin, 403)
-  - 빌드할 때 올라가 있지 않은 주소(404). `next.config.ts`가 원고 폴더의 주소 목록을 `env`(`DMB_REVIEW_SLUGS`)로 코드에 박아 두고, `lib/review-slugs.ts`가 확인해요. 아무 주소로나 요청을 보내 저장소(처음 보는 주소 5,000개까지)를 채우지 못하게 해요.
+  - 빌드할 때 올라가 있지 않은 주소(404). `next.config.ts`가 원고 폴더의 주소 목록을 `env`(`DMB_REVIEW_SLUGS`)로 코드에 박아 두고, `lib/review-slugs.ts`가 확인해요. 아무 주소로나 요청을 보내 저장소를 채우지 못해서, 저장소의 줄 수는 리뷰 수를 넘지 않아요.
+- 총 조회수와 조회순 정렬은 2.0.0에서 없앴어요(저장하지도 돌려주지도 않아요).
 - 목록·상세는 미리 만든 화면이라 조회수가 들어 있지 않아요. 화면이 열린 뒤 API로 받아 오고, 받기 전에는 "조회 –"예요.
 - Durable Object는 같은 워커 안에 있어 따로 만들 것이 없어요(`wrangler.jsonc`의 `durable_objects`·`migrations`, 무료 요금제는 SQLite 방식). OpenNext가 만든 처리기(`.open-next/worker.js`)를 `worker/index.ts`가 가져다 쓰고 Durable Object를 함께 내보내요.
 - 내 컴퓨터(`pnpm dev`)와 E2E(`next start`)는 Cloudflare가 아니라서 같은 규칙의 메모리 저장소를 써요. Durable Object까지 확인하려면 `pnpm cf:preview`로 띄워요.
@@ -168,9 +184,9 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 - **색:** `globals.css`의 변수(`--crt-*`)만 써요. 형광 초록 한 가지라, 오류·고른 것은 빨강 대신 **반전**(초록 바탕)과 모양(점선 테두리, ▶)으로 알려요.
 - **글자:** Neo둥근모 16px과 32px(`text-big`)만 써요. 굵게·기울임 대신 반전과 밑줄을 써요.
-- **포스터·사진:** 원본 파일은 그대로 두고, 화면에서만 SVG 필터(`#crt-phosphor`, `app/layout.tsx`)로 흑백 → 4단계 명암 → 형광 초록으로 바꾸고 주사선을 덮어요. 포스터 상자는 늘 2:3이고, 없으면 기본 포스터를 보여요.
+- **포스터·사진:** 올린 파일의 색은 그대로 두고, 화면에서만 SVG 필터(`#crt-phosphor`, `app/layout.tsx`)로 흑백 → 4단계 명암 → 형광 초록으로 바꾸고 주사선을 덮어요. 포스터 상자는 늘 2:3이고, 없으면 기본 포스터를 보여요.
 - **넓은 화면(1024px~):** 목록은 [검색 칸 16~18rem | 목록], 상세는 [포스터 | 본문(오른쪽 칸 전체)], 글쓰기는 [포스터 | 영화 정보 2열 × 5행] 3칸이에요. 검색 칸과 상세의 포스터는 키가 충분한 화면에서 스크롤해도 붙어 있어요.
-- **머리글:** 왼쪽 [로고] DMB: 덕배의 영화 블로그 (v1.2.0), 오른쪽 GitHub 아이콘.
+- **머리글:** 왼쪽 [로고] DMB: 덕배의 영화 블로그 (v2.0.0), 오른쪽 GitHub 아이콘.
   - 로고는 본문 왼쪽 끝, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞고, 둘 다 24 × 24px(누르는 높이 44px)예요. 휴대폰(360px 이상)에서도 한 줄이에요.
   - GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름).
   - 버전은 보조 글자색으로 보이고 `package.json`에서 읽어요(`lib/version.ts`).
@@ -181,7 +197,9 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **떠 있는 단추:** 오른쪽 아래 구석에 로그인했을 때 44 × 44px [+](리뷰 추가)가 있고, 내려 읽으면 [맨 위로]가 그 왼쪽에 붙어요. 글쓰기 화면에서는 [+]와 왼쪽 아래 "키보드 조작" 단추를 숨겨요.
 - **첫 화면 로딩 레이어:** 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 보여요. 페이지와 웹 폰트(neodgm)를 받으면 걷히고(최소 0.4초, 늦어도 4초), 같은 탭에서는 다시 덮지 않아요. 자바스크립트가 꺼져 있으면 보이지 않고, 스크립트가 돌지 않아도 6초 뒤 CSS가 걷어요.
 - **검색창:** 글쓰기 화면의 입력 칸과 같은 모양(`.field`)이에요.
-- **조회수:** 목록은 둘째 줄의 "· 조회 12", 상세는 머리 안내판의 정보 줄 끝 "· 조회 12". 정렬은 최신순·평점순·조회순이에요.
+- **조회수:** 목록은 둘째 줄의 "· 조회 12", 상세는 머리 안내판의 정보 줄 끝 "· 조회 12". 정렬은 최신순·평점순 두 가지예요.
+- **링크 미리 받기:** 목록의 리뷰 링크와 상세의 장르 링크는 화면에 보이기만 해서는 다음 화면을 미리 받지 않고, 마우스를 올리거나 초점이 가거나 손가락이 닿을 때 받아요(`intent-link.tsx`). 목록 10편이면 요청 15개(약 31KB)가 줄어요.
+- **공유 미리 보기·검색엔진:** 링크를 붙이면 포스터(없으면 `public/og.png`)가 카드에 보여요. 리뷰 상세에는 검색엔진용 리뷰 정보(JSON-LD: 영화·평점·글쓴이), 처음 화면에는 사이트 이름 정보(WebSite)를 넣어요(`lib/structured-data.ts`). 그림은 미리 만든 파일이라 워커가 그리지 않아요(`next/og`는 워커를 크게 키워서 쓰지 않아요).
 - **정보 줄의 가운뎃점:** 항목 사이 " · "의 앞 빈칸과 "감독 한서윤"·"조회 12"의 빈칸은 줄바꿈되지 않는 빈칸(NBSP, `lib/format.ts`의 `joinFacts`·`labeled`)이에요. 휴대폰에서 줄이 넘쳐도 가운뎃점으로 시작하는 줄이 생기지 않고, 이름표와 값이 떨어지지 않아요.
 - **로딩·스켈레톤:**
   - 로딩 UI는 옛 DOS 프로그램처럼 "불러오는 중▮"(1초에 한 번 깜빡이는 커서)과 칸이 하나씩 차오르는 16칸 막대예요(`role="status"`).
@@ -191,7 +209,8 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
   - 스켈레톤은 눈이 편하도록 움직이지 않는 옅은 초록 칸이에요(테두리·지나가는 빛 없음). 꾸밈이라 `aria-hidden`이에요.
   - 움직이는 것은 로딩 UI의 커서·막대뿐이고, 동작 줄이기(`prefers-reduced-motion`)를 켜면 그것도 멈춰요.
 - **글쓰기 화면:**
-  - 칸 아래 도움말은 주소(영문)에만 둬요(예: shutter-island → /reviews/shutter-island). 나머지는 틀렸을 때 오류 문구가 고치는 방법을 알려요.
+  - 칸 아래 도움말은 주소(영문)에만 둬요. 예시는 괄호 안에 적어요: "… 하이픈(-)만 씁니다. (예: shutter-island → /reviews/shutter-island)". 나머지는 틀렸을 때 오류 문구가 고치는 방법을 알려요.
+  - 단추 줄은 [리뷰 저장] [임시 저장] [취소]예요. 임시 저장한 글이 있으면 폼 맨 위에 "임시 저장한 글 (N)" 목록과 [불러오기]·[삭제]가 보여요(예전 [Markdown 파일 불러오기] 자리, 2.0.0에서 불러오기는 없앴어요).
   - [포스터 고르기]·[포스터 빼기]는 포스터와 같은 너비예요. 평점은 처음에 5.0이 골라져 있고, ▼는 왼쪽 글자 여백(12px)과 같은 간격으로 놓여요.
   - 본문은 [Markdown 입력 | 미리 보기]로 나란히 보여요. 미리 보기는 상세 화면과 같은 변환(`lib/markdown.ts`)을 쓰고, 아직 올리지 않은 사진은 임시 주소(blob:)로 보여요. 좁은 화면은 같은 두 쪽을 탭으로 바꿔 봐요.
 

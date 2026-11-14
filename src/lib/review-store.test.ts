@@ -9,8 +9,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EMPTY_VALUES } from "./review-file";
-import { deleteReview, isUploadPathFor, ReviewStoreError, saveReview, type SavePayload } from "./review-store";
+import { EMPTY_VALUES } from "./review-values";
+import { deleteReview, isUploadPathFor, readSavePayload, ReviewStoreError, saveReview, type SavePayload } from "./review-store";
 
 /** 가짜 저장소: 파일 경로 → 내용 번호, 그리고 내용 번호 → 글자(원고) */
 const repo = vi.hoisted(() => ({ files: new Map<string, string>(), texts: new Map<string, string>(), failTexts: false }));
@@ -76,6 +76,32 @@ beforeEach(() => {
   repo.texts = new Map();
   repo.failTexts = false;
   lastChanges = undefined;
+});
+
+describe("readSavePayload(저장 요청 모양 확인)", () => {
+  it("약속한 모양이면 그대로 받고, 모르는 항목은 뺀다", () => {
+    const sent = { ...payload({}, [{ path: "public/posters/winter-stop.jpg", sha: SHA, extra: 1 } as never]), baseSha: SHA, extra: "x" };
+    const read = readSavePayload({ ...sent, values: { ...sent.values, extra: "x" } });
+    expect(read).toEqual({ ...payload({}, [{ path: "public/posters/winter-stop.jpg", sha: SHA }]), baseSha: SHA });
+    // 새 글처럼 baseSha가 없어도 돼요.
+    expect(readSavePayload(payload())).toEqual(payload());
+  });
+
+  it.each([
+    ["JSON이 객체가 아님", null],
+    ["칸 값이 없음", { uploads: [] }],
+    ["글자 칸에 숫자", { ...payload(), values: { ...payload().values, year: 2024 } }],
+    ["칸이 빠짐", { ...payload(), values: { ...payload().values, title: undefined } }],
+    ["장르가 목록이 아님", { ...payload(), values: { ...payload().values, genres: "드라마" } }],
+    ["장르가 너무 많음", { ...payload(), values: { ...payload().values, genres: Array(21).fill("드라마") } }],
+    ["본문이 20만 글자 넘음", { ...payload(), values: { ...payload().values, body: "가".repeat(200_001) } }],
+    ["올린 사진 목록이 아님", { ...payload(), uploads: "x" }],
+    ["올린 사진이 51장", payload({}, Array(51).fill({ path: "p", sha: SHA }))],
+    ["올린 사진의 sha가 글자가 아님", payload({}, [{ path: "p", sha: 1 } as never])],
+    ["baseSha가 글자가 아님", { ...payload(), baseSha: 1 }],
+  ])("%s이면 null", (_name, input) => {
+    expect(readSavePayload(input)).toBeNull();
+  });
 });
 
 describe("isUploadPathFor", () => {

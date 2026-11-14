@@ -15,9 +15,10 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { NotConfigured } from "@/components/not-configured";
-import { ReviewWriter } from "@/components/review-writer";
+import { type EditSource, ReviewWriter } from "@/components/review-writer";
 import { isAdmin } from "@/lib/admin-auth";
 import { GitHubError, isGitHubConfigured } from "@/lib/github";
+import { parseReviewFile } from "@/lib/review-file";
 import { loadReviewSource } from "@/lib/review-store";
 
 /** 탭 제목, 그리고 검색엔진에 올리지 않기 */
@@ -57,9 +58,13 @@ export default async function EditPage({ params }: PageProps<"/write/[slug]">) {
   // 저장소에 없는 리뷰면 404 화면으로
   if (!review) notFound();
 
+  // 원고를 여기(서버)에서 칸 값으로 바꿔 넘겨요. YAML 도구는 커서 브라우저로 보내지 않아요(lib/review-file.ts).
+  const result = parseReviewFile(review.source);
+  const parsed: EditSource = result.ok ? { ok: true, values: result.values } : { ok: false, message: result.message, source: review.source };
+
   return (
     <EditLayout title={`리뷰 수정: ${slug}`}>
-      <ReviewWriter mode="edit" slug={slug} source={review.source} baseSha={review.sha} />
+      <ReviewWriter mode="edit" slug={slug} parsed={parsed} baseSha={review.sha} />
     </EditLayout>
   );
 }

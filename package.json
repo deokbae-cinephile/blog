@@ -1,6 +1,6 @@
 {
   "name": "blog",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.16.1",
@@ -35,8 +35,7 @@
     "unist-util-visit": "^5.2.0",
     "vfile": "^6.0.3",
     "vfile-matter": "^5.0.1",
-    "yaml": "^2.9.1",
-    "zod": "4.6.7"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

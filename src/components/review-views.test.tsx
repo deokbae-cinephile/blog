@@ -19,7 +19,7 @@ import { ReviewViews } from "./review-views";
 /** 가짜 fetch: 조회수 API처럼 답해요(POST면 센 것으로, GET이면 읽기만). counted: false면 POST도 서버가 거른 것처럼 답해요. */
 function fakeViewsApi(count: number, ok = true, { counted = true } = {}) {
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-    ok ? Response.json({ count, total: count, counted: counted && init?.method === "POST" }) : new Response("", { status: 503 }),
+    ok ? Response.json({ count, counted: counted && init?.method === "POST" }) : new Response("", { status: 503 }),
   );
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;

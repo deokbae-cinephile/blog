@@ -27,6 +27,8 @@ export const site = {
   shortName: "DMB",
   /** 머리글 왼쪽에 보이는 이름. 탭 제목과 설치 앱 이름은 위의 짧은 이름(DMB)을 그대로 써요. */
   headerTitle: "DMB: 덕배의 영화 블로그",
+  /** 글쓴이 이름. 검색엔진용 리뷰 정보(lib/structured-data.ts)의 글쓴이로 써요. */
+  author: "덕배",
   /** 검색엔진과 설치 화면에 쓰이는 설명 */
   description: "본 영화마다 평점과 한줄평, 몇 줄의 감상을 남기는 가벼운 영화 리뷰 블로그입니다.",
   /**
@@ -60,3 +62,10 @@ export const site = {
  * 검색엔진 정보(대표 주소)와 사이트맵(sitemap.xml)에 넣을 "전체 주소"를 만들 때 씁니다.
  */
 export const siteUrl = (process.env.SITE_URL || "https://deokbae.blog").replace(/\/$/, "");
+
+/**
+ * 공유 미리 보기 기본 그림(Open Graph). 링크를 카카오톡·메신저·SNS에 붙이면 카드에 보여요.
+ * 파일은 public/og.png(1200 × 630)이고, 로고와 블로그 이름으로 scripts/make-icons.mjs(pnpm icons)가 만들어요.
+ * 포스터가 있는 리뷰는 포스터를 대신 써요(app/reviews/[slug]/page.tsx).
+ */
+export const DEFAULT_SHARE_IMAGE = { url: "/og.png", width: 1200, height: 630, alt: site.headerTitle } as const;

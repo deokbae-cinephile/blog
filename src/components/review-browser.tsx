@@ -9,13 +9,13 @@
  *     ┌ 검색 칸(상세 화면 왼쪽 칸 너비) ┐   영화 목록 ·················· 전체 15편
  *     │ 검색  [__________] [찾기]       │   [포스터] 겨울 정류장 ·········· 4.5
  *     │ 장르  [▶전체 15편] [드라마 5편] │   [포스터] ...
- *     │ 정렬  [▶최신순] [평점순] [조회순] │   (처음 10편, 내려가면 10편씩 더)
+ *     │ 정렬  [▶최신순] [평점순]          │   (처음 10편, 내려가면 10편씩 더)
  *     └─────────────────────────────────┘
  *
  * 맡은 기능
  *   1. 검색: 글자를 치면 추천 층이 뜨고(search-box.tsx), Enter(또는 찾기 단추)를 누르면 적용해요.
- *   2. 장르 필터, 정렬(최신순·평점순·조회순): 고르는 즉시 적용해요.
- *      조회수는 목록이 열린 뒤 따로 받아 와서(use-view-counts.ts) 항목마다 보여 주고, 조회순 정렬에 써요.
+ *   2. 장르 필터, 정렬(최신순·평점순): 고르는 즉시 적용해요.
+ *      조회수는 목록이 열린 뒤 따로 받아 와서(use-view-counts.ts) 항목마다 보여 줘요.
  *   3. 결과 편수 안내: "15편 중 3편"을 화면 낭독기도 읽어 줘요(role="status").
  *   4. 조건을 주소(?q=&genre=&sort=)에 남겨요. 링크를 공유하거나 뒤로 가기를 해도 같은 목록이 보입니다.
  *   5. 결과가 없으면 안내하고, "검색 조건 지우기" 단추로 처음 상태로 돌아가요.
@@ -171,7 +171,7 @@ type ViewProps = {
   onParamsChange: (next: BrowseParams) => void;
   /** false면 검색창·버튼을 사용할 수 없게(disabled) 그려요. 미리 만든 HTML(fallback)에서 써요. 기본 true */
   interactive?: boolean;
-  /** 리뷰 주소 → 조회수. 아직 받지 못했으면 null(목록에는 "조회 –", 조회순은 최신순처럼) */
+  /** 리뷰 주소 → 조회수. 아직 받지 못했으면 null(목록에는 "조회 –") */
   views?: Readonly<Record<string, number>> | null;
 };
 
@@ -179,7 +179,6 @@ type ViewProps = {
 const SORTS: { value: SortKey; label: string }[] = [
   { value: "latest", label: "최신순" },
   { value: "rating", label: "평점순" },
-  { value: "views", label: "조회순" },
 ];
 
 /**
@@ -220,7 +219,7 @@ export function ReviewBrowserView({ reviews, params, onParamsChange, interactive
 
   // useMemo: 계산 결과를 기억해 두고, [ ] 안의 값이 바뀔 때만 다시 계산해요.
   // 리뷰가 많아져도 상관없는 일(예: 검색창에 글자 치기)로 다시 그릴 때 목록 계산을 건너뛸 수 있어요.
-  const results = useMemo(() => browse(reviews, { q, genre, sort }, views), [reviews, q, genre, sort, views]);
+  const results = useMemo(() => browse(reviews, { q, genre, sort }), [reviews, q, genre, sort]);
   const genres = useMemo(() => countGenres(reviews, genre), [reviews, genre]);
 
   // 검색어나 장르로 거르고 있는지(= "검색 조건 지우기" 단추를 보일지)

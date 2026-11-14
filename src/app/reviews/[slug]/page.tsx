@@ -22,6 +22,8 @@ import { notFound } from "next/navigation";
 import { ReviewArticle } from "@/components/review-article";
 import { formatRating } from "@/lib/format";
 import { getNeighbors, getReviewBySlug, getReviewSummaries } from "@/lib/load-reviews";
+import { DEFAULT_SHARE_IMAGE } from "@/lib/site";
+import { reviewJsonLd, toJsonLd } from "@/lib/structured-data";
 
 /**
  * 빌드할 때 만든 주소 밖의 주소(예: /reviews/없는-글)는 만들지 않고 404로 보내요.
@@ -66,6 +68,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `${review.title} 리뷰`;
   const description = `평점 ${formatRating(review.rating)} · ${review.oneLiner}`;
 
+  // 공유 미리 보기 그림: 포스터가 있으면 포스터, 없으면 블로그 기본 그림(public/og.png, layout.tsx와 같아요).
+  // 포스터는 세로로 긴 그림이라 X(트위터)에서는 작은 네모 카드(summary)로, 기본 그림은 큰 카드로 보여요.
+  const image = review.poster
+    ? { url: review.poster, alt: review.posterAlt ?? `영화 ‘${review.title}’ 포스터` }
+    : { ...DEFAULT_SHARE_IMAGE };
+
   return {
     // layout.tsx의 template 덕분에 뒤에 " — DMB"가 붙어요.
     title,
@@ -73,7 +81,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // 대표 주소. layout.tsx의 metadataBase와 합쳐져 전체 주소가 돼요.
     alternates: { canonical: `/reviews/${slug}` },
     // 메신저 미리보기: type "article"은 "글"이라는 뜻이에요. 쓴 날도 알려 줘요.
-    openGraph: { type: "article", title, description, url: `/reviews/${slug}`, publishedTime: review.publishedAt },
+    // (openGraph를 여기서 정하면 layout.tsx의 openGraph를 통째로 바꿔서, 그림도 여기서 다시 적어요.)
+    openGraph: { type: "article", title, description, url: `/reviews/${slug}`, publishedTime: review.publishedAt, images: [image] },
+    twitter: { card: review.poster ? "summary" : "summary_large_image", title, description, images: [image] },
   };
 }
 
@@ -93,5 +103,11 @@ export default async function ReviewPage({ params }: Props) {
   // 이전·다음 리뷰를 찾아요.
   const { newer, older } = await getNeighbors(slug);
 
-  return <ReviewArticle review={review} newer={newer} older={older} />;
+  return (
+    <>
+      {/* 검색엔진용 리뷰 정보(JSON-LD: 영화·평점·글쓴이). 화면에는 보이지 않아요(lib/structured-data.ts). */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(reviewJsonLd(review)) }} />
+      <ReviewArticle review={review} newer={newer} older={older} />
+    </>
+  );
 }

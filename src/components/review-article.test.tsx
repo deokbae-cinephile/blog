@@ -18,7 +18,8 @@ import { ReviewArticle } from "./review-article";
 
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
-  useRouter: () => ({ push: vi.fn() }),
+  // prefetch: 장르 링크(IntentLink)가 마우스를 올릴 때 불러요.
+  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
 }));
 
 // 두 번째(화성 세탁소)와 세 번째(필름이 끊기기 전에) 가짜 리뷰를 앞뒤 리뷰로 써요.

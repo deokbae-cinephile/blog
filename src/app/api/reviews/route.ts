@@ -16,22 +16,22 @@ import type { NextRequest } from "next/server";
 
 import { guardAdminRequest } from "@/lib/admin-auth";
 import { errorResponse, readJson } from "@/lib/api-response";
-import { saveReview, savePayloadSchema } from "@/lib/review-store";
+import { readSavePayload, saveReview } from "@/lib/review-store";
 
 /** 리뷰 추가 */
 export async function POST(request: NextRequest) {
   const denied = await guardAdminRequest(request);
   if (denied) return denied;
 
-  // 보낸 JSON이 약속한 모양인지 검사해요. safeParse는 틀려도 오류를 던지지 않고 결과로 알려 줘요.
-  const payload = savePayloadSchema.safeParse(await readJson(request));
-  if (!payload.success) {
+  // 보낸 JSON이 약속한 모양인지 검사해요. 틀리면 오류를 던지지 않고 null을 돌려줘요.
+  const payload = readSavePayload(await readJson(request));
+  if (!payload) {
     return Response.json({ message: "보낸 내용의 모양이 올바르지 않습니다. 화면을 새로 고친 뒤 다시 저장해 주세요." }, { status: 400 });
   }
 
   try {
     // 새 글의 주소는 칸에 적은 주소(values.slug)예요.
-    const result = await saveReview("create", payload.data.values.slug, payload.data);
+    const result = await saveReview("create", payload.values.slug, payload);
     return Response.json(result, { status: 201 });
   } catch (error) {
     return errorResponse(error);

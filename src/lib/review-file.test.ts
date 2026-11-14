@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseReviewFile, serializeReviewFile } from "./review-file";
-import { reviewFrontmatterSchema } from "./review-schema";
+import { checkFrontmatter } from "./review-schema";
 
 /** 원고 틀과 같은 모양의 원고 */
 const SOURCE = `---
@@ -30,6 +30,13 @@ poster: winter-stop.jpg
 
 ## 좋았던 점
 `;
+
+/** 검사를 통과한 원고 정보를 만들어요(틀리면 문구와 함께 시험을 멈춰요). */
+function parse(input: unknown) {
+  const result = checkFrontmatter(input);
+  if (!result.ok) throw new Error(result.issues.map((issue) => issue.message).join("\n"));
+  return result.value;
+}
 
 describe("parseReviewFile", () => {
   it("원고 틀 모양의 파일을 칸 값으로 바꾼다(숫자는 글자로, 평점은 소수 한 자리로)", () => {
@@ -85,7 +92,7 @@ describe("parseReviewFile", () => {
 
 describe("serializeReviewFile", () => {
   it("검사를 통과한 정보와 본문으로 원고 틀과 같은 순서의 원고를 만든다", () => {
-    const frontmatter = reviewFrontmatterSchema.parse({
+    const frontmatter = parse({
       title: "겨울 정류장",
       year: 2024,
       director: "한서윤",
@@ -115,7 +122,7 @@ describe("serializeReviewFile", () => {
   });
 
   it("콜론·#처럼 특별한 글자나 숫자처럼 보이는 글자는 따옴표로 감싸서 다시 읽어도 같다", () => {
-    const frontmatter = reviewFrontmatterSchema.parse({
+    const frontmatter = parse({
       title: "1987",
       originalTitle: "Mission: Impossible #2",
       year: 2024,
@@ -133,7 +140,7 @@ describe("serializeReviewFile", () => {
   });
 
   it("줄바꿈이 든 값도 한 줄 따옴표로 적어서, 다시 읽으면 같은 값이 된다(틀린 YAML이 되지 않게)", () => {
-    const frontmatter = reviewFrontmatterSchema.parse({
+    const frontmatter = parse({
       title: "겨울 정류장",
       year: 2024,
       director: "한서윤",

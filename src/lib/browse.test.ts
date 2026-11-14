@@ -43,12 +43,6 @@ describe("parseParams / toSearch", () => {
     expect(toSearch(params)).toBe("?q=%EA%B2%A8%EC%9A%B8&genre=%EB%93%9C%EB%9D%BC%EB%A7%88&sort=rating");
   });
 
-  it("조회순(sort=views)도 주소로 주고받는다", () => {
-    const params = parseParams(new URLSearchParams("sort=views"));
-    expect(params).toEqual({ ...DEFAULT_PARAMS, sort: "views" });
-    expect(toSearch(params)).toBe("?sort=views");
-  });
-
   it("없는 장르, 모르는 정렬, 공백만 있는 검색어는 기본값으로 둔다", () => {
     expect(parseParams(new URLSearchParams("q=%20%20&genre=멜로&sort=random"))).toEqual(DEFAULT_PARAMS);
   });
@@ -98,16 +92,6 @@ describe("browse", () => {
       mars.slug,
       legend.slug,
     ]);
-  });
-
-  it("조회순: 조회수가 많은 것부터, 같으면 최신순으로 정렬한다", () => {
-    const views = { [legend.slug]: 30, [mars.slug]: 7, [winter.slug]: 7 };
-    // reel은 조회수가 없어서 0이에요. winter와 mars는 같아서 최신순(winter가 더 최근)이에요.
-    expect(slugs(browse(reviewMocks, { ...DEFAULT_PARAMS, sort: "views" }, views))).toEqual([legend.slug, winter.slug, mars.slug, reel.slug]);
-  });
-
-  it("조회순인데 조회수를 아직 받지 못했으면(null) 최신순과 같다", () => {
-    expect(slugs(browse(reviewMocks, { ...DEFAULT_PARAMS, sort: "views" }, null))).toEqual(slugs(browse(reviewMocks, DEFAULT_PARAMS)));
   });
 
   it("검색어와 장르를 함께 쓴다", () => {

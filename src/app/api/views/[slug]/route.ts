@@ -4,7 +4,7 @@
  * 이 파일이 하는 일
  *   - GET  /api/views/winter-stop : 이 리뷰의 조회수를 세지 않고 읽어요.
  *   - POST /api/views/winter-stop : 이 리뷰를 한 번 봤다고 세고, 센 뒤의 숫자를 돌려줘요.
- *     답(JSON): { count: 13, total: 346, counted: true }  (counted: 이번에 셌는지)
+ *     답(JSON): { count: 13, counted: true }  (counted: 이번에 셌는지)
  *
  * 세지 않는 때
  *   - 빌드할 때 올라가 있지 않은 주소(404): 아무 주소로나 요청을 보내 저장소를 채우지 못하게 해요(lib/review-slugs.ts).

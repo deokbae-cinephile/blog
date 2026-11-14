@@ -35,7 +35,7 @@ describe("SiteHeader", () => {
     // 아이콘이 본문 양 끝·같은 줄에 있는지는 진짜 브라우저 E2E에서 재요(e2e/blog.spec.ts).
   });
 
-  it("이름 옆에 지금 버전(package.json)을 '(v1.2.0)'처럼 보이고, 버전은 이름 링크 밖에 둔다", () => {
+  it("이름 옆에 지금 버전(package.json)을 '(v2.0.0)'처럼 보이고, 버전은 이름 링크 밖에 둔다", () => {
     render(<SiteHeader />);
     const version = screen.getByText(/^\(v\d+\.\d+\.\d+\)$/);
     expect(version).toHaveTextContent(`(v${packageJson.version})`);

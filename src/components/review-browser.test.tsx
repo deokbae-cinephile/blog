@@ -32,6 +32,8 @@ const navigation = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
   useSearchParams: () => new URLSearchParams(navigation.search),
+  // 목록의 리뷰 링크(IntentLink)가 마우스를 올릴 때 미리 받기(prefetch)를 불러요.
+  useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
 }));
 
 /**
@@ -71,23 +73,19 @@ const searchBox = () => screen.getByRole("combobox", { name: "검색" });
 const status = () => screen.getByText(/편/, { selector: "[role='status']" });
 
 describe("ReviewBrowserView (화면)", () => {
-  it("조회순을 고르면 조회수가 많은 리뷰부터 보이고, 항목마다 조회수를 보인다", async () => {
-    const user = userEvent.setup();
-    const [winter, mars, reel, legend] = reviewMocks;
+  it("정렬은 최신순·평점순 두 가지이고(조회순은 없다), 항목마다 조회수를 보인다", () => {
+    const [, , reel, legend] = reviewMocks;
     render(<Harness views={{ [reel!.slug]: 12, [legend!.slug]: 3 }} />);
-    // 정렬은 최신순·평점순·조회순 세 가지예요.
     const sorts = screen.getByRole("group", { name: "정렬" });
     expect(within(sorts).getAllByRole("radio").map((radio) => radio.closest("label")?.textContent?.replace("▶", "").trim())).toEqual([
       "최신순",
       "평점순",
-      "조회순",
     ]);
-
-    await user.click(within(sorts).getByRole("radio", { name: "조회순" }));
-    expect(listTitles()).toEqual([reel!.title, legend!.title, winter!.title, mars!.title]);
+    // 순서는 최신순 그대로예요(조회수로 늘어놓지 않아요).
+    expect(listTitles()).toEqual(["겨울 정류장", "화성 세탁소", "필름이 끊기기 전에", "8비트 영웅전"]);
     // 조회수가 없는 리뷰는 0, 있는 리뷰는 그 숫자예요.
-    expect(screen.getByText(new RegExp(`조회 12$`))).toBeInTheDocument();
-    expect(screen.getAllByText(/조회 0$/)).toHaveLength(2);
+    expect(screen.getByText(/조회\s12$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/조회\s0$/)).toHaveLength(2);
   });
 
 

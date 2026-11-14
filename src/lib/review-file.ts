@@ -12,65 +12,23 @@
  *     본문 첫 문단...           ← 본문(Markdown)
  *
  *   이 파일은 원고 글자 ↔ 글쓰기 화면의 칸(제목, 평점, 본문 ...)을 서로 바꿔 줘요.
- *     - parseReviewFile: 원고 글자 → 칸 값. "Markdown 파일 불러오기"와 "리뷰 수정" 화면이 써요.
+ *     - parseReviewFile: 원고 글자 → 칸 값. "리뷰 수정" 화면(서버)이 저장소의 원고를 읽을 때 써요.
  *     - serializeReviewFile: 검사를 통과한 칸 값 → 원고 글자. 저장할 때 서버가 써요.
  *
- * 화면(브라우저)과 서버가 함께 써요
- *   불러오기는 브라우저에서 바로 하고(그래서 고르자마자 칸이 채워져요), 저장은 서버가 해요.
- *   같은 파일을 쓰니 "불러온 원고"와 "저장한 원고"의 모양이 늘 같아요.
+ * 서버에서만 써요
+ *   YAML 도구(yaml)가 커서 브라우저로 보내지 않아요. 글쓰기 화면은 칸 값 모양(lib/review-values.ts)만 가져가고,
+ *   수정 화면은 서버가 원고를 읽어 칸 값으로 바꿔 넘겨줘요(app/write/[slug]/page.tsx).
+ *   읽기와 쓰기가 같은 파일에 있어서 "읽은 원고"와 "저장한 원고"의 모양이 늘 같아요.
  *
  * 누가 쓰나요?
- *   components/review-writer.tsx(불러오기·수정), lib/review-store.ts(저장)
+ *   app/write/[slug]/page.tsx(수정할 원고 읽기), lib/review-store.ts(저장)
  */
 
 import { parse, stringify } from "yaml";
 
 import { GENRES, type Genre } from "./genres";
 import { FRONTMATTER_KEYS, type ReviewFrontmatter } from "./review-schema";
-
-/**
- * 글쓰기 화면의 칸 값이에요. 입력란은 글자를 다루니 숫자(연도·평점)도 글자로 들고 있어요.
- * 검사(lib/review-form.ts)를 통과하면 숫자로 바뀌어 원고에 들어가요.
- */
-export type ReviewFormValues = {
-  /** 주소(영문). 원고 파일 이름이 돼요. 예: winter-stop */
-  slug: string;
-  title: string;
-  originalTitle: string;
-  year: string;
-  country: string;
-  director: string;
-  runtime: string;
-  genres: Genre[];
-  /** "0.5" ~ "5.0". 아직 고르지 않았으면 "" */
-  rating: string;
-  oneLiner: string;
-  /** 포스터 파일 이름(public/posters 안). 없으면 "" */
-  poster: string;
-  posterAlt: string;
-  /** 글 쓴 날(YYYY-MM-DD). 새 글이면 ""이고, 저장할 때 서버가 오늘 날짜를 넣어요. */
-  publishedAt: string;
-  /** 본문(Markdown) */
-  body: string;
-};
-
-/** 아무것도 적지 않은 처음 칸 값 */
-export const EMPTY_VALUES: ReviewFormValues = {
-  slug: "",
-  title: "",
-  originalTitle: "",
-  year: "",
-  country: "",
-  director: "",
-  runtime: "",
-  genres: [],
-  rating: "",
-  oneLiner: "",
-  poster: "",
-  posterAlt: "",
-  publishedAt: "",
-  body: "",
-};
+import type { ReviewFormValues } from "./review-values";
 
 /** parseReviewFile의 결과 */
 export type ParsedReviewFile =

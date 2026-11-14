@@ -42,7 +42,7 @@ import { matter } from "vfile-matter";
 import { findImages, type ImageSize, renderMarkdown } from "./markdown";
 import { compareLatest, type Review, type ReviewSummary } from "./review";
 // SLUG: 원고 파일 이름(= 주소) 규칙, imageRefProblems: 사진 설명·주소 규칙. 글쓰기 저장 API(lib/review-form.ts)와 함께 써요.
-import { imageRefProblems, reviewFrontmatterSchema, safeDecode, SLUG, WEB_IMAGE_TYPES } from "./review-schema";
+import { checkFrontmatter, imageRefProblems, safeDecode, SLUG, WEB_IMAGE_TYPES } from "./review-schema";
 
 /**
  * 원고에 고칠 곳이 있을 때 던지는 오류예요.
@@ -132,18 +132,18 @@ export async function loadReviews(
       continue;
     }
 
-    // 2-4) 읽어 낸 정보를 검사 규칙에 넣어 봐요.
-    //      safeParse는 실패해도 오류를 던지지 않고 { success: false, error }를 돌려줘서 다루기 편해요.
-    const parsed = reviewFrontmatterSchema.safeParse(vfile.data.matter);
-    if (!parsed.success) {
+    // 2-4) 읽어 낸 정보를 검사 규칙(lib/review-schema.ts)에 넣어 봐요.
+    //      checkFrontmatter는 틀려도 오류를 던지지 않고 { ok: false, issues }를 돌려줘서 다루기 편해요.
+    const parsed = checkFrontmatter(vfile.data.matter);
+    if (!parsed.ok) {
       // 문제(issue)마다 "파일 경로: 문구" 한 줄씩 고칠 곳에 더합니다.
-      problems.push(...parsed.error.issues.map((issue) => `${where}: ${issue.message}`));
+      problems.push(...parsed.issues.map((issue) => `${where}: ${issue.message}`));
       continue;
     }
 
     // 2-5) 포스터를 적었다면 그 파일이 public/posters에 정말 있는지 확인해요.
     //      파일 이름 모양은 검사 규칙이 이미 봤지만, 파일을 빠뜨리고 올리는 실수는 여기서만 잡을 수 있어요.
-    const { poster, ...frontmatter } = parsed.data;
+    const { poster, ...frontmatter } = parsed.value;
     if (poster) {
       try {
         await access(path.join(publicDir, "posters", poster));

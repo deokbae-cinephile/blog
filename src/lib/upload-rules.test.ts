@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { extensionOf, MAX_IMAGE_BYTES, UPLOAD_PATH, uploadProblem } from "./upload-rules";
+import { extensionOf, MAX_IMAGE_BYTES, sniffImageType, UPLOAD_PATH, uploadProblem } from "./upload-rules";
 
 describe("extensionOf", () => {
   it("확장자를 소문자로 꺼내고, 없으면 빈 글자다", () => {
@@ -43,4 +43,33 @@ describe("UPLOAD_PATH", () => {
       expect(UPLOAD_PATH.test(path)).toBe(false);
     },
   );
+});
+
+describe("sniffImageType(파일 앞부분으로 그림 형식 알아내기)", () => {
+  /** 글자와 숫자를 섞어 파일 앞부분을 만들어요. 글자는 한 글자에 한 바이트예요. */
+  const head = (...parts: (string | number[])[]) =>
+    new Uint8Array(parts.flatMap((part) => (typeof part === "string" ? part.split("").map((char) => char.charCodeAt(0)) : part)));
+  /** AVIF·HEIC 모양: 상자 크기(4바이트) + "ftyp" + 주 상표 + 판 번호(4바이트) + 함께 쓰는 상표들 */
+  const ftyp = (major: string, ...compatible: string[]) => head([0, 0, 0, 16 + compatible.length * 4], "ftyp", major, [0, 0, 0, 0], ...compatible);
+
+  it.each([
+    ["jpg", head([0xff, 0xd8, 0xff, 0xe0])],
+    ["png", head([0x89], "PNG", [0x0d, 0x0a, 0x1a, 0x0a])],
+    ["gif", head("GIF89a")],
+    ["gif", head("GIF87a")],
+    ["webp", head("RIFF", [1, 2, 3, 4], "WEBP")],
+    ["avif", ftyp("avif", "mif1")],
+    ["avif", ftyp("mif1", "miaf", "avif")],
+  ])("%s 서명을 알아본다", (type, bytes) => {
+    expect(sniffImageType(bytes)).toBe(type);
+  });
+
+  it.each([
+    ["글자 파일", head("hello")],
+    ["아이폰 사진(HEIC)", ftyp("heic", "mif1", "heix")],
+    ["빈 파일", head()],
+    ["RIFF지만 WebP가 아닌 파일(WAV)", head("RIFF", [1, 2, 3, 4], "WAVE")],
+  ])("%s는 모르는 형식(undefined)", (_name, bytes) => {
+    expect(sniffImageType(bytes)).toBeUndefined();
+  });
 });

@@ -13,7 +13,7 @@
  *   components/login-form.tsx, components/session-controls.tsx, components/review-writer.tsx, components/delete-review.tsx
  */
 
-import type { ReviewFormValues } from "./review-file";
+import type { ReviewFormValues } from "./review-values";
 import type { FieldErrors } from "./review-form";
 
 /** API 결과 */

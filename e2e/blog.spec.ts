@@ -114,6 +114,24 @@ test.describe("처음 화면(목록)", () => {
     expect(await measure()).toEqual(expected);
   });
 
+  test("목록의 리뷰 링크는 화면에 보이기만 해서는 미리 받지 않고, 마우스를 올리면 그때 미리 받는다", async ({ page, isMobile }) => {
+    test.skip(isMobile, "마우스 올리기는 데스크톱에서 시험해요(휴대폰은 손가락이 닿을 때 받아요)");
+    // 리뷰 상세의 화면 데이터(RSC: 주소에 _rsc가 붙어요) 요청을 모아요.
+    const prefetched: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith("/reviews/") && url.searchParams.has("_rsc")) prefetched.push(url.pathname);
+    });
+    await openHome(page);
+    await page.waitForLoadState("networkidle");
+    // 목록에 10편이 보여도 하나도 미리 받지 않아요.
+    expect(prefetched).toEqual([]);
+    const link = page.getByRole("region", { name: "영화 목록" }).getByRole("listitem").first().getByRole("link");
+    const href = await link.getAttribute("href");
+    await link.hover();
+    await expect.poll(() => prefetched).toContain(href);
+  });
+
   test("머리글 이름 옆에 지금 버전(package.json)을 보인다", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("banner").getByText(/^\(v\d+\.\d+\.\d+\)$/)).toHaveText(`(v${version})`);
@@ -310,6 +328,39 @@ test.describe("넓은 화면의 목록 배치", () => {
 });
 
 test.describe("리뷰 상세", () => {
+  test("공유 미리 보기 그림(포스터, 없으면 기본 그림)과 검색엔진용 리뷰 정보(JSON-LD)를 담는다", async ({ page, request }) => {
+    // 포스터가 있는 리뷰: 공유 그림은 포스터, X(트위터)는 작은 카드
+    await page.goto("/reviews/alpha-station");
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/posters\/test-pattern\.png$/);
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute("content", "summary");
+    const data = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent())!);
+    expect(data).toMatchObject({
+      "@context": "https://schema.org",
+      "@type": "Review",
+      datePublished: "2026-03-01",
+      reviewRating: { "@type": "Rating", ratingValue: 4.5, bestRating: 5, worstRating: 0.5 },
+      itemReviewed: { "@type": "Movie", name: "알파 정거장", alternateName: "Alpha Station", dateCreated: "2020", duration: "PT101M" },
+    });
+
+    // 포스터가 없는 리뷰: 블로그 기본 그림(1200×630)
+    await page.goto("/reviews/beta-romance");
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/og\.png$/);
+    await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute("content", "1200");
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute("content", "summary_large_image");
+    const og = await request.get("/og.png");
+    expect(og.status()).toBe(200);
+    expect(og.headers()["content-type"]).toBe("image/png");
+
+    // 처음 화면: 사이트 이름 정보(WebSite)와 기본 공유 그림
+    await page.goto("/");
+    expect(JSON.parse((await page.locator('script[type="application/ld+json"]').textContent())!)).toMatchObject({
+      "@type": "WebSite",
+      name: "DMB",
+      alternateName: "덕배의 영화 블로그",
+    });
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/og\.png$/);
+  });
+
   test("목록에서 제목을 누르면 상세로 가고, 포스터·머리 안내판·본문을 보인다(본 날·쓴 날은 없다)", async ({ page }) => {
     await openHome(page);
     await page.getByRole("link", { name: "알파 정거장" }).click();

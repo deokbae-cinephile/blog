@@ -28,14 +28,13 @@
  *   components/review-browser.tsx가 목록을 그릴 때 리뷰마다 하나씩 씁니다.
  */
 
-import Link from "next/link";
-
 import { joinFacts, labeled } from "@/lib/format";
 import type { ReviewSummary } from "@/lib/review";
 
 import { formatViews } from "@/lib/views-api";
 
 import { GenreTags } from "./genre-tags";
+import { IntentLink } from "./intent-link";
 import { Poster } from "./poster";
 import { Rating } from "./rating";
 
@@ -79,11 +78,12 @@ export function ReviewListItem({ review, views = null }: Props) {
           {/* 첫째 줄: 제목 · 점선 · 평점 */}
           <div className="flex flex-wrap items-center gap-x-3">
             <h3 id={titleId} className="glow">
-              {/* stretched-link: 누르는 영역을 항목 전체로 넓혀요.
-                  focus-visible:outline-none: 링크 자체의 초점 테두리는 없애고, 대신 <li> 전체에 테두리와 반전을 보여 줘요. */}
-              <Link href={`/reviews/${slug}`} className="stretched-link no-underline focus-visible:outline-none">
+              {/* stretched-link: 누르는 영역을 항목 전체로 넓혀요(마우스를 항목 어디에 올려도 이 링크에 올린 것이에요).
+                  focus-visible:outline-none: 링크 자체의 초점 테두리는 없애고, 대신 <li> 전체에 테두리와 반전을 보여 줘요.
+                  IntentLink: 목록에 보이기만 해서는 상세 화면을 미리 받지 않고, 마우스를 올리거나 초점이 갈 때만 받아요. */}
+              <IntentLink href={`/reviews/${slug}`} className="stretched-link no-underline focus-visible:outline-none">
                 {title}
-              </Link>
+              </IntentLink>
             </h3>
             <span aria-hidden="true" className="leader hidden sm:block" />
             {/* ml-auto: 점선이 없는 휴대폰에서도 평점이 오른쪽 끝에 붙어요. */}

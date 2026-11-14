@@ -5,7 +5,7 @@
  *   조회수 API(app/api/views/**)가 조회수를 세고 읽을 저장소를 골라 줘요.
  *
  *     Cloudflare(배포된 블로그)  → Durable Object "ViewCounter"(worker/view-counter.ts)
- *                                   SQLite에 리뷰마다의 조회수와 총 조회수를 저장해요. 세는 일은 한 곳에서 차례로 해서 숫자가 어긋나지 않아요.
+ *                                   SQLite에 리뷰마다의 조회수를 저장해요. 세는 일은 한 곳에서 차례로 해서 숫자가 어긋나지 않아요.
  *     내 컴퓨터(pnpm dev)·E2E    → 메모리 저장소. 서버를 끄면 사라져요. 규칙(lib/view-rules.ts)은 똑같아요.
  *
  * 어느 쪽인지는 어떻게 아나요?
@@ -20,7 +20,7 @@ import "server-only";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-import { MAX_SLUGS, RecentViews, TOTAL_KEY, type ViewResult, type ViewSnapshot } from "./view-rules";
+import { RecentViews, type ViewResult, type ViewSnapshot } from "./view-rules";
 
 /** 조회수 저장소가 하는 일 */
 export type ViewStore = {
@@ -28,7 +28,7 @@ export type ViewStore = {
   count(slug: string, visitor: string): Promise<ViewResult>;
   /** 세지 않고 지금 숫자만 읽어요. */
   get(slug: string): Promise<ViewResult>;
-  /** 모든 리뷰의 조회수와 총 조회수를 읽어요. */
+  /** 모든 리뷰의 조회수를 읽어요. */
   read(): Promise<ViewSnapshot>;
 };
 
@@ -60,31 +60,23 @@ export function getViewStore(): ViewStore {
  * 메모리 저장소(내 컴퓨터·E2E용). Durable Object와 같은 규칙으로 세요.
  * ────────────────────────────────────────────────────────────── */
 
-/** 리뷰 주소 → 조회수(TOTAL_KEY 줄은 총 조회수) */
+/** 리뷰 주소 → 조회수 */
 const memoryCounts = new Map<string, number>();
 const memoryRecent = new RecentViews();
 
 /** 지금 숫자 읽기 */
-const memoryResult = (slug: string, counted: boolean): ViewResult => ({
-  count: memoryCounts.get(slug) ?? 0,
-  total: memoryCounts.get(TOTAL_KEY) ?? 0,
-  counted,
-});
+const memoryResult = (slug: string, counted: boolean): ViewResult => ({ count: memoryCounts.get(slug) ?? 0, counted });
 
 const memoryStore: ViewStore = {
   async count(slug, visitor) {
-    // 처음 보는 리뷰인데 이미 가득 찼으면 세지 않아요.
-    const full = !memoryCounts.has(slug) && memoryCounts.size - 1 >= MAX_SLUGS;
-    if (full || memoryRecent.isRepeat(visitor, slug)) return memoryResult(slug, false);
+    if (memoryRecent.isRepeat(visitor, slug)) return memoryResult(slug, false);
     memoryCounts.set(slug, (memoryCounts.get(slug) ?? 0) + 1);
-    memoryCounts.set(TOTAL_KEY, (memoryCounts.get(TOTAL_KEY) ?? 0) + 1);
     return memoryResult(slug, true);
   },
   async get(slug) {
     return memoryResult(slug, false);
   },
   async read() {
-    const counts = Object.fromEntries([...memoryCounts].filter(([slug]) => slug !== TOTAL_KEY));
-    return { counts, total: memoryCounts.get(TOTAL_KEY) ?? 0 };
+    return { counts: Object.fromEntries(memoryCounts) };
   },
 };

@@ -59,3 +59,40 @@ export function uploadProblem(file: { name: string; size: number }, kind: "poste
   if (file.size > MAX_IMAGE_BYTES) return `${file.name}: 사진이 4MB보다 큽니다. 사진 크기를 줄여 다시 넣어 주세요.`;
   return null;
 }
+
+/** 파일 앞부분으로 알아낼 수 있는 그림 형식(모든 브라우저가 보여 줄 수 있는 것만) */
+export type ImageType = "jpg" | "png" | "gif" | "webp" | "avif";
+
+/** 글자 몇 개를 바이트(글자 번호)로 바꿔 파일 앞부분과 견줘요. */
+const ascii = (bytes: Uint8Array, start: number, text: string) =>
+  text.split("").every((char, index) => bytes[start + index] === char.charCodeAt(0));
+
+/**
+ * 파일 앞부분(형식마다 정해진 "서명" 바이트)을 보고 실제 그림 형식을 알아내요. 모르는 형식이면 undefined예요.
+ * 확장자는 바꿔 붙일 수 있어서, 사진 올리기 API가 진짜 그림인지 확인할 때 써요(큰 라이브러리 없이 몇 바이트만 봐요).
+ *
+ *   JPG  : FF D8 FF
+ *   PNG  : 89 50 4E 47 0D 0A 1A 0A ("\x89PNG\r\n\x1a\n")
+ *   GIF  : "GIF87a" 또는 "GIF89a"
+ *   WebP : "RIFF" + (크기 4바이트) + "WEBP"
+ *   AVIF : (상자 크기 4바이트) + "ftyp" + 상표 목록에 "avif" 또는 "avis"
+ *          아이폰 사진(HEIC)도 같은 ftyp 모양이지만 상표가 "heic" 등이라 걸러져요.
+ *
+ * @param bytes 파일 내용(앞부분만 있어도 돼요)
+ * @example sniffImageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0])); // "jpg"
+ */
+export function sniffImageType(bytes: Uint8Array): ImageType | undefined {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)) return "png";
+  if (ascii(bytes, 0, "GIF87a") || ascii(bytes, 0, "GIF89a")) return "gif";
+  if (ascii(bytes, 0, "RIFF") && ascii(bytes, 8, "WEBP")) return "webp";
+  if (ascii(bytes, 4, "ftyp")) {
+    // ftyp 상자의 크기(앞 4바이트, 큰 자리부터)만큼 안에서 상표(4글자씩)를 찾아요: 8번째 바이트부터 주 상표, 16번째부터 함께 쓰는 상표들.
+    const boxSize = (((bytes[0] ?? 0) << 24) | ((bytes[1] ?? 0) << 16) | ((bytes[2] ?? 0) << 8) | (bytes[3] ?? 0)) >>> 0;
+    const end = Math.min(boxSize, bytes.length);
+    for (let offset = 8; offset + 4 <= end; offset += offset === 8 ? 8 : 4) {
+      if (ascii(bytes, offset, "avif") || ascii(bytes, offset, "avis")) return "avif";
+    }
+  }
+  return undefined;
+}

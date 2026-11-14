@@ -4,7 +4,6 @@
  * 이 파일이 하는 일
  *   글쓴이가 리뷰를 추가하고 수정하는 폼이에요. 본문은 Markdown으로 써요.
  *
- *     [Markdown 파일 불러오기]  ← .md 원고를 고르면 칸이 바로 채워져요(불러오면 바로 적용)
  *     넓은 화면(1024px~)은 3칸: [포스터 | 영화 정보 2열 × 5행]
  *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────┐
  *     │ [미리보기]     │ │ 주소(영문)        │ 제목              │
@@ -17,7 +16,7 @@
  *     │ [장면 사진 넣기] → 커서 자리에 ![](/images/...) 줄이 들어가요 │
  *     │ 본문(Markdown) <textarea> │ 미리 보기(저장한 뒤의 모습)  │  ← 좁은 화면은 탭으로 바꿔 봐요
  *     └──────────────────────────────────────────────────────┘
- *     [저장] [취소]
+ *     [리뷰 저장] [임시 저장] [취소]
  *   좁은 화면에서는 한 칸으로, 포스터 → 영화 정보 → 본문 차례로 쌓여요(코드 순서도 같아서 읽는 순서가 같아요).
  *   칸 아래 도움말은 주소(영문)에만 둬요. 나머지 칸은 이름만으로 알 수 있고, 틀리면 오류 문구가 고치는 방법을 알려 줘요.
  *
@@ -27,8 +26,15 @@
  *   3. 칸 값과 올린 사진 목록을 저장 API(app/api/reviews)로 보내요. 서버가 검사한 뒤 저장소에 커밋해요.
  *   4. "저장했습니다" 안내. GitHub Actions가 검사한 뒤 다시 배포하면(몇 분 뒤) 블로그에 보여요.
  *
- * 사진 원본은 고치지 않아요
- *   고른 파일을 그대로 올려요. 화면에서만 형광 초록 4단계 명암과 주사선으로 바꿔 보여 줘요(SVG 필터).
+ * 사진은 올리기 전에 줄여요
+ *   고르는 순간 브라우저 안에서 긴 변 1600px로 줄여요(포스터는 JPG, 장면 사진은 WebP. lib/shrink-image.ts). 이미 작은 사진과 GIF는 그대로예요.
+ *   그래서 4MB가 넘는 휴대폰 사진도 고를 수 있어요. 화면에서는 형광 초록 4단계 명암과 주사선으로 바꿔 보여 줘요(SVG 필터).
+ *
+ * 임시 저장(lib/drafts.ts)
+ *   [임시 저장]은 검사 없이 지금 칸 값과 고른 사진을 이 브라우저(IndexedDB)에 저장해요. 쓰다 만 글도 돼요.
+ *   폼 맨 위의 "임시 저장한 글"에서 [불러오기]로 이어 쓰고, [삭제]로 지워요.
+ *   새 글 화면에는 새 글의 임시 저장본만, 수정 화면에는 그 리뷰의 임시 저장본만 보여요.
+ *   리뷰를 저장하면 불러왔던 임시 저장본은 지워요(다 쓴 글이니까요).
  *
  * 두 번 누름 막기
  *   [저장]을 빠르게 두 번 눌러도 저장은 한 번만 해요. useState는 다음 그리기에야 바뀌어서 useRef 잠금을 함께 써요.
@@ -42,16 +48,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 // flushSync: 화면 바꾸기를 바로 끝내게 하는 React 기능이에요. 숨어 있던 본문 칸을 보인 "다음"에 초점을 옮길 때 써요.
 import { flushSync } from "react-dom";
 
 import { type ApiResult, createReview, updateReview, uploadImage } from "@/lib/admin-api";
+import { deleteDraft, type Draft, type DraftSummary, listDrafts, loadDraft, saveDraft } from "@/lib/drafts";
 import { GENRES, type Genre } from "@/lib/genres";
 import { indentText } from "@/lib/indent";
-import { EMPTY_VALUES, parseReviewFile, type ReviewFormValues } from "@/lib/review-file";
+import { formatBytes, shrinkImage } from "@/lib/shrink-image";
 import { type FieldErrors, validateReviewForm } from "@/lib/review-form";
 import { SLUG } from "@/lib/review-schema";
+import { EMPTY_VALUES, type ReviewFormValues } from "@/lib/review-values";
 import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/upload-rules";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
@@ -63,15 +71,30 @@ import { type PaneView, WritePreviewPanes } from "./write-preview-panes";
  * 1. 화면이 받는 값과 정해 둔 값
  * ────────────────────────────────────────────────────────────── */
 
-/** ReviewWriter가 받는 값. 리뷰 추가면 mode만, 수정이면 원고와 그 내용 번호까지 받아요. */
+/** 수정 화면이 서버에서 원고를 읽은 결과(app/write/[slug]/page.tsx가 lib/review-file.ts로 읽어 넘겨줘요) */
+export type EditSource =
+  | {
+      ok: true;
+      /** 원고에서 읽은 칸 값(주소 빼고) */
+      values: Omit<ReviewFormValues, "slug">;
+    }
+  | {
+      ok: false;
+      /** 읽지 못한 까닭과 고치는 방법 */
+      message: string;
+      /** 원고 글자 전체(본문 칸에 그대로 넣어 손으로 고칠 수 있게 해요) */
+      source: string;
+    };
+
+/** ReviewWriter가 받는 값. 리뷰 추가면 mode만, 수정이면 서버가 읽은 원고와 그 내용 번호까지 받아요. */
 type Props =
   | { mode: "create" }
   | {
       mode: "edit";
       /** 수정할 리뷰 주소 */
       slug: string;
-      /** 저장소에서 읽은 원고 글자 */
-      source: string;
+      /** 저장소에서 읽은 원고(서버가 칸 값으로 바꿔 둔 것) */
+      parsed: EditSource;
       /** 원고의 내용 번호(sha). 저장할 때 그사이 다른 곳에서 고쳤는지 비교해요. */
       baseSha: string;
     };
@@ -112,12 +135,6 @@ const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
  */
 const FIELD_ORDER = Object.keys(FIELD_LABELS) as (keyof ReviewFormValues)[];
 
-/** 원고 파일 이름에서 주소를 만들어요. "winter-stop.md" → "winter-stop". 규칙에 맞지 않으면 "" */
-function slugFromFileName(name: string): string {
-  const base = name.replace(/\.(md|markdown|txt)$/i, "").toLowerCase();
-  return SLUG.test(base) ? base : "";
-}
-
 /* ──────────────────────────────────────────────────────────────
  * 2. 글쓰기 폼
  * ────────────────────────────────────────────────────────────── */
@@ -132,7 +149,7 @@ export function ReviewWriter(props: Props) {
   const [errors, setErrors] = useState<FieldErrors>({});
   // 본문: 좁은 화면에서 지금 보이는 쪽(Markdown 입력 또는 미리 보기). 넓은 화면은 둘 다 보여요.
   const [bodyView, setBodyView] = useState<PaneView>("input");
-  // 결과 안내(불러옴, 포스터 고름, 올리는 중) — role="status"
+  // 결과 안내(포스터 고름, 올리는 중) — role="status"
   const [notice, setNotice] = useState(initial.notice);
   // 화면에는 보이지 않고 화면 낭독기만 읽는 안내(장면 사진을 넣었을 때) — role="status"
   const [quietNotice, setQuietNotice] = useState("");
@@ -156,14 +173,34 @@ export function ReviewWriter(props: Props) {
   // 두 번 누름 막기 잠금
   const lockRef = useRef(false);
 
+  // 임시 저장: 지금 쓰는 글의 임시 저장 번호(불러왔거나 한 번 저장했으면 있어요)와, 이 화면에 보일 임시 저장한 글 목록
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  // [임시 저장] 단추 옆의 결과 안내(role="status")
+  const [draftNotice, setDraftNotice] = useState("");
+  // [임시 저장] 두 번 누름 막기: 잠금(useRef)과 단추 막기(useState)를 함께 써요(저장과 같은 까닭).
+  const draftLockRef = useRef(false);
+  const [draftBusy, setDraftBusy] = useState(false);
+  // 마지막으로 임시 저장했거나 불러온 상태. 떠날 때 "저장하지 않은 내용"이 있는지 이것과 견줘요.
+  const [savedState, setSavedState] = useState<SavedState>(() => ({ values: initial.values, poster: null, scenes: new Map() }));
+  // 수정 화면이면 그 리뷰 주소(그 리뷰의 임시 저장본만 보여요), 새 글이면 null
+  const editSlug = props.mode === "edit" ? props.slug : null;
+
   // 초점을 옮길 곳들의 손잡이
   const summaryRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const savedRef = useRef<HTMLHeadingElement>(null);
+  const draftsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const draftButtonRef = useRef<HTMLButtonElement>(null);
   // 본문을 바꾼 뒤 커서(고른 범위)를 둘 자리 [시작, 끝]. 다음 그리기에서 맞춰요(사진 줄 넣기, Tab 들여쓰기).
   const selectionRef = useRef<[number, number] | null>(null);
   // 본문 칸에서 Esc를 누른 바로 다음 Tab은 들여쓰지 않고 원래대로 다음 칸으로 넘어가요(글상자에서 빠져나갈 길).
   const tabLeavesRef = useRef(false);
+  // 늘 최신 칸 값과 장면 사진을 담아 두는 손잡이. 사진을 줄이는 동안(기다리는 사이) 바뀐 값을 놓치지 않으려고 써요.
+  const latestRef = useRef({ values, scenes });
+  useLayoutEffect(() => {
+    latestRef.current = { values, scenes };
+  });
 
   // 칸 id들의 앞부분. useId로 겹치지 않게 만들어요.
   const baseId = useId();
@@ -212,52 +249,24 @@ export function ReviewWriter(props: Props) {
     );
   }
 
-  /* ── 불러오기(import) ── */
-
-  /** [Markdown 파일 불러오기]로 .md 파일을 고르면 칸을 바로 채워요. */
-  async function handleImport(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    // 같은 파일을 다시 골라도 onChange가 오게 고르기 칸을 비워 둬요.
-    event.target.value = "";
-    if (!file) return;
-    if (file.size > 1024 * 1024) {
-      setFailure(`${file.name}: 원고 파일이 1MB보다 큽니다. 원고 틀 모양의 .md 파일인지 확인해 주세요.`);
-      return;
-    }
-
-    const parsed = parseReviewFile(await file.text());
-    if (!parsed.ok) {
-      setFailure(`${file.name}: ${parsed.message}`);
-      return;
-    }
-
-    setValues((current) => ({
-      ...parsed.values,
-      // 주소: 수정 화면은 바꾸지 않아요. 새 리뷰는 적어 둔 주소가 없으면 파일 이름으로 채워요.
-      slug: mode === "edit" ? current.slug : current.slug || slugFromFileName(file.name),
-      // 글 쓴 날: 원고에 없으면 지금 값을 그대로 둬요(수정할 때 날짜가 사라지지 않게).
-      publishedAt: parsed.values.publishedAt || current.publishedAt,
-      // 평점: 원고에 없으면 지금 값(처음에는 5.0)을 그대로 둬요. 평점 칸에 "고르세요"가 없거든요.
-      rating: parsed.values.rating || current.rating,
-    }));
-    // 새로 골라 둔 포스터는 불러온 원고의 포스터로 바뀌니 버려요.
-    setPoster(null);
-    setErrors({});
-    setFailure("");
-    const ignored = parsed.ignoredKeys.length > 0 ? ` 이 블로그에서 쓰지 않는 항목(${parsed.ignoredKeys.join(", ")})은 뺐습니다.` : "";
-    setNotice(`${file.name}을(를) 불러와 칸을 채웠습니다. 내용을 확인한 뒤 저장하세요.${ignored}`);
-  }
-
   /* ── 포스터 ── */
 
   /**
-   * [포스터 고르기]로 그림을 고르면 미리보기를 보여 주고, 저장할 때 올려요.
-   * 주소(영문)보다 먼저 골라도 돼요. 파일 이름(<주소>.jpg)은 주소를 적는 대로 맞춰져요(changeSlug).
+   * [포스터 고르기]로 그림을 고르면 큰 사진은 줄이고(lib/shrink-image.ts) 미리보기를 보여 주고, 저장할 때 올려요.
+   * 주소(영문)보다 먼저 골라도 돼요. 파일 이름(<주소>.jpg 등)은 주소를 적는 대로 맞춰져요(changeSlug).
    */
-  function handlePosterChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  async function handlePosterChange(event: ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!picked) return;
+    // 형식(확장자)은 줄이기 전에 먼저 봐요. 크기(4MB)는 줄인 뒤에 봐요(큰 휴대폰 사진도 줄이면 들어가요).
+    const typeProblem = uploadProblem({ name: picked.name, size: 0 }, "poster");
+    if (typeProblem) {
+      setErrors((current) => ({ ...current, poster: typeProblem }));
+      return;
+    }
+    // 포스터는 공유 미리 보기(카카오톡 등)에서도 보이게 JPG로 줄여요.
+    const { file, shrunk } = await shrinkImage(picked, "poster");
     const problem = uploadProblem(file, "poster");
     if (problem) {
       setErrors((current) => ({ ...current, poster: problem }));
@@ -267,9 +276,11 @@ export function ReviewWriter(props: Props) {
     const extension = extensionOf(file.name).replace("jpeg", "jpg");
     // URL.createObjectURL: 고른 파일을 서버에 올리지 않고도 화면에 보여 줄 수 있는 임시 주소(blob:)를 만들어요.
     setPoster({ file, url: URL.createObjectURL(file), extension });
-    // 주소가 이미 있으면 파일 이름을 바로 정하고, 아직이면 비워 둬요(주소를 적으면 채워져요).
-    setField("poster", slugReady ? `${values.slug}.${extension}` : "");
-    setNotice(`포스터로 ${file.name}을(를) 골랐습니다. 저장하면 함께 올라갑니다.`);
+    // 주소가 이미 있으면 파일 이름을 바로 정하고, 아직이면 비워 둬요(주소를 적으면 채워져요). 줄이는 사이 바뀐 주소도 반영해요.
+    const slug = latestRef.current.values.slug;
+    setField("poster", SLUG.test(slug) ? `${slug}.${extension}` : "");
+    const resized = shrunk ? ` 큰 사진이라 ${formatBytes(picked.size)}에서 ${formatBytes(file.size)}로 줄였습니다.` : "";
+    setNotice(`포스터로 ${picked.name}을(를) 골랐습니다.${resized} 저장하면 함께 올라갑니다.`);
   }
 
   // 미리보기 임시 주소는 포스터를 바꾸거나 화면을 떠날 때 지워요(브라우저 메모리를 돌려줘요).
@@ -303,11 +314,11 @@ export function ReviewWriter(props: Props) {
 
   /* ── 장면 사진 ── */
 
-  /** [장면 사진 넣기]로 그림을 고르면 본문의 커서 자리에 사진 줄을 넣어요. */
-  function handleScenesChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+  /** [장면 사진 넣기]로 그림을 고르면 큰 사진은 줄이고(lib/shrink-image.ts), 본문의 커서 자리에 사진 줄을 넣어요. */
+  async function handleScenesChange(event: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (files.length === 0) return;
+    if (picked.length === 0) return;
     // 좁은 화면에서 미리 보기를 보고 있었어도, 사진 줄은 쓰기 칸에 들어가니 쓰기 칸을 보여 줘요.
     setBodyView("input");
     if (!slugReady) {
@@ -316,8 +327,23 @@ export function ReviewWriter(props: Props) {
       return;
     }
 
-    // 받을 수 없는 파일은 이유를 모아 알려 주고, 받을 수 있는 것만 넣어요.
-    const problems = files.map((file) => uploadProblem(file, "scene")).filter((problem): problem is string => problem !== null);
+    // 형식이 맞는 사진만 줄여요(한 장씩 차례로: 큰 사진 여러 장을 한꺼번에 읽으면 휴대폰 메모리가 모자랄 수 있어요).
+    const typeOk = picked.filter((file) => uploadProblem({ name: file.name, size: 0 }, "scene") === null);
+    const files: File[] = [];
+    let shrunkCount = 0;
+    for (const file of typeOk) {
+      const result = await shrinkImage(file, "scene");
+      files.push(result.file);
+      if (result.shrunk) shrunkCount += 1;
+    }
+    // 줄이는 동안 바뀐 본문·사진도 반영하려고 최신 값으로 이어 가요.
+    const { values, scenes } = latestRef.current;
+
+    // 받을 수 없는 파일은 이유를 모아 알려 주고(형식이 틀렸거나, 줄여도 4MB가 넘는 사진), 받을 수 있는 것만 넣어요.
+    const problems = [
+      ...picked.filter((file) => !typeOk.includes(file)).map((file) => uploadProblem({ name: file.name, size: 0 }, "scene")),
+      ...files.map((file) => uploadProblem(file, "scene")),
+    ].filter((problem): problem is string => problem !== null);
     const accepted = files.filter((file) => uploadProblem(file, "scene") === null);
 
     // 사진 이름은 scene-1.jpg, scene-2.png ...처럼 번호를 이어 붙여요. 본문과 넣어 둔 사진에 이미 쓴 번호는 건너뛰어요.
@@ -349,7 +375,7 @@ export function ReviewWriter(props: Props) {
       const caret = before.length + (before ? 2 : 0) + 2;
       selectionRef.current = [caret, caret];
       // 화면에는 안내 글을 띄우지 않아요. 본문에 넣은 줄이 바로 보이니까요. 화면 낭독기에만 짧게 알려요.
-      announceQuietly(`사진 ${lines.length}장을 본문에 넣었습니다.`);
+      announceQuietly(`사진 ${lines.length}장을 본문에 넣었습니다.${shrunkCount > 0 ? ` 큰 사진 ${shrunkCount}장은 줄였습니다.` : ""}`);
     }
     if (problems.length > 0) setErrors((current) => ({ ...current, body: problems.join(" ") }));
   }
@@ -470,9 +496,116 @@ export function ReviewWriter(props: Props) {
     if (!result.ok) return fail(result);
 
     // 4) 성공: 저장 완료 안내로 바꿔요. 폼을 떠나니 잠금은 풀지 않아요.
+    //    불러왔던 임시 저장본은 다 쓴 글이라 지워요(지우지 못해도 저장은 끝났으니 알리지 않아요).
+    if (draftId) void deleteDraft(draftId).catch(() => undefined);
     setNotice("");
     setSavedSlug(result.data.slug);
     setPhase("saved");
+  }
+
+  /* ── 임시 저장 ── */
+
+  // 이 화면에 보일 임시 저장한 글을 처음 한 번 읽어요(브라우저에만 있어서 화면이 열린 뒤에 읽어요).
+  useEffect(() => {
+    let cancelled = false;
+    listDrafts().then(
+      (all) => {
+        if (!cancelled) setDrafts(draftsFor(all, editSlug));
+      },
+      // 이 브라우저에서 임시 저장을 쓸 수 없으면(사생활 보호 창 등) 목록을 보이지 않아요.
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [editSlug]);
+
+  /** 임시 저장한 글 목록을 다시 읽어요(저장·삭제한 뒤). */
+  async function refreshDrafts() {
+    try {
+      setDrafts(draftsFor(await listDrafts(), editSlug));
+    } catch {
+      // 읽지 못하면 목록을 그대로 둬요.
+    }
+  }
+
+  /** [임시 저장]: 지금 칸 값과 고른 사진을 이 브라우저에 저장해요. 검사하지 않아요(쓰다 만 글도 저장돼요). */
+  async function handleDraftSave() {
+    if (draftLockRef.current || lockRef.current) return;
+    draftLockRef.current = true;
+    setDraftBusy(true);
+    setFailure("");
+    // 처음 저장하면 새 번호를, 불러왔거나 저장한 적이 있으면 같은 번호를 써서 그 글을 새 내용으로 바꿔요.
+    const draft: Draft = {
+      id: draftId ?? crypto.randomUUID(),
+      mode,
+      reviewSlug: editSlug ?? "",
+      savedAt: Date.now(),
+      values,
+      poster: poster ? { file: poster.file, extension: poster.extension } : null,
+      scenes: [...scenes],
+      imagesSlug,
+    };
+    try {
+      await saveDraft(draft);
+      setDraftId(draft.id);
+      setSavedState({ values, poster: posterFile, scenes });
+      setDraftNotice(`${formatDraftTime(draft.savedAt)}에 임시 저장했습니다. 이 브라우저에 저장했고, 위의 ‘임시 저장한 글’에서 다시 불러올 수 있습니다.`);
+      await refreshDrafts();
+    } catch {
+      setFailure("임시 저장하지 못했습니다. 이 브라우저가 저장 공간을 쓸 수 없는 상태일 수 있습니다(사생활 보호 창 등). 일반 창에서 다시 시도해 주세요.");
+    } finally {
+      draftLockRef.current = false;
+      setDraftBusy(false);
+    }
+  }
+
+  /** [불러오기]: 임시 저장한 글로 칸과 사진을 채워요. 지금 쓰던 내용이 있으면 먼저 물어요. */
+  async function handleDraftLoad(id: string) {
+    if (dirty && !window.confirm("지금 쓰던 내용을 지우고 임시 저장한 글을 불러올까요?")) return;
+    let draft: Draft | undefined;
+    try {
+      draft = await loadDraft(id);
+    } catch {
+      draft = undefined;
+    }
+    if (!draft) {
+      setFailure("임시 저장한 글을 찾지 못했습니다. 목록을 다시 읽었습니다.");
+      await refreshDrafts();
+      return;
+    }
+    // 수정 화면은 주소를 바꾸지 않아요(그 리뷰를 고치는 화면이니까요).
+    const nextValues = editSlug === null ? draft.values : { ...draft.values, slug: editSlug };
+    const nextScenes = new Map(draft.scenes);
+    setValues(nextValues);
+    // 포스터 미리보기용 임시 주소(blob:)는 새로 만들어요. 예전 주소는 정리 함수가 지워요(위의 useEffect).
+    setPoster(draft.poster ? { ...draft.poster, url: URL.createObjectURL(draft.poster.file) } : null);
+    setScenes(nextScenes);
+    setImagesSlug(draft.imagesSlug);
+    setDraftId(draft.id);
+    setErrors({});
+    setFailure("");
+    setDraftNotice("");
+    setSavedState({ values: nextValues, poster: draft.poster?.file ?? null, scenes: nextScenes });
+    setNotice(`${formatDraftTime(draft.savedAt)}에 임시 저장한 글을 불러왔습니다.`);
+  }
+
+  /** [삭제]: 확인한 뒤 임시 저장한 글을 지워요. */
+  async function handleDraftDelete(draft: DraftSummary) {
+    const name = draft.title || "제목 없음";
+    if (!window.confirm(`임시 저장한 글 ‘${name}’을(를) 지울까요? 지우면 되돌릴 수 없습니다.`)) return;
+    try {
+      await deleteDraft(draft.id);
+    } catch {
+      setFailure("임시 저장한 글을 지우지 못했습니다. 다시 시도해 주세요.");
+      return;
+    }
+    // 지금 쓰는 글의 임시 저장본을 지웠으면, 다음 [임시 저장]은 새 글로 저장해요.
+    if (draft.id === draftId) setDraftId(null);
+    await refreshDrafts();
+    setNotice(`임시 저장한 글 ‘${name}’을(를) 지웠습니다.`);
+    // 누른 [삭제] 단추가 사라져 초점을 잃지 않게, 목록 제목(남아 있으면)이나 [임시 저장] 단추로 옮겨요.
+    requestAnimationFrame(() => (draftsHeadingRef.current ?? draftButtonRef.current)?.focus());
   }
 
   // 저장 완료 안내가 나오면 그 제목으로 초점을 옮겨요(누른 [저장] 단추가 사라지니까요).
@@ -482,11 +615,10 @@ export function ReviewWriter(props: Props) {
 
   /* ── 저장하지 않고 떠나려 할 때 묻기 ── */
 
-  // 처음 값과 달라졌거나 고른 사진이 있으면 "고친 내용이 있음"으로 봐요.
-  const dirty = useMemo(
-    () => JSON.stringify(values) !== JSON.stringify(initial.values) || posterFile !== null || scenes.size > 0,
-    [values, initial.values, posterFile, scenes],
-  );
+  // 처음 값(또는 마지막으로 임시 저장·불러온 상태)과 칸 값이나 고른 사진이 다르면 "저장하지 않은 내용이 있음"으로 봐요.
+  // (그릴 때마다 견줘도 가벼워요. React Compiler가 알아서 다시 쓰기를 줄여 줘요.)
+  const dirty =
+    JSON.stringify(values) !== JSON.stringify(savedState.values) || posterFile !== savedState.poster || !sameScenes(scenes, savedState.scenes);
   useEffect(() => {
     if (!dirty || phase === "saved") return;
     // beforeunload: 탭을 닫거나 새로 고칠 때 브라우저가 "떠날까요?"라고 물어 줘요.
@@ -536,10 +668,7 @@ export function ReviewWriter(props: Props) {
   return (
     // noValidate: 브라우저 기본 오류 말풍선 대신 우리 문구를 보여 줘요.
     <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving}>
-      {/* 불러오기: 원고 틀(content/templates/review.md) 모양의 .md 파일을 고르면 칸이 바로 채워져요. */}
-      <FileButton label="Markdown 파일 불러오기" accept=".md,.markdown,text/markdown,text/plain" onChange={handleImport} disabled={saving} />
-
-      {/* 결과 안내(불러옴·포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
+      {/* 결과 안내(포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
           영역은 처음부터 두고 글자만 바꿔야 읽어 줘요. 비어 있을 때는 empty:sr-only로 화면에서만 숨겨 빈 간격이 생기지 않게 해요. */}
       <p role="status" className="empty:sr-only">
         {notice}
@@ -552,6 +681,56 @@ export function ReviewWriter(props: Props) {
       <p role="alert" className="alert-text empty:sr-only">
         {failure}
       </p>
+
+      {/* 임시 저장한 글(이 브라우저에 저장해 둔 글). 있을 때만 보여요. 최근에 저장한 것부터예요.
+          [불러오기]·[삭제]의 이름은 보이는 글자 그대로이고, 어느 글인지는 설명(aria-describedby)으로 덧붙여요. */}
+      {drafts.length > 0 && (
+        <section aria-labelledby={`${baseId}-drafts`} className="grid gap-3">
+          {/* tabIndex -1: 글을 지운 뒤 초점을 여기로 옮겨요(Tab 순서에는 들어가지 않아요). */}
+          <h2 id={`${baseId}-drafts`} ref={draftsHeadingRef} tabIndex={-1} className="glow outline-none">
+            임시 저장한 글 <span className="text-crt-dim">({drafts.length})</span>
+          </h2>
+          {/* 넓은 화면(sm~): 목록을 [글 이름 | 단추] 두 칸 표처럼 놓아 단추가 한 세로줄에 맞아요.
+              줄(li)은 두 칸을 다 쓰고 grid-cols-subgrid로 목록의 칸 너비를 그대로 따라요. 좁은 화면은 이름 아래에 단추가 와요. */}
+          <ul className="grid gap-3 sm:grid-cols-[auto_auto] sm:items-center sm:justify-start sm:gap-x-6">
+            {drafts.map((draft) => {
+              const labelId = `${baseId}-draft-${draft.id}`;
+              return (
+                <li key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:col-span-2 sm:grid sm:grid-cols-subgrid">
+                  <span id={labelId}>
+                    {draft.title || "제목 없음"}
+                    <span className="text-crt-dim">
+                      {" · "}
+                      <time dateTime={new Date(draft.savedAt).toISOString()}>{formatDraftTime(draft.savedAt)}</time>
+                      {draft.id === draftId ? " · 지금 쓰는 글" : ""}
+                    </span>
+                  </span>
+                  <span className="flex gap-2">
+                    <button
+                      type="button"
+                      aria-describedby={labelId}
+                      onClick={() => void handleDraftLoad(draft.id)}
+                      disabled={saving || draftBusy}
+                      className="btn-line"
+                    >
+                      불러오기
+                    </button>
+                    <button
+                      type="button"
+                      aria-describedby={labelId}
+                      onClick={() => void handleDraftDelete(draft)}
+                      disabled={saving || draftBusy}
+                      className="btn-line"
+                    >
+                      삭제
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* 고칠 곳 목록. 저장을 눌렀는데 틀린 칸이 있으면 나타나고, 초점이 여기로 와요(tabIndex -1).
           항목을 누르면 그 칸으로 가요. */}
@@ -589,7 +768,7 @@ export function ReviewWriter(props: Props) {
           {/* 미리보기와 단추를 같은 너비의 칸에 넣어, 단추가 포스터 너비만큼 넓어요.
               w-40: 좁은 화면 10rem, lg:w-full: 넓은 화면에서는 왼쪽 칸 너비를 채워요(최대 18rem). */}
           <div className="grid w-40 gap-4 lg:w-full lg:max-w-[18rem]">
-            {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(원본 파일은 그대로 올라가요). 꾸밈이라 alt를 비워요. */}
+            {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(올라가는 파일은 색을 바꾸지 않은 사진이에요). 꾸밈이라 alt를 비워요. */}
             <span className="poster-frame relative block aspect-[2/3] w-full">
               {posterSrc ? (
                 // unoptimized: 브라우저 안의 blob: 주소는 이미지 최적화를 거칠 수 없어서 원본 그대로 보여 줘요.
@@ -632,7 +811,7 @@ export function ReviewWriter(props: Props) {
               id={fieldId("slug")}
               label={FIELD_LABELS.slug}
               required
-              hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: shutter-island → /reviews/shutter-island"
+              hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. (예: shutter-island → /reviews/shutter-island)"
               error={errors.slug}
               value={values.slug}
               onChange={changeSlug}
@@ -729,7 +908,7 @@ export function ReviewWriter(props: Props) {
                   aria-errormessage={errors.rating ? `${fieldId("rating")}-error` : undefined}
                   className="peer field w-full cursor-pointer appearance-none pr-9"
                 >
-                  {/* 목록에 없는 값(불러온 원고의 4.3 같은 값)이면 그 값을 그대로 보여 주고, 저장할 때 오류로 알려요. */}
+                  {/* 목록에 없는 값(저장소 원고를 손으로 고친 4.3 같은 값)이면 그 값을 그대로 보여 주고, 저장할 때 오류로 알려요. */}
                   {!RATINGS.includes(values.rating) && (
                     <option value={values.rating} disabled>
                       {values.rating || "고르세요"}
@@ -797,26 +976,52 @@ export function ReviewWriter(props: Props) {
         />
       </fieldset>
 
-      {/* 저장·취소 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={saving} className="btn-inverse">
-          {saving ? "저장하는 중…" : mode === "edit" ? "수정한 내용 저장" : "리뷰 저장"}
-        </button>
-        <Link href={mode === "edit" ? `/reviews/${values.slug}` : "/"} className="btn-line">
-          취소
-        </Link>
+      {/* 저장·임시 저장·취소. 임시 저장 결과는 단추 바로 아래에 알려요(role="status": 끼어들지 않고 읽어 줘요). */}
+      <div className="grid gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" disabled={saving} className="btn-inverse">
+            {saving ? "저장하는 중…" : mode === "edit" ? "수정한 내용 저장" : "리뷰 저장"}
+          </button>
+          <button type="button" ref={draftButtonRef} onClick={() => void handleDraftSave()} disabled={saving || draftBusy} className="btn-line">
+            임시 저장
+          </button>
+          <Link href={mode === "edit" ? `/reviews/${values.slug}` : "/"} className="btn-line">
+            취소
+          </Link>
+        </div>
+        <p role="status" className="text-crt-dim empty:sr-only">
+          {draftNotice}
+        </p>
       </div>
     </form>
   );
 }
 
-/** 처음 상태(칸 값과 안내)를 만들어요. 수정이면 원고를 읽어 채워요. */
+/** 마지막으로 임시 저장했거나 불러온 상태(떠날 때 저장하지 않은 내용이 있는지 견줘 봐요) */
+type SavedState = { values: ReviewFormValues; poster: File | null; scenes: Map<string, File> };
+
+/** 장면 사진 두 묶음이 같은지(같은 주소에 같은 파일) */
+function sameScenes(a: Map<string, File>, b: Map<string, File>): boolean {
+  return a.size === b.size && [...a].every(([path, file]) => b.get(path) === file);
+}
+
+/** 이 화면에 보일 임시 저장한 글: 새 글 화면(editSlug null)은 새 글 것만, 수정 화면은 그 리뷰 것만 */
+function draftsFor(all: DraftSummary[], editSlug: string | null): DraftSummary[] {
+  return all.filter((draft) => (editSlug === null ? draft.mode === "create" : draft.mode === "edit" && draft.reviewSlug === editSlug));
+}
+
+/** 임시 저장한 때를 "11월 14일 오후 3:12"처럼 보여요. */
+function formatDraftTime(time: number): string {
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(time);
+}
+
+/** 처음 상태(칸 값과 안내)를 만들어요. 수정이면 서버가 읽어 둔 원고로 채워요. */
 function initialState(props: Props): { values: ReviewFormValues; notice: string; failure: string } {
   if (props.mode === "create") return { values: WRITER_EMPTY_VALUES, notice: "", failure: "" };
-  const parsed = parseReviewFile(props.source);
+  const { parsed } = props;
   if (!parsed.ok) {
     // 저장소의 원고를 읽지 못했어요(직접 고친 원고가 망가진 경우). 본문 칸에 원고 전체를 넣어 손으로 고칠 수 있게 해요.
-    return { values: { ...WRITER_EMPTY_VALUES, slug: props.slug, body: props.source }, notice: "", failure: `원고를 읽지 못했습니다: ${parsed.message}` };
+    return { values: { ...WRITER_EMPTY_VALUES, slug: props.slug, body: parsed.source }, notice: "", failure: `원고를 읽지 못했습니다: ${parsed.message}` };
   }
   return { values: { ...parsed.values, slug: props.slug }, notice: "", failure: "" };
 }
