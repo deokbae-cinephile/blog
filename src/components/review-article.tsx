@@ -25,7 +25,8 @@
  *     (왼쪽 칸 포스터 아래에 두면, 키가 작은 화면에서 왼쪽 아래에 떠 있는 [키보드 조작] 단추에 가려져서 맨 윗줄에 둬요.)
  *   - 한줄평과 본문(사진과 글을 섞은 HTML)을 오른쪽 칸에 보여 주기
  *   - 장르를 누르면 그 장르로 거른 목록으로 가기
- *   - 쓴 날 순서로 이전·다음 리뷰로 가기(링크, 그리고 키보드 ◀▶ — review-keys.tsx)
+ *   - 처음 화면 목록(최신순) 순서로 이전·다음 리뷰로 가기(링크, 그리고 키보드 ◀▶ — review-keys.tsx)
+ *     이전 = 목록에서 바로 위 리뷰(더 최근에 쓴 글), 다음 = 바로 아래 리뷰(더 예전에 쓴 글)
  *   - 글쓴이로 로그인했으면 [수정]·[삭제] 단추(admin-review-actions.tsx)
  *
  * 왜 페이지 파일(app/reviews/[slug]/page.tsx)과 나눴을까요?
@@ -53,14 +54,14 @@ import { ShareButton } from "./share-button";
 type Props = {
   /** 보여 줄 리뷰(본문 포함) */
   review: Review;
-  /** 바로 다음에(더 최근에) 쓴 리뷰. 없으면 null */
-  newer: ReviewSummary | null;
-  /** 바로 전에(더 예전에) 쓴 리뷰. 없으면 null */
-  older: ReviewSummary | null;
+  /** 이전 리뷰: 처음 화면 목록(최신순)에서 바로 위 리뷰(더 최근에 쓴 글). 맨 위면 null */
+  previous: ReviewSummary | null;
+  /** 다음 리뷰: 목록에서 바로 아래 리뷰(더 예전에 쓴 글). 맨 아래면 null */
+  next: ReviewSummary | null;
 };
 
 /** 리뷰 상세 내용 */
-export function ReviewArticle({ review, newer, older }: Props) {
+export function ReviewArticle({ review, previous, next }: Props) {
   // 필요한 항목을 꺼내 둬요(구조 분해 할당).
   const { slug, title, originalTitle, year, country, director, runtime, genres, rating, oneLiner, poster, posterAlt, html } =
     review;
@@ -139,12 +140,12 @@ export function ReviewArticle({ review, newer, older }: Props) {
               prose: 본문 글꼴·간격·제목·사진 모양을 정한 클래스예요(globals.css). */}
           <div className="prose mt-10" dangerouslySetInnerHTML={{ __html: html }} />
 
-          <ReviewNav newer={newer} older={older} />
+          <ReviewNav previous={previous} next={next} />
         </div>
       </div>
 
       {/* 키보드 조작: ◀▶ 이전·다음 리뷰, Esc 목록으로. 화면에는 아무것도 그리지 않아요. */}
-      <ReviewKeys newerHref={newer ? `/reviews/${newer.slug}` : null} olderHref={older ? `/reviews/${older.slug}` : null} />
+      <ReviewKeys previousHref={previous ? `/reviews/${previous.slug}` : null} nextHref={next ? `/reviews/${next.slug}` : null} />
     </article>
   );
 }
@@ -152,11 +153,12 @@ export function ReviewArticle({ review, newer, older }: Props) {
 /**
  * 이전·다음 리뷰로 가는 링크
  *
- * `Pick<Props, "newer" | "older">`: 위의 Props에서 newer와 older만 골라 쓴다는 뜻이에요.
+ * 처음 화면 목록(최신순) 순서를 따라요: [◀ 이전 리뷰] = 목록에서 바로 위, [다음 리뷰 ▶] = 바로 아래.
+ * `Pick<Props, "previous" | "next">`: 위의 Props에서 previous와 next만 골라 쓴다는 뜻이에요.
  */
-function ReviewNav({ newer, older }: Pick<Props, "newer" | "older">) {
+function ReviewNav({ previous, next }: Pick<Props, "previous" | "next">) {
   // 앞뒤 리뷰가 하나도 없으면(리뷰가 한 편뿐일 때) 아무것도 그리지 않아요. null을 돌려주면 React는 아무것도 그리지 않습니다.
-  if (!newer && !older) return null;
+  if (!previous && !next) return null;
 
   return (
     // <nav>: 이동 링크 묶음이라는 뜻이에요. 이름은 아래 h2("다른 리뷰")로 정해요.
@@ -166,26 +168,26 @@ function ReviewNav({ newer, older }: Pick<Props, "newer" | "older">) {
         다른 리뷰
       </h2>
       <ul className="grid gap-4 sm:grid-cols-2">
-        {older && (
+        {previous && (
           <li>
-            {/* rel="prev": "이전 글"이라는 관계를 검색엔진에 알려 줘요. 링크 이름: "이전 리뷰 필름이 끊기기 전에" */}
-            <Link href={`/reviews/${older.slug}`} rel="prev" className="btn-line w-full flex-col items-start py-3">
+            {/* rel="prev": "이전 글"이라는 관계를 검색엔진에 알려 줘요. 링크 이름: "이전 리뷰 리틀 포레스트" */}
+            <Link href={`/reviews/${previous.slug}`} rel="prev" className="btn-line w-full flex-col items-start py-3">
               <span className="text-crt-dim">
                 <span aria-hidden="true">◀ </span>이전 리뷰
               </span>
-              {/* 두 줄 사이의 공백 한 칸. 화면 모양에는 영향이 없고, 링크 이름이 "이전 리뷰필름이..."처럼 붙지 않게 해요. */}{" "}
-              <span>{older.title}</span>
+              {/* 두 줄 사이의 공백 한 칸. 화면 모양에는 영향이 없고, 링크 이름이 "이전 리뷰리틀..."처럼 붙지 않게 해요. */}{" "}
+              <span>{previous.title}</span>
             </Link>
           </li>
         )}
-        {newer && (
+        {next && (
           // sm:col-start-2: 넓은 화면에서 이전 리뷰가 없어도 "다음 리뷰"는 늘 오른쪽 칸에 놓여요.
           <li className="sm:col-start-2">
-            <Link href={`/reviews/${newer.slug}`} rel="next" className="btn-line w-full flex-col items-end py-3 text-right">
+            <Link href={`/reviews/${next.slug}`} rel="next" className="btn-line w-full flex-col items-end py-3 text-right">
               <span className="text-crt-dim">
                 다음 리뷰<span aria-hidden="true"> ▶</span>
               </span>{" "}
-              <span>{newer.title}</span>
+              <span>{next.title}</span>
             </Link>
           </li>
         )}

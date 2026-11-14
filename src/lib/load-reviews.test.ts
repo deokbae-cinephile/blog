@@ -13,14 +13,14 @@
  *   - mkdtemp           : 겹치지 않는 이름의 임시 폴더를 만들어요.
  */
 
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadReviews, ReviewContentError } from "./load-reviews";
+import { loadReviews, ReviewContentError, writeReviewsData } from "./load-reviews";
 
 /**
  * 시험용 원고 글자를 만드는 도우미예요.
@@ -221,3 +221,25 @@ describe("loadReviews", () => {
     expect(error.problems[0]).toContain("title(한국어 제목)을 적어 주세요");
   });
 });
+
+describe("writeReviewsData(빌드 직전에 리뷰 데이터 파일 쓰기)", () => {
+  it("원고를 읽어 최신순 리뷰 데이터(본문 HTML 포함)를 JSON으로 쓰고, 쓴 편 수를 돌려준다", async () => {
+    await writeFile(path.join(dir, "winter-stop.md"), review(base, "## 좋았던 점"));
+    await writeFile(path.join(dir, "older.md"), review({ ...base, title: "예전 글", publishedAt: "2026-01-01" }));
+    const outFile = path.join(dir, ".generated", "reviews.json");
+
+    expect(await writeReviewsData(outFile, dir)).toBe(2);
+    const written = JSON.parse(await readFile(outFile, "utf8"));
+    expect(written.map((item: { slug: string }) => item.slug)).toEqual(["winter-stop", "older"]);
+    expect(written[0].html).toContain("<h2>좋았던 점</h2>");
+  });
+
+  it("고칠 곳이 있으면 파일을 쓰지 않고 ReviewContentError를 던진다(빌드가 멈춰요)", async () => {
+    await writeFile(path.join(dir, "Bad_Name.md"), review(base));
+    const outFile = path.join(dir, ".generated", "reviews.json");
+
+    await expect(writeReviewsData(outFile, dir)).rejects.toBeInstanceOf(ReviewContentError);
+    await expect(access(outFile)).rejects.toThrow();
+  });
+});
+

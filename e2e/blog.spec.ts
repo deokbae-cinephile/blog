@@ -326,6 +326,20 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect((await aside.boundingBox())!.y).toBeLessThan(80);
   });
 
+  test("목록 한 편은 제목 바로 옆에 장르 태그를 둔다(둘째 줄에는 원제·연도·감독)", async ({ page }) => {
+    await openHome(page);
+    const item = page.getByRole("article", { name: "알파 정거장" });
+    const title = (await item.getByRole("heading", { level: 3 }).boundingBox())!;
+    const genres = item.getByRole("list", { name: "장르" });
+    await expect(genres).toHaveText(/\[드라마\][\s\S]*\[재난\]/);
+    const box = (await genres.boundingBox())!;
+    // 같은 줄(세로 가운데가 같음), 제목 오른쪽
+    expect(Math.abs(box.y + box.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
+    expect(box.x).toBeGreaterThan(title.x + title.width);
+    // 둘째 줄은 원제·연도·감독만이에요(장르는 제목 옆으로 옮겼어요).
+    await expect(item.getByText(/^Alpha Station\s·\s2020\s·\s감독\s\S+$/)).toBeVisible();
+  });
+
   test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고, 한줄평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openHome(page);
@@ -456,12 +470,15 @@ test.describe("리뷰 상세", () => {
     expect(box.height / box.width).toBeCloseTo(1.5, 1);
   });
 
-  test("가장 최근 리뷰에는 '이전 리뷰'만 있고, 누르면 그 리뷰로 간다", async ({ page }) => {
+  test("이전·다음 리뷰는 처음 화면 목록 순서를 따른다: 맨 위 리뷰에는 '다음 리뷰'(목록에서 바로 아래)만 있다", async ({ page }) => {
+    // 목록(최신순): 알파 정거장 → 베타 로맨스 → … 알파 정거장이 맨 위라 '이전 리뷰'는 없어요.
     await page.goto("/reviews/alpha-station");
     const nav = page.getByRole("navigation", { name: "다른 리뷰" });
     await expect(nav.getByRole("link")).toHaveCount(1);
-    await nav.getByRole("link", { name: "이전 리뷰 베타 로맨스" }).click();
+    await nav.getByRole("link", { name: "다음 리뷰 베타 로맨스" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "베타 로맨스" })).toBeVisible();
+    // 베타 로맨스의 '이전 리뷰'는 목록에서 바로 위인 알파 정거장이에요.
+    await expect(nav.getByRole("link", { name: "이전 리뷰 알파 정거장" })).toHaveAttribute("href", "/reviews/alpha-station");
   });
 
   test("장르를 누르면 그 장르로 거른 목록으로 간다", async ({ page }) => {
@@ -702,9 +719,9 @@ test.describe("키보드", () => {
     await page.getByRole("link", { name: "베타 로맨스" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "베타 로맨스" })).toBeVisible();
 
-    await page.keyboard.press("ArrowRight"); // 다음(더 최근) 리뷰
+    await page.keyboard.press("ArrowLeft"); // 이전 리뷰(목록에서 바로 위)
     await expect(page.getByRole("heading", { level: 1, name: "알파 정거장" })).toBeVisible();
-    await page.keyboard.press("ArrowLeft"); // 이전(더 예전) 리뷰
+    await page.keyboard.press("ArrowRight"); // 다음 리뷰(목록에서 바로 아래)
     await expect(page.getByRole("heading", { level: 1, name: "베타 로맨스" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();

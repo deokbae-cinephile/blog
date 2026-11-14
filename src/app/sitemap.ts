@@ -11,7 +11,7 @@
 
 import type { MetadataRoute } from "next";
 
-import { getReviewSummaries } from "@/lib/load-reviews";
+import { getReviewSummaries } from "@/lib/review-data";
 import { siteUrl } from "@/lib/site";
 
 /**

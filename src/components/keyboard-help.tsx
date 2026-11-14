@@ -142,9 +142,9 @@ export function KeyboardHelp() {
   if (pathname.startsWith("/write")) return null;
 
   return (
-    // 자리: 왼쪽 아래 고정 줄(site-footer.tsx)의 맨 앞이에요. 오른쪽에 [방문자 n명](로그인한 글쓴이만)이 붙어요.
+    // 자리: 왼쪽 아래 고정 줄(site-footer.tsx)의 맨 앞이에요. 오른쪽에 [로그아웃](로그인했을 때만)이 붙어요.
     // hidden sm:block: 휴대폰에서는 숨기고 640px 이상에서 보여요.
-    // relative: 펼친 안내 창(absolute)을 이 단추 위에 띄우는 기준이에요. 창이 떠 있어서 단추 줄의 너비가 바뀌지 않아요(옆의 방문자 수가 밀리지 않게).
+    // relative: 펼친 안내 창(absolute)을 이 단추 위에 띄우는 기준이에요. 창이 떠 있어서 단추 줄의 너비가 바뀌지 않아요(옆의 [로그아웃]이 밀리지 않게).
     // (코드 순서 = 화면 낭독기가 읽는 순서라서, "단추 → 펼쳐진 안내" 순으로 읽혀요.)
     <div className="relative hidden sm:block">
       <button

@@ -29,7 +29,6 @@ src/
 │  ├─ api/session/        로그인(POST)·로그아웃(DELETE)
 │  ├─ api/images/         사진 한 장 올리기(POST) → GitHub blob
 │  ├─ api/reviews/        리뷰 추가(POST), [slug]/ 수정(PUT)·삭제(DELETE)
-│  ├─ api/visits/         방문 세기(POST, 하루 한 번)·누적 방문자 수 읽기(GET, 로그인한 글쓴이만)
 │  ├─ offline/, not-found.tsx, manifest.ts, sitemap.ts, robots.ts
 │  ├─ write/loading.tsx   글쓰기 화면을 준비하는 동안의 로딩 UI + 스켈레톤
 │  └─ layout.tsx, globals.css, fonts/   공통 틀(포스터 SVG 필터 포함)·스타일·글꼴
@@ -37,15 +36,16 @@ src/
 │  ├─ review-browser.tsx  검색·장르·정렬과 목록(10편씩 무한 스크롤)
 │  ├─ search-box.tsx      자동완성 검색창(콤보박스)
 │  ├─ review-writer.tsx   리뷰 라이터(추가·수정 폼, 사진 넣기, 임시 저장)
-│  ├─ write-preview-panes.tsx, markdown-preview.tsx  본문 쓰기 칸 | 미리 보기(좁은 화면은 탭)
-│  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
+│  ├─ write-preview-panes.tsx, markdown-preview.tsx  본문 쓰기 칸 | 미리 보기(좁은 화면은 탭, 미리 보기는 브라우저에서만 불러와요)
+│  ├─ login-form.tsx, session-controls.tsx(왼쪽 아래 [로그아웃]), admin-review-actions.tsx, delete-review.tsx
 │  ├─ floating-buttons.tsx  오른쪽 아래 [맨 위로]와 그 오른쪽의 [+](리뷰 추가, 로그인했을 때만)
 │  ├─ loading-status.tsx, skeleton.tsx, boot-overlay.tsx  로딩 UI, 글쓰기 스켈레톤, 첫 화면 로딩 레이어
 │  ├─ intent-link.tsx     마우스를 올리거나 초점이 갈 때만 다음 화면을 미리 받는 링크(목록의 리뷰, 상세의 장르)
 │  ├─ share-button.tsx    상세의 [공유하기](휴대폰 공유 창, 없으면 주소 복사)
 │  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx(+ github-link.tsx) …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
-│  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사(손으로 짠 checkFrontmatter)·HTML 바꾸기
+│  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드 직전에 원고 읽기·검사(손으로 짠 checkFrontmatter)·HTML 바꾸기
+│  ├─ review-data.ts                                   화면용 리뷰 데이터(운영 빌드는 .generated/reviews.json만 읽음), 목록 순서의 이전·다음
 │  ├─ review-form.ts, review-values.ts                 글쓰기 칸 검사, 칸 값 모양(화면·서버가 함께 써요)
 │  ├─ review-file.ts                                   원고 ↔ 칸 값 바꾸기(YAML, 서버에서만)
 │  ├─ drafts.ts, shrink-image.ts                       임시 저장(이 브라우저의 IndexedDB), 사진 줄이기(올리기 전 브라우저에서)
@@ -53,16 +53,14 @@ src/
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ review-source.ts                                 수정 화면용 원고 읽기(Markdown 변환 도구를 부르지 않아 서버 묶음이 가벼워요)
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
-│  ├─ visit-rules.ts, visit-store.ts                  방문자 규칙(하루 한 번, 어제·오늘 기록), 저장소 고르기(Durable Object·메모리)
-│  ├─ visitor-key.ts                                   사람 구별 값(SHA-256), 로봇 거르기, 한국 시간 오늘 날짜
 │  ├─ photo-variants.ts, resize-photos.ts              본문 사진의 작은 사본 규칙(srcset·sizes), 빌드할 때 만들기(sharp)
 │  └─ browse.ts, site.ts, version.ts, genres.ts, indent.ts …  검색·정렬, 블로그 정보·버전, 장르, 본문 Tab 들여쓰기
-worker/                   Cloudflare Worker 시작 파일(index.ts)과 방문자 저장소 Durable Object(visit-counter.ts)
 e2e/                      E2E 테스트, 시험용 원고(fixtures/), 가짜 GitHub 서버(mock-github.mjs)
 scripts/                  아이콘·공유 그림 만들기(make-icons.mjs), 로그인 비밀 값 만들기(admin-secrets.mjs),
+                          리뷰 데이터 미리 만들기(build-reviews.mjs → .generated/reviews.json, 저장소에 안 올림),
                           본문 사진의 작은 사본 만들기(resize-photos.mjs, build·e2e:build가 next build 전에 실행)
 open-next.config.ts       Cloudflare Workers용으로 바꾸는 설정(미리 만든 화면 캐시, 캐시 가로채기)
-wrangler.jsonc            Cloudflare Workers 설정(시작 파일, 코드 줄이기, 정적 파일, 이미지 최적화, 방문자 Durable Object, 도메인)
+wrangler.jsonc            Cloudflare Workers 설정(시작 파일 .open-next/worker.js, 코드 줄이기, 정적 파일, 이미지 최적화, 지운 Durable Object 기록, 도메인)
 ```
 
 ## 3. 데이터 흐름
@@ -70,7 +68,9 @@ wrangler.jsonc            Cloudflare Workers 설정(시작 파일, 코드 줄이
 **읽기(누구나)**
 
 ```
-content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ──> 정적 HTML(목록·상세) ──> 방문자
+content/reviews/*.md ──빌드 직전──> scripts/build-reviews.mjs(lib/load-reviews.ts: 검사·HTML) ──> .generated/reviews.json
+                    ──next build──> lib/review-data.ts가 데이터만 읽어 정적 HTML(목록·상세) ──> 방문자
+(개발 서버 pnpm dev는 lib/review-data.ts가 원고를 바로 읽어서, 원고를 고치면 새로 고침만으로 보여요.)
 ```
 
 원고에 실수가 있으면 빌드가 멈추고, 어느 파일의 어디를 어떻게 고칠지 한국어로 알려 줍니다. 그래서 잘못된 글은 배포되지 않아요.
@@ -93,7 +93,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
   - 장면 사진은 본문에 그대로 보여서 가장 가벼운 WebP예요. WebP를 만들 줄 모르는 브라우저면 PNG·JPG로 만들어요.
 - 사진은 요청 하나가 하는 일(CPU·메모리)을 작게 나누려고 한 장씩(최대 4MB) 먼저 올리고, 리뷰를 저장할 때 원고와 함께 커밋 하나로 묶어요. 사진 올리기 API는 파일 앞부분(서명 바이트)으로 실제 형식을 확인해요(`sniffImageType`).
 - 본문 사진은 빌드할 때 작은 사본(가로 480·800·1200px WebP, 원본 너비의 90% 이하만)을 `public/_resized`에 만들어 `srcset`으로 화면 크기에 맞게 받아요.
-  - 순서: `pnpm build`(배포의 OpenNext도 이것을 불러요) → `scripts/resize-photos.mjs`(`lib/resize-photos.ts`, sharp) → `next build`. 원고 읽기(`lib/load-reviews.ts`)가 사본이 정말 있는 것만 `srcset`에 넣어요.
+  - 순서: `pnpm build`(배포의 OpenNext도 이것을 불러요) → `scripts/resize-photos.mjs`(`lib/resize-photos.ts`, sharp) → `scripts/build-reviews.mjs` → `next build`. 원고 읽기(`lib/load-reviews.ts`)가 사본이 정말 있는 것만 `srcset`에 넣어요.
   - `sizes`는 본문 칸 너비(1024px 이상 `100vw − 27rem`, 640px 이상 `100vw − 4rem`, 그 밖 `100vw − 2rem`)와 원본 너비, 화면 높이 80% × 비율 가운데 가장 작은 값이에요(`lib/photo-variants.ts`의 `photoSizes`). 나란히 놓인 사진은 칸을 둘로 나눠요. Chromium·Firefox·WebKit에서 `min()`이 든 `sizes`를 바르게 읽는 것을 확인했어요.
   - 실행 중인 워커는 아무 일도 하지 않아요(다른 정적 파일처럼 Cloudflare가 바로 내줘요). 깨진 사진은 빌드를 멈추지 않고 경고만 남기고 원본만 써요. 움직이는 그림(GIF, 여러 장 WebP·AVIF, 움직이는 PNG)은 사본이 첫 장만 남아 멈춰 버려서 사본을 만들지 않고 원본만 써요. 사본은 저장소에 올리지 않아요(`.gitignore`).
 - 새 리뷰의 "글 쓴 날"(`publishedAt`)은 저장할 때 서버가 한국 시간 날짜와 시각까지 넣어요(`2026-11-14T19:35:48+09:00`, `lib/review-form.ts`의 `nowInSeoul`). 같은 날 쓴 리뷰끼리도 최신순이 맞아요. 날짜만 적힌 예전 원고(`2026-11-14`)도 그대로 읽고, 그날 0시로 봐요.
@@ -108,28 +108,27 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 수정·삭제는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
 - 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
 
-**방문자 수(로그인한 글쓴이에게만 보여요)**
+**리뷰 데이터는 빌드 직전에 미리 만들어요(워커를 가볍게)**
 
-```
-방문자 브라우저 ─(그날 처음 열 때 한 번) POST /api/visits ─> Durable Object "VisitCounter"
-                                                        ├ visitors_recent: 그날 이미 센 사람(어제·오늘 것만 남겨요)
-                                                        └ visit_days: 날마다 센 방문 수(더하면 누적)
-글쓴이 화면     ─ GET /api/visits(로그인 확인) ─> { total } ─> 왼쪽 아래 [키보드 조작] 오른쪽 "방문자 n명"
-```
+- 목록·상세·사이트맵은 빌드할 때 미리 만드는 화면이라, 실행 중인 워커가 원고를 읽거나 Markdown을 바꿀 일이 없어요.
+- 그래서 빌드 직전에 `scripts/build-reviews.mjs`가 원고를 읽고 검사해 본문 HTML까지 담은 `.generated/reviews.json`을 쓰고, 화면(`lib/review-data.ts`)은 그 파일만 읽어요. Markdown 변환 도구(unified 등)와 원고 읽기 도구(vfile·image-size 등)가 워커에 실리지 않아요.
+  - 원고에 고칠 곳이 있으면 이 단계에서 목록을 모두 보여 주고 빌드를 멈춰요(예전에는 next build 도중에 멈췄어요).
+  - 실행: `node --conditions=react-server scripts/build-reviews.mjs`(`server-only` 표시가 빈 모듈로 풀리게). `.ts`는 Node.js 24의 type stripping으로 바로 실행해서, 원고 읽기 쪽 파일은 import에 `.ts`까지 적어요.
+  - `next build`만 따로 돌리면 데이터 파일이 없다고 알려요. 늘 `pnpm build`(또는 `pnpm e2e:build`)로 빌드해요.
+- 개발 서버(`pnpm dev`)는 `lib/review-data.ts`가 원고를 바로 읽어요(`process.env.NODE_ENV !== "production"` 분기는 운영 빌드에서 통째로 빠져요).
+- 글쓰기 미리 보기(`markdown-preview.tsx`)는 `next/dynamic`의 `ssr: false`로 브라우저에서만 불러와요. 서버에서 이 화면을 그릴 때 Markdown 도구가 함께 묶이지 않아요(받는 동안은 같은 로딩 화면, `preview-loading.tsx`).
+- 결과: 워커 gzip 1,533KiB → 1,274KiB(−259KiB). 워커에 남은 Markdown 도구는 저장 API가 본문 사진을 빌드와 같은 규칙으로 찾는 한 벌뿐이에요(참조형 사진까지 저장 전에 거르려고 남겨요).
 
-- 누적 방문자 수: 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)은 하루(한국 시간)에 한 번만 세고, 그렇게 센 방문을 모두 더해요.
-- 세지 않는 때: 로그인한 글쓴이(서버가 세션 쿠키로 확인, 화면도 로그인 표시 쿠키가 있으면 보내지 않아요), 검색엔진 로봇·링크 미리 보기 수집기(브라우저 정보), 다른 사이트에서 보낸 요청(403).
-- 가볍게: 방문자 브라우저는 그날 센 날짜를 localStorage(`dmb:visit-day`)에 기억해 하루에 요청을 한 번만 보내요.
-- 저장소: 방문자 전용 Durable Object `VisitCounter`(`worker/visit-counter.ts`, `wrangler.jsonc`의 migrations v2). 2.0.0 핫픽스에서 조회수 저장소를 지우며 새로 만들어, 방문자 수는 그때 0부터 다시 셌어요.
-- 세기 요청(`/api/visits`)도 로그인과 같은 Cloudflare 속도 제한 규칙에 묶여 있어요(아래 5장 "속도 제한 규칙").
-- Durable Object는 같은 워커 안에 있어 따로 만들 것이 없어요(무료 요금제는 SQLite 방식). OpenNext가 만든 처리기(`.open-next/worker.js`)를 `worker/index.ts`가 가져다 쓰고 Durable Object를 함께 내보내요.
-- 내 컴퓨터(`pnpm dev`)와 E2E(`next start`)는 Cloudflare가 아니라서 같은 규칙의 메모리 저장소를 써요. Durable Object까지 확인하려면 `pnpm cf:preview`로 띄워요.
-- 보이기: `components/visitor-count.tsx`. 숫자는 `GET /api/visits`가 로그인을 확인한 뒤에만 돌려줘요(아니면 401). `/api/visits`는 proxy.ts가 막지 않아요(방문자도 세기 요청을 보내야 해서요).
+**방문자 수(2.0.0 핫픽스에서 모두 지웠어요)**
+
+- 세는 코드(`/api/visits`, 화면의 세기 요청), 보이기([방문자 n명]), 저장소(Durable Object `VisitCounter`)와 그 안의 숫자까지 모두 지웠어요. `wrangler.jsonc`의 migrations v4(`deleted_classes`)가 배포될 때 데이터를 지워요(되돌릴 수 없어요).
+- 쓰는 Durable Object가 없어져서 워커 시작 파일도 OpenNext 기본 파일(`.open-next/worker.js`)로 되돌렸어요(예전 `worker/index.ts`·`worker/visit-counter.ts`를 지움, `@cloudflare/workers-types`도 뺌).
+- 그 자리(왼쪽 아래 [키보드 조작] 오른쪽)에는 로그인했을 때 [로그아웃]을 고정했어요(`session-controls.tsx`).
 
 **조회수(2.0.0 핫픽스에서 모두 지웠어요)**
 
 - 화면 표시, 서버 API(`/api/views`), 저장소(Durable Object `ViewCounter`)와 그 안의 숫자까지 모두 지웠어요. `wrangler.jsonc`의 migrations v3(`deleted_classes`)이 배포될 때 데이터를 지워요(되돌릴 수 없어요). 지운 클래스는 코드에서 내보내지 않아요.
-- 그 저장소에 함께 있던 예전 방문자 수도 같이 지워졌어요. 방문자 수는 새 저장소(`VisitCounter`)에서 0부터 다시 세요.
+- 그 저장소에 함께 있던 예전 방문자 수도 같이 지워졌어요(방문자 수 기능은 뒤에 모두 지웠어요, 위 참고).
 - 조회수가 쓰던 빌드 때 리뷰 주소 목록(`DMB_REVIEW_SLUGS`, `lib/review-slugs.ts`)과 "방금 본 사람" 장부도 함께 지웠어요.
 
 ## 4. 로그인과 접근 막기
@@ -195,7 +194,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | `wrangler.jsonc`의 `routes` | `deokbae.blog`, `www.deokbae.blog`를 Custom Domain으로. 배포할 때 DNS 기록과 HTTPS 인증서가 자동으로 만들어져요 |
 
 - 처음 주소 `https://blog.deokbae.workers.dev`와 버전 미리보기 주소는 닫았어요(`wrangler.jsonc`의 `"workers_dev": false`, `"preview_urls": false`). 블로그 주소는 `https://deokbae.blog` 하나예요. `www.deokbae.blog`도 같은 블로그를 보여 주고, 화면마다 대표 주소를 `https://deokbae.blog/...`로 알려요.
-- **속도 제한 규칙(2026-11-14 설정, 2.0.0 핫픽스에서 방문자 세기를 더함):** Cloudflare 대시보드 → deokbae.blog → Security → WAF(보안 규칙) → Rate limiting rules의 규칙 하나(`로그인·방문자 세기 요청 제한`). URI Path가 `/api/session` 또는 `/api/visits`인 요청이 IP마다 10초에 5번을 넘으면 10초 동안 막아요(429, error code 1015). 식: `(http.request.uri.path eq "/api/session") or (http.request.uri.path eq "/api/visits")`. 무료 플랜은 규칙 1개, 조건은 경로만(요청 방식은 고를 수 없어요), 시간은 10초로 정해져 있어서 두 주소를 한 규칙에 묶었어요. 방문자 브라우저는 하루에 한 번만 세기 요청을 보내서, 보통 쓰임은 막히지 않아요. 세는 데 약간의 지연이 있어서 짧게 몰아친 요청 몇 개는 통과할 수 있고, 그 뒤는 서버의 실패 횟수 제한이 함께 막아요. workers.dev 주소를 모두 닫아서 모든 요청이 이 규칙을 지나요.
+- **속도 제한 규칙(2026-11-14 설정):** Cloudflare 대시보드 → deokbae.blog → Security → WAF(보안 규칙) → Rate limiting rules의 `로그인 시도 제한`. URI Path가 `/api/session`인 요청이 IP마다 10초에 5번을 넘으면 10초 동안 막아요(429, error code 1015). 무료 플랜은 규칙 1개, 조건은 경로만, 시간은 10초로 정해져 있어요(방문자 세기 요청을 묶으려던 계획은 방문자 수 기능을 지워서 필요 없어졌어요). 세는 데 약간의 지연이 있어서 짧게 몰아친 요청 몇 개는 통과할 수 있고, 그 뒤는 서버의 실패 횟수 제한이 함께 막아요. workers.dev 주소를 모두 닫아서 모든 요청이 이 규칙을 지나요.
 
 ## 6. 화면 규칙
 
@@ -209,16 +208,16 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
   - 눈으로도 미리 알 수 있게, 가리키거나 초점이 가면 "이 블로그의 소스 코드 저장소(새 창)" 말풍선(`role="tooltip"`)이 떠요. Esc로 닫혀요(`github-link.tsx`, 머리글에서 브라우저 코드는 이것뿐이에요).
   - 버전은 보조 글자색으로 보이고 `package.json`에서 읽어요(`lib/version.ts`).
   - 탭 제목과 설치 앱 이름은 짧게 "DMB"예요.
-- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
+- **목록 한 편:** [썸네일 2:3 | 제목 + [장르] 태그 ····· 평점 / 원제·연도·감독 / 한줄평]. 장르 태그는 상세 화면처럼 제목과 함께 보여요(목록 한 편 전체가 링크라 장르는 글자로만). 한줄평은 썸네일 아래 끝에 맞춰요.
 - **장르:** 가나다순(공포·다큐멘터리·드라마·로맨스·범죄·스릴러·스포츠·액션·재난·코미디). 목록의 장르 단추와 글쓰기 칸이 같은 순서예요. 주소에는 영어 이름으로 적어요(`?genre=drama`, `lib/genres.ts`의 `GENRE_SLUGS`). 예전 한글 주소(`?genre=드라마`)도 같은 장르로 열려요.
 - **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독, 오른쪽에 큰 평점.
 - **떠 있는 단추:** 오른쪽 아래 구석에 로그인했을 때 44 × 44px [+](리뷰 추가)가 있고, 내려 읽으면 [맨 위로]가 그 왼쪽에 붙어요. 글쓰기 화면에서는 [+]와 왼쪽 아래 "키보드 조작" 단추를 숨겨요.
-- **왼쪽 아래 고정 줄:** [키보드 조작](640px 이상, 글쓰기 화면 제외) [방문자 n명](로그인한 글쓴이만, 점선 테두리의 안내 상자 `.badge-float`). 키보드 안내 창은 단추 위에 떠서 열려도 방문자 수가 움직이지 않아요. 휴대폰·글쓰기 화면에서는 방문자 수만 왼쪽 끝에 보여요.
+- **왼쪽 아래 고정 줄:** [키보드 조작](640px 이상, 글쓰기 화면 제외) [로그아웃](로그인했을 때만, 같은 떠 있는 단추 모양 `.btn-float`). 키보드 안내 창은 단추 위에 떠서 열려도 [로그아웃]이 움직이지 않아요. 휴대폰·글쓰기 화면에서는 [로그아웃]만 왼쪽 끝에 보여요. 로그아웃에 실패하면 단추 위에 안내 상자(`role="alert"`)가 떠요.
 - **첫 화면 로딩 레이어:** 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 보여요. 페이지와 웹 폰트(neodgm)를 받으면 걷히고(최소 0.4초, 늦어도 4초), 같은 탭에서는 다시 덮지 않아요. 자바스크립트가 꺼져 있으면 보이지 않고, 스크립트가 돌지 않아도 6초 뒤 CSS가 걷어요.
 - **검색창:** 글쓰기 화면의 입력 칸과 같은 모양(`.field`)이에요.
 - **정렬:** 최신순·평점순 두 가지예요. 최신순은 글 쓴 날의 시각까지 봐서, 같은 날 쓴 리뷰도 나중에 쓴 글이 앞에 와요(`lib/review.ts`의 `compareLatest`). 날짜만 적힌 예전 원고는 그날 0시로 보고, 시각까지 같으면 제목 가나다순이에요. 조회수는 2.0.0 핫픽스에서 모두 지웠어요.
 - **링크 미리 받기:** 목록의 리뷰 링크와 상세의 장르 링크는 화면에 보이기만 해서는 다음 화면을 미리 받지 않고, 마우스를 올리거나 초점이 가거나 손가락이 닿을 때 받아요(`intent-link.tsx`). 목록 10편이면 요청 15개(약 31KB)가 줄어요.
-- **공유하기:** 상세의 포스터 아래 [공유하기]는 휴대폰(과 지원하는 컴퓨터)의 공유 창으로 리뷰의 대표 주소·제목·평점과 한줄평을 보내요(`share-button.tsx`, Web Share API). 공유 창이 없으면 주소를 복사하고 `role="status"`로 알려요. 공유 창을 닫으면 아무 일도 하지 않아요. 포스터 파일을 따로 보내지 않는 까닭은, 앱에 따라 그림만 가고 링크가 빠지기 때문이에요. 받는 쪽은 링크의 공유 미리 보기로 포스터를 보여 줘요.
+- **공유하기:** 상세 맨 윗줄 오른쪽 [공유하기]는 휴대폰(과 지원하는 컴퓨터)의 공유 창으로 리뷰의 대표 주소·제목·평점과 한줄평을 보내요(`share-button.tsx`, Web Share API). 공유 창이 없으면 주소를 복사하고 `role="status"`로 알려요. 공유 창을 닫으면 아무 일도 하지 않아요. 포스터 파일을 따로 보내지 않는 까닭은, 앱에 따라 그림만 가고 링크가 빠지기 때문이에요. 받는 쪽은 링크의 공유 미리 보기로 포스터를 보여 줘요.
 - **공유 미리 보기·검색엔진:** 링크를 붙이면 포스터(없으면 `public/og.png`)가 카드에 보여요. 포스터의 가로·세로(`og:image:width`·`height`)도 알려서, 메신저가 링크를 처음 받았을 때도 포스터를 바로 그려요. 리뷰 상세에는 검색엔진용 리뷰 정보(JSON-LD: 영화·평점·글쓴이), 처음 화면에는 사이트 이름 정보(WebSite)를 넣어요(`lib/structured-data.ts`). 그림은 미리 만든 파일이라 워커가 그리지 않아요(`next/og`는 워커를 크게 키워서 쓰지 않아요).
 - **정보 줄의 가운뎃점:** 항목 사이 " · "의 앞 빈칸과 "감독 한서윤"의 빈칸은 줄바꿈되지 않는 빈칸(NBSP, `lib/format.ts`의 `joinFacts`·`labeled`)이에요. 휴대폰에서 줄이 넘쳐도 가운뎃점으로 시작하는 줄이 생기지 않고, 이름표와 값이 떨어지지 않아요.
 - **로딩·스켈레톤:**
@@ -237,7 +236,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 ## 7. 키보드와 접근성
 
 - 목록: ▲▼(또는 ◀▶) 이전·다음 리뷰 고르기, Home·End 처음·끝, Enter 열기. 검색창: ▲▼ 추천 고르기, Enter 찾기, Esc 추천 닫기(APG 콤보박스).
-- 상세: ◀▶ 이전·다음 리뷰, Esc 목록으로. 한 글자 단축키는 쓰지 않아요(KWCAG 6.1.4).
+- 상세: ◀▶ 이전·다음 리뷰(처음 화면 목록 순서: ◀ 이전 = 목록에서 바로 위, ▶ 다음 = 바로 아래), Esc 목록으로. 링크 [◀ 이전 리뷰]·[다음 리뷰 ▶]도 같은 순서예요. 한 글자 단축키는 쓰지 않아요(KWCAG 6.1.4).
 - 무한 스크롤은 [n편 더 보기] 단추와 함께 써요. 단추로 불러오면(또는 단추에 초점이 있을 때 저절로 불러오면) 새로 나온 첫 리뷰로 초점이 가요.
 - 폼: 칸마다 보이는 이름과 "(필수)", 틀린 칸에 `aria-invalid` + 오류 문구(`aria-describedby`·`aria-errormessage`), 저장할 때 "고칠 곳" 목록으로 초점 이동.
 - 본문 글상자: Tab은 다음 칸으로 넘어가지 않고 들여쓰기(목록 줄이면 줄 맨 앞, 아니면 커서 자리에 Tab 문자), Shift+Tab은 내어쓰기예요. Markdown은 Tab을 4칸으로 읽어 `-`·`1.` 목록 모두 한 번에 안쪽 목록이 돼요. 글상자에서 빠져나갈 때는 Esc를 누른 다음 Tab이에요.

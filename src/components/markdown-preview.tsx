@@ -26,7 +26,7 @@
 
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
-import { LoadingStatus } from "./loading-status";
+import { PreviewLoading } from "./preview-loading";
 
 /** MarkdownPreview가 받는 값 */
 type Props = {
@@ -95,20 +95,8 @@ export function MarkdownPreview({ markdown, images }: Props) {
     return <p className="text-crt-dim">본문을 쓰면 여기에 저장한 뒤의 모습으로 보여요.</p>;
   }
 
-  // 변환 도구를 처음 받는 동안: 로딩 UI와 글줄 모양의 스켈레톤(소제목 한 줄 + 글 세 줄). 스켈레톤은 꾸밈이라 읽지 않아요.
-  if (html === null) {
-    return (
-      <div className="grid gap-4">
-        <LoadingStatus label="미리 보기를 준비하는 중" />
-        <div aria-hidden="true" className="grid gap-3">
-          <span className="skeleton block h-6 w-1/3" />
-          <span className="skeleton block h-4 w-full" />
-          <span className="skeleton block h-4 w-5/6" />
-          <span className="skeleton block h-4 w-2/3" />
-        </div>
-      </div>
-    );
-  }
+  // 변환 도구를 처음 받는 동안: 로딩 UI와 글줄 모양의 스켈레톤(preview-loading.tsx, 글쓰기 화면이 이 파일을 받는 동안과 같은 모양)
+  if (html === null) return <PreviewLoading />;
 
   return (
     // .prose: 상세 화면의 본문과 같은 꾸밈(globals.css).

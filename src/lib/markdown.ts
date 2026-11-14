@@ -42,7 +42,7 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
 
-import { type PhotoVariant, photoSizes } from "./photo-variants";
+import { type PhotoVariant, photoSizes } from "./photo-variants.ts";
 
 /** 사진 한 장의 크기(px). 가로(width)와 세로(height) */
 export type ImageSize = { width: number; height: number };

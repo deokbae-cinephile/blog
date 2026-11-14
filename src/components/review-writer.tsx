@@ -51,6 +51,7 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -69,9 +70,19 @@ import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/u
 
 import { Choice, ChoiceGroup } from "./choice-chips";
 import { LoadingStatus } from "./loading-status";
-import { MarkdownPreview } from "./markdown-preview";
 import { PixelArt } from "./pixel-art";
+import { PreviewLoading } from "./preview-loading";
 import { type PaneView, WritePreviewPanes } from "./write-preview-panes";
+
+/**
+ * 본문 미리 보기(components/markdown-preview.tsx)는 브라우저에서만 불러와요(ssr: false).
+ * 미리 보기는 Markdown 변환 도구(lib/markdown.ts)를 쓰는데, 서버에서 이 화면을 그릴 때 함께 묶이면 워커가 그만큼(압축 약 64KB) 무거워져요.
+ * 미리 보기는 원래 브라우저에서만 변환하니 서버에서 그릴 일이 없어요. 받는 동안은 같은 로딩 화면을 보여요.
+ */
+const MarkdownPreview = dynamic(() => import("./markdown-preview").then((module) => module.MarkdownPreview), {
+  ssr: false,
+  loading: () => <PreviewLoading />,
+});
 
 /* ──────────────────────────────────────────────────────────────
  * 1. 화면이 받는 값과 정해 둔 값

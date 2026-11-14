@@ -21,7 +21,7 @@ import { notFound } from "next/navigation";
 
 import { ReviewArticle } from "@/components/review-article";
 import { formatRating } from "@/lib/format";
-import { getNeighbors, getReviewBySlug, getReviewSummaries } from "@/lib/load-reviews";
+import { getNeighbors, getReviewBySlug, getReviewSummaries } from "@/lib/review-data";
 import { DEFAULT_SHARE_IMAGE } from "@/lib/site";
 import { reviewJsonLd, toJsonLd } from "@/lib/structured-data";
 
@@ -102,14 +102,14 @@ export default async function ReviewPage({ params }: Props) {
   // 없으면 404 화면으로. (notFound()는 그 자리에서 멈추므로 아래 코드는 실행되지 않아요.)
   if (!review) notFound();
 
-  // 이전·다음 리뷰를 찾아요.
-  const { newer, older } = await getNeighbors(slug);
+  // 이전·다음 리뷰를 찾아요(처음 화면 목록 순서: 이전 = 바로 위, 다음 = 바로 아래).
+  const { previous, next } = await getNeighbors(slug);
 
   return (
     <>
       {/* 검색엔진용 리뷰 정보(JSON-LD: 영화·평점·글쓴이). 화면에는 보이지 않아요(lib/structured-data.ts). */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(reviewJsonLd(review)) }} />
-      <ReviewArticle review={review} newer={newer} older={older} />
+      <ReviewArticle review={review} previous={previous} next={next} />
     </>
   );
 }

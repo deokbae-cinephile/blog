@@ -14,12 +14,14 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // 워커 이름. 대시보드에 보이는 이름이자 기본 주소(blog.<계정 이름>.workers.dev)가 돼요.
   "name": "blog",
-  // 워커의 시작 파일. OpenNext가 만든 처리기(.open-next/worker.js)를 가져다 쓰고,
-  //   방문자 저장소(Durable Object)를 함께 내보내는 우리 파일이에요(worker/index.ts).
-  "main": "worker/index.ts",
+  // 워커의 시작 파일: OpenNext가 만든 처리기 그대로예요(opennextjs-cloudflare build가 만들어요).
+  //   예전에는 조회수·방문자 저장소(Durable Object)를 함께 내보내려고 우리 시작 파일(worker/index.ts)을 두었는데,
+  //   2.0.0 핫픽스에서 두 기능을 모두 지워서 기본 파일로 되돌렸어요.
+  "main": ".open-next/worker.js",
   // 올리기 전에 워커 코드를 줄여요(빈칸·긴 이름 줄이기). 무료 요금제의 워커 크기 한도(압축 3MB) 안에 넉넉히 들어가게 해요.
   // 줄이기 전 압축 2.13MB → 줄인 뒤 약 1.8MB(2.0.0에서 잼). 함수 이름은 남겨서(keep_names 기본값) 오류 기록은 그대로 읽을 수 있어요.
-  // (2.0.0 핫픽스에서 수정 화면이 Markdown 변환 도구를 부르지 않게 나눠 약 1.53MB(gzip 1,533KiB)가 됐어요. lib/review-source.ts)
+  // (2.0.0 핫픽스: 수정 화면이 Markdown 변환 도구를 부르지 않게 나눠 1,533KiB(gzip), 리뷰 데이터를 빌드 직전에 미리 만들고
+  //  미리 보기를 브라우저에서만 불러 1,274KiB가 됐어요. lib/review-source.ts, lib/review-data.ts, scripts/build-reviews.mjs)
   "minify": true,
   // 이 날짜 기준의 Workers 런타임 동작을 써요. 날짜를 올리면 동작이 바뀔 수 있어서, 올릴 때는 미리 띄워 보고 올려요.
   "compatibility_date": "2026-11-01",
@@ -41,19 +43,16 @@
   "images": {
     "binding": "IMAGES"
   },
-  // 방문자 저장소: Durable Object(worker/visit-counter.ts). 코드에서는 env.VISIT_COUNTER로 불러요(lib/visit-store.ts).
-  //   같은 워커 안에 있어서 따로 만들 것이 없어요. 무료 요금제에서는 SQLite 방식만 쓸 수 있어요(아래 migrations).
-  "durable_objects": {
-    "bindings": [{ "name": "VISIT_COUNTER", "class_name": "VisitCounter" }]
-  },
-  // Durable Object 클래스를 처음 만들거나 바꿀 때의 기록이에요. 한 번 올린 tag는 고치지 않고, 바뀔 때 새 tag를 더해요.
+  // Durable Object 기록(지금은 쓰는 Durable Object가 없어요). 한 번 올린 tag는 고치지 않고, 바뀔 때 새 tag를 더해요.
   //   new_sqlite_classes: SQLite 저장소를 쓰는 클래스로 만들어요. deleted_classes: 클래스와 그 안에 저장된 데이터를 모두 지워요(되돌릴 수 없어요).
-  //   v1: 조회수 저장소(ViewCounter, 1.2.0). v2: 방문자 저장소(VisitCounter, 2.0.0 핫픽스, 방문자 수를 0부터 다시 셈).
-  //   v3: 조회수 기능을 모두 지우며 ViewCounter와 그 데이터(조회수, 예전 방문자 수)를 지움. 지운 클래스는 코드에서 내보내지 않아요.
+  //   v1: 조회수 저장소(ViewCounter, 1.2.0). v2: 방문자 저장소(VisitCounter, 2.0.0 핫픽스).
+  //   v3: 조회수 기능을 모두 지우며 ViewCounter와 데이터를 지움. v4: 방문자 수 기능을 모두 지우며 VisitCounter와 데이터를 지움.
+  //   지운 클래스는 바인딩도, 코드에서 내보내는 것도 없어야 해요. 그래서 시작 파일도 OpenNext 기본 파일로 되돌렸어요(위 main).
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ViewCounter"] },
     { "tag": "v2", "new_sqlite_classes": ["VisitCounter"] },
-    { "tag": "v3", "deleted_classes": ["ViewCounter"] }
+    { "tag": "v3", "deleted_classes": ["ViewCounter"] },
+    { "tag": "v4", "deleted_classes": ["VisitCounter"] }
   ],
   // 도메인: deokbae.blog와 www.deokbae.blog를 이 워커에 바로 붙여요(Custom Domain).
   //   배포할 때 Cloudflare가 두 주소의 DNS 기록과 HTTPS 인증서를 알아서 만들어요.
