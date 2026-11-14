@@ -404,6 +404,19 @@ test.describe("리뷰 상세", () => {
   });
 });
 
+test.describe("포스터를 받지 못할 때", () => {
+  // 서비스 워커가 그림 요청을 대신 받으면 아래 page.route로 막을 수 없어서, 이 시험에서는 꺼요.
+  test.use({ serviceWorkers: "block" });
+
+  test("포스터 그림을 받지 못하면 스켈레톤을 치우고 기본 포스터를 보인다", async ({ page }) => {
+    // 포스터 그림 요청을 실패시켜요(파일이 없거나 연결이 끊긴 것처럼).
+    await page.route((url) => url.pathname.startsWith("/_next/image") || url.pathname.startsWith("/posters/"), (route) => route.abort());
+    await page.goto("/reviews/alpha-station");
+    await expect(page.getByRole("img", { name: "일곱 빛깔 세로 띠가 있는 화면 조정 무늬(포스터 없음)" })).toBeVisible();
+    await expect(page.locator("article .poster-frame .skeleton")).toHaveCount(0);
+  });
+});
+
 test.describe("맨 위로 단추", () => {
   test("내려가면 나타나고(아이콘 없이 글자만), 누르면 맨 위로 올라가 머리글에 초점을 둔다", async ({ page }) => {
     await page.setViewportSize({ width: 800, height: 600 });

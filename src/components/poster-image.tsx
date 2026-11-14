@@ -4,6 +4,8 @@
  * 이 파일이 하는 일
  *   포스터 그림(next/image)을 그리고, 그림이 도착하기 전까지는 액자 안에 스켈레톤(움직이지 않는 옅은 초록)을 보여 줘요.
  *   그림이 다 오면(onLoad) 스켈레톤을 치워요.
+ *   그림을 받지 못하면(onError: 파일이 없거나 연결이 끊김) 스켈레톤을 치우고, 받은 대신 그림(fallback, 기본 포스터)을 보여 줘요.
+ *   (화면이 준비되기 전에 실패했어도 next/image가 onError를 다시 알려 줘서, 스켈레톤이 남지 않아요.)
  *
  *     ┌──────┐            ┌──────┐
  *     │░░▒▒░░│  그림 도착  │ 포스터 │
@@ -23,25 +25,39 @@
 "use client";
 
 import Image, { type ImageProps } from "next/image";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
-/** 포스터 그림. 받는 값은 next/image와 같아요(alt 필수). */
-export function PosterImage({ alt, onLoad, ...props }: ImageProps) {
-  // 그림이 다 왔는지. 오기 전에는 스켈레톤을 그 아래에 깔아 둬요.
-  const [loaded, setLoaded] = useState(false);
+/** PosterImage가 받는 값: next/image의 값(alt 필수) + 그림을 받지 못했을 때 대신 보일 것 */
+type Props = ImageProps & {
+  /** 그림을 받지 못했을 때 대신 보일 것(예: 기본 포스터). 없으면 브라우저의 깨진 그림 표시가 남아요. */
+  fallback?: ReactNode;
+};
+
+/** 포스터 그림 */
+export function PosterImage({ alt, onLoad, onError, fallback, ...props }: Props) {
+  // 그림 상태: loading(오는 중) → loaded(다 옴) 또는 failed(받지 못함)
+  const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
+
+  // 받지 못했으면 대신 보일 것을 그려요(기본 포스터).
+  if (state === "failed" && fallback) return <>{fallback}</>;
 
   return (
     <>
       {/* 스켈레톤: 액자를 꽉 채워(absolute inset-0) 그림이 올 자리에 깔아요. 꾸밈이라 읽지 않아요. */}
-      {!loaded && <span aria-hidden="true" className="skeleton absolute inset-0" />}
+      {state === "loading" && <span aria-hidden="true" className="skeleton absolute inset-0" />}
       <Image
         {...props}
         // 대체 텍스트는 받은 그대로 넘겨요(꾸밈 그림이면 빈 글자).
         alt={alt}
         // 그림이 다 오면 스켈레톤을 치워요. 넘겨받은 onLoad가 있으면 그것도 불러요.
         onLoad={(event) => {
-          setLoaded(true);
+          setState("loaded");
           onLoad?.(event);
+        }}
+        // 받지 못해도 스켈레톤을 치우고 대신 보일 것으로 바꿔요. 넘겨받은 onError가 있으면 그것도 불러요.
+        onError={(event) => {
+          setState("failed");
+          onError?.(event);
         }}
       />
     </>

@@ -18,6 +18,7 @@
  *
  * 그림이 오기 전에는
  *   액자 안에 스켈레톤(움직이지 않는 옅은 초록)을 깔아 두고, 그림이 오면 치워요(components/poster-image.tsx).
+ *   그림을 받지 못하면 기본 포스터로 바꿔 보여 줘요.
  *
  * 크기 두 가지
  *   - thumb: 목록의 썸네일(꾸밈). 바로 옆에 제목이 있어 화면 낭독기가 같은 말을 두 번 읽지 않게 alt를 비워요.
@@ -83,6 +84,8 @@ export function Poster({ src, alt, size, preload = false, className = "" }: Prop
           // object-cover: 비율이 조금 달라도 상자를 꽉 채우고 넘치는 부분을 잘라요.
           // poster-image: 형광 초록 필터(globals.css)
           className="poster-image object-cover"
+          // 그림을 받지 못하면(파일이 없거나 연결이 끊김) 기본 포스터를 대신 보여 줘요.
+          fallback={<DefaultPoster alt={alt} size={size} />}
         />
       ) : (
         <DefaultPoster alt={alt} size={size} />
