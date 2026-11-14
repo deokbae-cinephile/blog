@@ -386,13 +386,13 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect(await background()).toBe(before);
   });
 
-  test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고(넓은 화면 76px), 평점은 첫째 줄 끝, 한 줄 평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
+  test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고(넓은 화면 70px), 평점은 첫째 줄 끝, 한 줄 평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openHome(page);
     const item = listRegion(page).locator("li").first();
     const box = (await item.locator(".poster-frame").boundingBox())!;
-    // 넓은 화면의 썸네일은 76px(예전 64px의 약 1.2배)이고 가로 2 : 세로 3이에요(반올림 오차 0.02까지).
-    expect(Math.round(box.width)).toBe(76);
+    // 넓은 화면의 썸네일은 70px(예전 64px의 약 1.1배)이고 가로 2 : 세로 3이에요(반올림 오차 0.02까지).
+    expect(Math.round(box.width)).toBe(70);
     expect(Math.abs(box.width / box.height - 2 / 3)).toBeLessThanOrEqual(0.02);
     // 앞에 "-"나 번호가 없고, 썸네일이 제목보다 앞(왼쪽)에 있어요.
     await expect(item.locator("article > span[aria-hidden='true']")).toHaveCount(0);

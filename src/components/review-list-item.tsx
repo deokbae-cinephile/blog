@@ -76,10 +76,10 @@ export function ReviewListItem({ review, linked }: Props) {
         //   (제목이 링크일 때만. 링크가 아니면 누를 곳이 없어 반전하지 않아요.)
         // focus-visible:outline-*: 코드로 이 항목에 초점을 옮기면 점선 테두리로 보여 줘요.
         // grid-cols-[3.5rem_minmax(0,1fr)] — 휴대폰: 왼쪽 3.5rem 칸에 썸네일, 오른쪽에 글자
-        // sm:grid-cols-[4.75rem_minmax(0,1fr)] — 넓은 화면: 썸네일 4.75rem(76px)
+        // sm:grid-cols-[4.375rem_minmax(0,1fr)] — 넓은 화면: 썸네일 4.375rem(70px)
         // items-stretch: 글자 칸이 썸네일과 같은 높이로 늘어나요(한 줄 평을 아래 끝에 붙이려고).
         // minmax(0,1fr): 남는 너비를 모두 쓰되, 긴 글자 때문에 칸이 넘치지 않게 최소 0까지 줄어들 수 있게 해요.
-        className={`grid grid-cols-[3.5rem_minmax(0,1fr)] items-stretch gap-x-4 px-3 py-3 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crt-fg focus-visible:outline-dashed sm:grid-cols-[4.75rem_minmax(0,1fr)] ${
+        className={`grid grid-cols-[3.5rem_minmax(0,1fr)] items-stretch gap-x-4 px-3 py-3 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crt-fg focus-visible:outline-dashed sm:grid-cols-[4.375rem_minmax(0,1fr)] ${
           linked ? "group-hover:inverse group-has-[a:focus-visible]:inverse" : ""
         }`}
       >
