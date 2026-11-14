@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { GENRES, isGenre } from "./genres";
+import { GENRE_SLUGS, genreFromParam, GENRES, genreSlug, isGenre } from "./genres";
 
 describe("GENRES", () => {
   it("정한 10가지 장르를 가나다순으로 둔다", () => {
@@ -24,5 +24,23 @@ describe("isGenre", () => {
     expect(isGenre("공포")).toBe(true);
     expect(isGenre("SF")).toBe(false);
     expect(isGenre("")).toBe(false);
+  });
+});
+
+describe("장르 영어 주소 이름(GENRE_SLUGS)", () => {
+  it("모든 장르에 겹치지 않는 영어 소문자 이름이 있다", () => {
+    const slugs = GENRES.map((genre) => genreSlug(genre));
+    expect(slugs.every((slug) => /^[a-z]+$/.test(slug))).toBe(true);
+    expect(new Set(slugs).size).toBe(GENRES.length);
+    expect(Object.keys(GENRE_SLUGS)).toEqual([...GENRES]);
+  });
+
+  it("주소 값을 장르로 바꾼다: 영어 이름(대소문자 무시)과 예전 한글 이름을 받고, 없는 값은 null", () => {
+    expect(genreFromParam("drama")).toBe("드라마");
+    expect(genreFromParam("HORROR")).toBe("공포");
+    expect(genreFromParam("드라마")).toBe("드라마");
+    expect(genreFromParam("melo")).toBeNull();
+    expect(genreFromParam("")).toBeNull();
+    expect(genreFromParam(null)).toBeNull();
   });
 });

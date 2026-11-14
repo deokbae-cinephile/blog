@@ -26,7 +26,7 @@ import { toJsonLd, websiteJsonLd } from "@/lib/structured-data";
 
 /**
  * 이 페이지의 메타데이터
- * canonical(대표 주소): "/?genre=공포"처럼 조건만 다른 주소가 여러 개여도 검색엔진에는 "/"가 대표라고 알려 줘요.
+ * canonical(대표 주소): "/?genre=horror"처럼 조건만 다른 주소가 여러 개여도 검색엔진에는 "/"가 대표라고 알려 줘요.
  * 제목은 따로 정하지 않아 layout.tsx의 기본값("DMB")을 써요.
  */
 export const metadata: Metadata = {

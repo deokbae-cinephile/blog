@@ -47,8 +47,11 @@ describe("SiteHeader", () => {
     render(<SiteHeader />);
     // 링크 이름은 "GitHub"(화면 낭독기용 글자)이고, 어디로 가는지는 설명으로 알려 줘요.
     const link = screen.getByRole("link", { name: "GitHub" });
-    expect(link).toHaveAccessibleDescription("이 블로그의 소스 코드 저장소");
+    expect(link).toHaveAccessibleDescription("이 블로그의 소스 코드 저장소(새 창)");
     expect(link).toHaveAttribute("href", "https://github.com/deokbae-cinephile/blog");
+    // 새 창으로 열고, 새 창이 이 창을 건드리지 못하게 해요.
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
     // 글자 "GitHub"는 화면에서 숨겨요(sr-only). 화면에는 아이콘만 보여요.
     expect(within(link).getByText("GitHub")).toHaveClass("sr-only");
     // 아이콘은 링크 이름과 같은 뜻이라 꾸밈(aria-hidden)이에요.

@@ -73,7 +73,7 @@ describe("ReviewArticle", () => {
 
   it("장르는 그 장르로 거른 목록으로 가는 링크다", () => {
     renderAlone();
-    expect(screen.getByRole("link", { name: "로맨스" })).toHaveAttribute("href", `/?genre=${encodeURIComponent("로맨스")}`);
+    expect(screen.getByRole("link", { name: "로맨스" })).toHaveAttribute("href", "/?genre=romance");
   });
 
   it("한줄평은 화면 낭독기에 '한줄평:'을 붙여 읽히고, 본문 HTML도 보인다", () => {

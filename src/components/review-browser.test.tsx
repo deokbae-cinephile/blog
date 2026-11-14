@@ -446,8 +446,8 @@ describe("ReviewBrowser (주소 연결)", () => {
   // 테스트마다 spyOn을 원래대로 되돌려요.
   afterEach(() => vi.restoreAllMocks());
 
-  it("주소의 조건으로 목록을 거른다", () => {
-    navigation.search = `genre=${encodeURIComponent("코미디")}`;
+  it("주소의 조건으로 목록을 거른다(장르는 영어 이름, 예전 한글 주소도 받는다)", () => {
+    navigation.search = "genre=comedy";
     render(<ReviewBrowser reviews={reviewMocks} />);
     expect(listTitles()).toEqual(["화성 세탁소"]);
     expect(screen.getByRole("radio", { name: "코미디 1편" })).toBeChecked();

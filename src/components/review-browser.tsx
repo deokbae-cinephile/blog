@@ -40,7 +40,7 @@
 // 이 파일의 컴포넌트는 상태(useState)와 클릭 처리처럼 브라우저에서 돌아야 하는 일을 해서 클라이언트 컴포넌트로 만들어요.
 "use client";
 
-// useSearchParams: 주소의 ? 뒤 조건(예: q=겨울&genre=드라마)을 읽는 Next.js 훅
+// useSearchParams: 주소의 ? 뒤 조건(예: q=겨울&genre=drama)을 읽는 Next.js 훅
 import { useSearchParams } from "next/navigation";
 // React에서 쓰는 도구들. 각각 아래에서 쓰일 때 설명할게요.
 import { type FormEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -114,9 +114,9 @@ function ignore() {}
  *   그래서 화면은 상태로 "바로" 바꾸고, 주소는 그 뒤에 맞춰 바꿔요.
  */
 function UrlBoundBrowser({ reviews }: Props) {
-  // 주소의 ? 뒤 조건(예: q=겨울&genre=드라마)
+  // 주소의 ? 뒤 조건(예: q=겨울&genre=drama)
   const searchParams = useSearchParams();
-  // 비교하기 쉽게 글자로 바꿔 둬요. 예: "genre=공포&sort=rating"
+  // 비교하기 쉽게 글자로 바꿔 둬요. 예: "genre=horror&sort=rating"
   const urlKey = searchParams.toString();
 
   // 화면에 보일 조건. 처음에는 주소에서 읽어요. (useState(() => ...)는 처음 한 번만 계산해요.)

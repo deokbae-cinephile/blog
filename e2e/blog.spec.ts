@@ -70,7 +70,8 @@ test.describe("처음 화면(목록)", () => {
     const banner = page.getByRole("banner");
     const github = banner.getByRole("link", { name: "GitHub", exact: true });
     await expect(github).toHaveAttribute("href", "https://github.com/deokbae-cinephile/blog");
-    await expect(github).toHaveAccessibleDescription("이 블로그의 소스 코드 저장소");
+    await expect(github).toHaveAccessibleDescription("이 블로그의 소스 코드 저장소(새 창)");
+    await expect(github).toHaveAttribute("target", "_blank");
     await expect(banner).not.toContainText("평론가를 꿈꾸는");
     // 처음 화면 머리(촬영기 그림과 안내판)도 없어요.
     await expect(page.locator("#intro-title")).toHaveCount(0);
@@ -207,7 +208,8 @@ test.describe("처음 화면(목록)", () => {
     expect(await listTitles(page)).toEqual(["알파 정거장", LONG_TITLE]);
 
     await page.getByRole("radio", { name: "평점순" }).check();
-    await expect(page).toHaveURL(/genre=.+&sort=rating/);
+    // 주소에는 장르를 영어 이름으로 적어요(드라마 → drama).
+    await expect(page).toHaveURL(/\?genre=drama&sort=rating$/);
     await expect.poll(() => listTitles(page)).toEqual([LONG_TITLE, "알파 정거장"]);
   });
 

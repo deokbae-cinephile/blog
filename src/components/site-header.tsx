@@ -15,7 +15,7 @@
  *
  * 맡은 기능
  *   - 블로그 이름을 누르면 처음 화면(목록)으로 가요.
- *   - [GitHub]: 이 블로그의 소스 코드가 있는 저장소로 가요. 아이콘은 사이트에 맞춰 픽셀로 그렸어요(lib/github-mark.ts).
+ *   - [GitHub]: 이 블로그의 소스 코드가 있는 저장소를 새 창(새 탭)으로 열어요. 아이콘은 사이트에 맞춰 픽셀로 그렸어요(lib/github-mark.ts).
  *   (리뷰 추가 단추는 머리글이 아니라 화면 오른쪽 아래, 맨 위로 단추 오른쪽에 떠 있어요. components/floating-buttons.tsx)
  *
  * 브라우저 코드가 없는 "서버 컴포넌트"예요
@@ -68,7 +68,9 @@ export function SiteHeader() {
 
       {/* 소스 코드 저장소 링크. 화면에는 GitHub 아이콘만 보여요.
           링크 이름은 화면 낭독기용 글자(sr-only) "GitHub"예요. 아이콘은 이 이름과 같은 뜻이라 꾸밈으로 둬요(읽지 않음).
-          어디로 가는 링크인지는 설명(aria-describedby)으로 덧붙여, 화면 낭독기가 "GitHub, 링크, 이 블로그의 소스 코드 저장소"처럼 읽어요.
+          어디로 가는 링크인지와 새 창으로 열린다는 것은 설명(aria-describedby)으로 덧붙여,
+          화면 낭독기가 "GitHub, 링크, 이 블로그의 소스 코드 저장소(새 창)"처럼 읽어요(미리 알 수 있게, KWCAG 7.2.1).
+          target="_blank": 새 창으로 열어요. rel="noopener noreferrer": 새 창이 이 블로그 창을 건드리지 못하게 하고, 어디서 왔는지 알리지 않아요.
           설명 글은 화면에서는 숨겨요(hidden). 숨긴 글도 aria-describedby로 가리키면 읽어 줘요.
           menu-link: 누르는 높이 44px, 좌우 안쪽 여백 10px → 아이콘 24px와 합쳐 44 × 44px.
           -mr-2.5: 오른쪽 안쪽 여백(10px)만큼 바깥으로 당겨, 아이콘 오른쪽 끝을 본문 오른쪽 끝에 딱 맞춰요(누르는 영역은 그대로예요).
@@ -76,6 +78,8 @@ export function SiteHeader() {
           self-start: 아주 좁은 화면에서 왼쪽 묶음이 두 줄이 되어도 아이콘은 첫 줄(오른쪽 위)에 있어요. */}
       <a
         href={site.repo.url}
+        target="_blank"
+        rel="noopener noreferrer"
         aria-describedby="github-link-desc"
         className="menu-link -mr-2.5 ml-auto shrink-0 self-start"
       >
@@ -83,7 +87,7 @@ export function SiteHeader() {
         <span className="sr-only">GitHub</span>
       </a>
       <span id="github-link-desc" hidden>
-        이 블로그의 소스 코드 저장소
+        이 블로그의 소스 코드 저장소(새 창)
       </span>
     </header>
   );

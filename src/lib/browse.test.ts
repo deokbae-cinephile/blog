@@ -37,14 +37,23 @@ const [winter, mars, reel, legend] = reviewMocks as [
 
 describe("parseParams / toSearch", () => {
   it("주소의 조건을 읽고, 다시 같은 주소로 만든다", () => {
-    const params = parseParams(new URLSearchParams("q=겨울&genre=드라마&sort=rating"));
+    const params = parseParams(new URLSearchParams("q=겨울&genre=drama&sort=rating"));
     expect(params).toEqual({ q: "겨울", genre: "드라마", sort: "rating" });
     // 한글은 주소에 쓸 수 있는 모양(%EA%B2%A8...)으로 바뀌어요.
-    expect(toSearch(params)).toBe("?q=%EA%B2%A8%EC%9A%B8&genre=%EB%93%9C%EB%9D%BC%EB%A7%88&sort=rating");
+    // 장르는 영어 이름으로 적어요(한글을 적으면 %EB%93%9C…처럼 길어져요).
+    expect(toSearch(params)).toBe("?q=%EA%B2%A8%EC%9A%B8&genre=drama&sort=rating");
   });
 
   it("없는 장르, 모르는 정렬, 공백만 있는 검색어는 기본값으로 둔다", () => {
     expect(parseParams(new URLSearchParams("q=%20%20&genre=멜로&sort=random"))).toEqual(DEFAULT_PARAMS);
+  });
+
+  it("예전 주소처럼 한글 장르(?genre=드라마)가 와도 같은 장르로 받고, 다시 적을 때는 영어 이름으로 적는다", () => {
+    const params = parseParams(new URLSearchParams(`genre=${encodeURIComponent("드라마")}`));
+    expect(params.genre).toBe("드라마");
+    expect(toSearch(params)).toBe("?genre=drama");
+    // 영어 이름은 대소문자를 가리지 않아요.
+    expect(parseParams(new URLSearchParams("genre=Drama")).genre).toBe("드라마");
   });
 
   it("기본값만 있으면 주소에 아무것도 붙이지 않는다", () => {
