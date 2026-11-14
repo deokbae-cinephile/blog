@@ -7,7 +7,7 @@ director: 마틴 스코세이지
 runtime: 138
 genres: [공포, 드라마, 스릴러]
 rating: 4.5
-oneLiner: 바로 소설 원작을 찾아볼 수밖에 없게끔 만드는 마력
+oneLiner: 바로 소설 원작을 찾아볼 수밖에 없게끔 만드는 작품
 publishedAt: 2026-11-14
 poster: shutter-island.jpg
 ---
