@@ -13,6 +13,9 @@
  *   - await user.keyboard("{Enter}")  : Enter 키를 눌러요.
  *   - await user.click(요소)           : 요소를 눌러요.
  *   진짜 사람처럼 이벤트(키 누름, 포커스 등)를 차례로 일으켜서, fireEvent보다 실제 사용에 가까워요.
+ *
+ * 리뷰 상세를 여는지(lib/site.ts의 REVIEW_DETAIL_PUBLIC, v3 전까지 false)는 테스트마다 바꿔 볼 수 있게 흉내 내요.
+ * 글쓴이 로그인은 쿠키(blog_admin=1)로 흉내 내요(components/use-is-admin.ts가 이 쿠키를 봐요).
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
@@ -28,6 +31,21 @@ import { ReviewBrowser, ReviewBrowserView } from "./review-browser";
 
 /* ── 가짜 next/navigation: 주소 조건을 우리가 정한 값으로 흉내 내요 ── */
 const navigation = vi.hoisted(() => ({ search: "" }));
+
+/* ── 리뷰 상세를 여는지: detail.open을 바꾸면 그 테스트에서만 열린 상태(v3)가 돼요. 처음은 실제 값처럼 닫힘이에요. ── */
+// (가져온 이름은 쓸 때마다 이 getter를 읽어서, 테스트 안에서 바꾼 값이 바로 보여요.)
+const detail = vi.hoisted(() => ({ open: false }));
+vi.mock("@/lib/site", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/site")>()),
+  get REVIEW_DETAIL_PUBLIC() {
+    return detail.open;
+  },
+}));
+
+/** 로그인 표시 쿠키를 지워요(로그아웃 상태). */
+const logOut = () => {
+  document.cookie = "blog_admin=; max-age=0; path=/";
+};
 
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
@@ -248,24 +266,31 @@ describe("ReviewBrowserView (방향키로 고르기)", () => {
 
   beforeEach(() => {
     placeItems(100); // 기본: 목록이 화면에 보여요.
-    // 리뷰를 고르는 키는 제목이 링크일 때만 써요. v3 전까지는 글쓴이(로그인 표시 쿠키)에게만 링크라서 로그인한 상태로 시험해요.
-    document.cookie = "blog_admin=1; path=/";
+    // 리뷰를 고르는 키는 제목이 링크일 때(상세를 연 뒤, v3)만 써요. 그래서 상세를 연 상태로 시험해요.
+    detail.open = true;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    document.cookie = "blog_admin=; max-age=0; path=/";
+    detail.open = false;
+    logOut();
   });
 
-  it("v3 전 방문자(로그인 전)의 목록에는 링크가 없어, ▼ ▶ Home을 눌러도 가로채지 않는다(리뷰를 고르지 않는다)", async () => {
-    document.cookie = "blog_admin=; max-age=0; path=/";
+  it("v3 전(상세를 열지 않은 동안)에는 방문자든 글쓴이든 ▼ ▶ Home을 눌러도 가로채지 않는다(글쓴이의 [수정] 링크로도 가지 않는다)", async () => {
+    detail.open = false;
     const user = userEvent.setup();
-    render(<Harness />);
-    // 목록 항목 안에 링크가 하나도 없어요(제목은 글자로만).
-    expect(document.querySelectorAll("li a[href]")).toHaveLength(0);
-    for (const key of ["{ArrowDown}", "{ArrowRight}", "{Home}"]) {
-      await user.keyboard(key);
-      expect(document.body).toHaveFocus();
+    for (const cookie of ["", "blog_admin=1; path=/"]) {
+      if (cookie) document.cookie = cookie;
+      const { unmount } = render(<Harness />);
+      // 제목은 링크가 아니라 글자예요.
+      expect(document.querySelectorAll("li h3 a[href]")).toHaveLength(0);
+      // 방문자의 목록에는 링크가 하나도 없고, 글쓴이의 목록에는 리뷰마다 [수정] 링크만 있어요.
+      expect(document.querySelectorAll("li a[href]")).toHaveLength(cookie ? reviewMocks.length : 0);
+      for (const key of ["{ArrowDown}", "{ArrowRight}", "{Home}"]) {
+        await user.keyboard(key);
+        expect(document.body).toHaveFocus();
+      }
+      unmount();
     }
   });
 
@@ -353,6 +378,11 @@ describe("ReviewBrowserView (무한 스크롤)", () => {
   /** 23편: 처음 10편 → 20편 → 23편으로 늘어나요. */
   const reviews = manyReviews(23);
 
+  afterEach(() => {
+    detail.open = false;
+    logOut();
+  });
+
   it("처음에는 10편만 보이고, 몇 편이 보이는지 알린다", () => {
     render(<Harness reviews={reviews} />);
     expect(listTitles()).toHaveLength(10);
@@ -366,7 +396,7 @@ describe("ReviewBrowserView (무한 스크롤)", () => {
     await user.click(screen.getByRole("button", { name: "10편 더 보기" }));
     expect(listTitles()).toHaveLength(20);
     // 11번째 리뷰(새로 나온 첫 리뷰)에 초점이 가요. 키보드 사용자가 이어서 읽을 수 있어요.
-    // v3 전 방문자의 목록은 제목이 링크가 아니라서, 리뷰 한 편(article, tabIndex -1)으로 초점을 옮겨요.
+    // v3 전에는 제목이 링크가 아니라서, 리뷰 한 편(article, tabIndex -1)으로 초점을 옮겨요.
     expect(document.activeElement).toHaveTextContent("시험 영화 11");
     expect(document.activeElement?.tagName).toBe("ARTICLE");
 
@@ -378,13 +408,20 @@ describe("ReviewBrowserView (무한 스크롤)", () => {
     expect(status()).toHaveTextContent(/^전체 23편$/);
   });
 
-  it("글쓴이(제목이 링크)라면 [더 보기]를 누른 뒤 새로 나온 첫 리뷰의 제목 링크로 초점을 옮긴다", async () => {
+  it("v3 전 글쓴이의 목록([수정] 링크가 있어요)에서도 [더 보기]를 누르면 [수정]이 아니라 새로 나온 첫 리뷰(article)로 초점을 옮긴다", async () => {
     document.cookie = "blog_admin=1; path=/";
     const user = userEvent.setup();
     render(<Harness reviews={reviews} />);
     await user.click(screen.getByRole("button", { name: "10편 더 보기" }));
+    expect(document.activeElement).toBe(screen.getByRole("article", { name: "시험 영화 11" }));
+  });
+
+  it("상세를 열면(v3, 제목이 링크) [더 보기]를 누른 뒤 새로 나온 첫 리뷰의 제목 링크로 초점을 옮긴다", async () => {
+    detail.open = true;
+    const user = userEvent.setup();
+    render(<Harness reviews={reviews} />);
+    await user.click(screen.getByRole("button", { name: "10편 더 보기" }));
     expect(document.activeElement).toBe(screen.getByRole("link", { name: "시험 영화 11" }));
-    document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
   it("목록 끝의 '더 보기' 자리가 화면에 가까워지면 저절로 10편을 더 보인다", () => {

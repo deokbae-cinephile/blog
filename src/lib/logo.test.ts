@@ -22,6 +22,17 @@ describe("LOGO_ROWS", () => {
 });
 
 describe("HEADER_LOGO_ROWS", () => {
+  it("LOGO_ROWS(같은 카메라) 위아래에 빈 줄을 하나씩 더한 그림이다", () => {
+    expect(HEADER_LOGO_ROWS.slice(1, -1)).toEqual([...LOGO_ROWS]);
+    expect(HEADER_LOGO_ROWS.at(0)).toMatch(/^\.+$/);
+    expect(HEADER_LOGO_ROWS.at(-1)).toMatch(/^\.+$/);
+  });
+
+  it("왼쪽 끝 칸과 오른쪽 끝 칸이 색칠돼 있어, 그림 끝이 곧 요소 끝이다(머리글의 로고 ↔ 이름 간격이 그대로)", () => {
+    expect(HEADER_LOGO_ROWS.some((row) => row.startsWith("#"))).toBe(true);
+    expect(HEADER_LOGO_ROWS.some((row) => row.endsWith("#"))).toBe(true);
+  });
+
   it("'#'과 '.'만 쓰고, 모든 줄의 칸 수가 같다", () => {
     expect(HEADER_LOGO_ROWS.every((row) => /^[#.]+$/.test(row))).toBe(true);
     expect(new Set(HEADER_LOGO_ROWS.map((row) => row.length)).size).toBe(1);

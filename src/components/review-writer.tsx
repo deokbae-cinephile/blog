@@ -5,14 +5,13 @@
  *   글쓴이가 리뷰를 추가하고 수정하는 폼이에요. 본문은 Markdown으로 써요.
  *
  *     넓은 화면(1024px~)은 3칸: [포스터 | 영화 정보 2열 × 5행]
- *     * 표시는 꼭 적어야 하는 칸입니다.        ← 칸 이름 옆 *의 뜻(색이 아니라 글자로 알려요)
- *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────┐
- *     │ [미리보기]     │ │ 주소 *            │ 제목 *            │
- *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도 *        │  ← 단추는 포스터와 같은 너비
- *     │ [포스터 빼기]  │ │ 감독 *            │ 출연              │  ← 출연은 5명까지(넘으면 저장할 때 알려요)
- *     │               │ │ 상영 시간(분)     │ 장르 *(여러 개)    │
- *     │               │ │ 평점 *(처음 5.0)  │ 한 줄 평 *          │
- *     └───────────────┘ └──────────────────────────────────────┘
+ *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────────┐
+ *     │ [미리보기]     │ │ [필수] 주소          │ [필수] 한글 제목      │
+ *     │ [포스터 고르기]│ │ 영문 제목            │ [필수] 개봉 연도      │  ← 단추는 포스터와 같은 너비
+ *     │ [포스터 빼기]  │ │ [필수] 감독          │ 출연                 │  ← 출연은 5명까지(넘으면 저장할 때 알려요)
+ *     │               │ │ 상영 시간(분)        │ [필수] 장르(여러 개)  │
+ *     │               │ │ [필수] 평점(처음 5.0) │ [필수] 한 줄 평       │
+ *     └───────────────┘ └──────────────────────────────────────────┘
  *     ┌ 본문 ─────────────────────────────────────────────────┐
  *     │ [장면 사진 넣기] → 커서 자리에 ![](/images/...) 줄이 들어가요 │
  *     │ 본문(Markdown) <textarea> │ 미리 보기(저장한 뒤의 모습)  │  ← 좁은 화면은 탭으로 바꿔 봐요
@@ -20,7 +19,8 @@
  *     [리뷰 저장] [임시 저장] [취소]
  *   좁은 화면에서는 한 칸으로, 포스터 → 영화 정보 → 본문 차례로 쌓여요(코드 순서도 같아서 읽는 순서가 같아요).
  *   칸 아래 도움말은 주소에만 둬요. 나머지 칸은 이름만으로 알 수 있고, 틀리면 오류 문구가 고치는 방법을 알려 줘요.
- *   꼭 적어야 하는 칸은 이름 옆에 *를 보여요. 화면 낭독기는 *를 읽지 않고, 입력 칸의 required로 "필수"라고 알려 줘요.
+ *   꼭 적어야 하는 칸은 이름 앞에 "[필수]"를 보여요(예: "[필수] 한글 제목"). 화면 낭독기는 대괄호 없이 "필수 한글 제목"으로 읽고,
+ *   입력 칸에는 required도 달려 있어요.
  *
  * 저장하는 순서
  *   1. 칸 검사(lib/review-form.ts) — 틀린 칸이 있으면 "고칠 곳" 목록을 보여 주고 거기로 초점을 옮겨요.
@@ -67,6 +67,7 @@ import { indentText } from "@/lib/indent";
 import { formatBytes, shrinkImage } from "@/lib/shrink-image";
 import { type FieldErrors, validateReviewForm } from "@/lib/review-form";
 import { SLUG } from "@/lib/review-schema";
+import { REVIEW_DETAIL_PUBLIC } from "@/lib/site";
 import { EMPTY_VALUES, type ReviewFormValues, withFormDefaults } from "@/lib/review-values";
 import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/upload-rules";
 
@@ -134,13 +135,13 @@ const WRITER_EMPTY_VALUES: ReviewFormValues = { ...EMPTY_VALUES, rating: DEFAULT
 /** 평점 고르기 칸 오른쪽의 ▼ 그림(7×4칸, 한 칸 2px → 14×8px). 사이트의 픽셀 그림과 같은 모양이에요. */
 const SELECT_ARROW_ROWS = ["#######", ".#####.", "..###..", "...#..."] as const;
 
-/** 칸 이름(화면에 보이는 이름). 고칠 곳 목록에서 "제목: 제목을 입력하세요."처럼 써요. */
+/** 칸 이름(화면에 보이는 이름). 고칠 곳 목록에서 "한글 제목: 한글 제목을 입력하세요."처럼 써요. */
 const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
   poster: "포스터",
   posterAlt: "포스터 설명",
   slug: "주소",
-  title: "제목",
-  originalTitle: "원제",
+  title: "한글 제목",
+  originalTitle: "영문 제목",
   year: "개봉 연도",
   director: "감독",
   cast: "출연",
@@ -746,11 +747,14 @@ export function ReviewWriter(props: Props) {
         </h2>
         <p>저장소에 올렸습니다. 블로그를 다시 배포하는 동안(몇 분) 기다린 뒤 새로 고치면 보입니다.</p>
         <ul className="flex flex-wrap gap-2">
-          <li>
-            <Link href={`/reviews/${savedSlug}`} className="btn-line">
-              이 리뷰 보기
-            </Link>
-          </li>
+          {/* 리뷰 상세는 v3에서 열어요(lib/site.ts). 그전에는 [이 리뷰 보기]를 두지 않아요(눌러도 목록으로 가요). */}
+          {REVIEW_DETAIL_PUBLIC && (
+            <li>
+              <Link href={`/reviews/${savedSlug}`} className="btn-line">
+                이 리뷰 보기
+              </Link>
+            </li>
+          )}
           <li>
             <Link href="/" className="btn-line">
               목록으로
@@ -872,9 +876,6 @@ export function ReviewWriter(props: Props) {
         </div>
       )}
 
-      {/* 칸 이름 옆 *의 뜻. 화면에 보이는 안내라 색이 아니라 글자로 알려요(KWCAG 7.3.2 레이블 제공). */}
-      <p className="text-crt-dim">* 표시는 꼭 적어야 하는 칸입니다.</p>
-
       {/* 포스터와 영화 정보. 넓은 화면(lg, 1024px~)에서는 3칸으로 나눠 [포스터 | 영화 정보(2칸)]로 놓아요. */}
       <div className="grid gap-10 lg:grid-cols-3 lg:gap-8">
         {/* 포스터: 넓은 화면에서는 왼쪽 한 칸. 주소보다 먼저 골라도 돼요. */}
@@ -943,7 +944,7 @@ export function ReviewWriter(props: Props) {
             <p>
               <span className="text-crt-dim">주소: </span>/reviews/{values.slug}
               <br />
-              <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다)</span>
+              <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다.)</span>
             </p>
           )}
 
@@ -996,10 +997,9 @@ export function ReviewWriter(props: Props) {
             <ChoiceGroup
               layout="aside"
               legend={
-                // 장르는 체크박스 묶음이라 required를 달 곳이 없어요. 그래서 *는 숨기고 화면 낭독기용 글자 "(필수)"를 함께 둬요.
+                // 장르는 체크박스 묶음이라 required를 달 곳이 없어요. "[필수]" 글자가 묶음 이름("필수 장르")에 들어가 필수라고 알려요.
                 <>
-                  {FIELD_LABELS.genres} <RequiredMark />
-                  <span className="sr-only">(필수)</span>
+                  <RequiredMark /> {FIELD_LABELS.genres}
                 </>
               }
               describedBy={errors.genres ? `${fieldId("genres")}-error` : undefined}
@@ -1172,11 +1172,16 @@ function initialState(props: Props): { values: ReviewFormValues; notice: string;
  * ────────────────────────────────────────────────────────────── */
 
 /**
- * 꼭 적어야 하는 칸의 표시 "*". 칸 이름과 같은 색이에요(칸 이름 뒤에 빈칸 한 칸을 두고 붙여요).
- * aria-hidden: 화면 낭독기는 "별표"라고 읽지 않아요. 필수인지는 입력 요소의 required(또는 숨긴 글자 "(필수)")로 알려요.
+ * 꼭 적어야 하는 칸의 표시 "[필수]". 칸 이름 앞에 빈칸 한 칸을 두고 붙여요(예: "[필수] 한글 제목").
+ * 보조 글자색(text-crt-dim)으로 칸 이름보다 덜 눈에 띄게 해요. 대괄호는 꾸밈이라 화면 낭독기가 읽지 않고("필수"만 읽어요),
+ * 칸 이름에도 "필수"가 들어가 필수라고 알려 줘요(글자 칸에는 required도 함께 달아요).
  */
 function RequiredMark() {
-  return <span aria-hidden="true">*</span>;
+  return (
+    <span className="text-crt-dim">
+      <span aria-hidden="true">[</span>필수<span aria-hidden="true">]</span>
+    </span>
+  );
 }
 
 /** Field가 받는 값 */
@@ -1186,8 +1191,8 @@ type FieldProps = {
   /** 칸 이름 */
   label: string;
   /**
-   * 꼭 채워야 하는 칸이면 이름 옆에 *를 보여 줘요(색이 아닌 글자 표시예요. 뜻은 폼 위 안내 줄이 알려요).
-   * 입력 요소에도 required를 달아, 화면 낭독기가 "필수"라고 알려 줘요(*는 읽지 않아요).
+   * 꼭 채워야 하는 칸이면 이름 앞에 "[필수]"를 글자로 보여 줘요(색만으로 알리지 않아요).
+   * 입력 요소에도 required를 달아 필수 상태를 알려요.
    */
   required?: boolean;
   /** 칸 아래 도움말 */
@@ -1211,14 +1216,13 @@ function Field({ id, label, required = false, hint, error, children }: FieldProp
   return (
     <div className="grid gap-2">
       <label htmlFor={id} className="glow">
-        {label}
-        {/* 이름과 * 사이 빈칸 한 칸. */}
+        {/* "[필수]"와 이름 사이 빈칸 한 칸. */}
         {required && (
           <>
-            {" "}
-            <RequiredMark />
+            <RequiredMark />{" "}
           </>
         )}
+        {label}
       </label>
       {children(describedBy)}
       {hint && (

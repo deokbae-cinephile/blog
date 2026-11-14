@@ -6,7 +6,7 @@
  *   - 로그인: 틀리면 알리고, 맞으면 원래 가려던 화면으로 돌아가는지
  *   - 리뷰 라이터: 리뷰 추가(포스터·장면 사진 포함)를 저장하면 저장소(가짜 GitHub)에 커밋이 올라가는지,
  *     본문 미리 보기가 넓은 화면은 나란히, 좁은 화면은 탭으로 보이는지
- *   - 수정·삭제, 로그아웃
+ *   - 수정·삭제(v3 전까지는 상세를 글쓴이에게도 열지 않아, 목록 한 편 아래의 [수정]·[삭제]로 해요), 로그아웃
  *   - 접근성: 로그인·글쓰기 화면 axe 검사
  *
  * 저장소는 가짜 GitHub 서버(e2e/mock-github.mjs)예요. 시작할 때 처음 모습으로 되돌려요.
@@ -18,8 +18,10 @@ import path from "node:path";
 
 import { expect, type Page, test } from "@playwright/test";
 
+// 리뷰 상세를 여는지(v3 전까지 false). 열면 [수정]·[삭제]가 목록이 아니라 상세 맨 윗줄에 있어요.
+import { REVIEW_DETAIL_PUBLIC } from "../src/lib/site";
 import { E2E_ADMIN } from "./admin-account";
-import { expectNoA11yViolations, expectNoHorizontalScroll, loginAsAuthor } from "./helpers";
+import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
 
 /** 가짜 GitHub 서버 주소(playwright.config.ts와 같아요) */
 const GITHUB = `http://127.0.0.1:${process.env.MOCK_GITHUB_PORT ?? 3101}`;
@@ -50,10 +52,10 @@ test.describe("로그인 전(proxy.ts가 막기)", () => {
     expect(await response.json()).toEqual({ message: "로그인이 필요합니다. 다시 로그인한 뒤 시도하세요." });
   });
 
-  test("로그인 전에는 [+](리뷰 추가)·[수정]·[삭제]가 보이지 않고, 리뷰 상세에도 들어갈 수 없다(목록으로 옮김)", async ({ page }) => {
-    // v3 전까지 방문자가 상세 주소로 오면 처음 화면(목록)으로 옮겨요(proxy.ts).
-    await page.goto("/reviews/alpha-station");
-    await expect(page).toHaveURL(/\/$/);
+  test("로그인 전에는 목록에 [+](리뷰 추가)·[수정]·[삭제]가 보이지 않는다", async ({ page }) => {
+    // (상세 주소로 오면 목록으로 옮기는지는 blog.spec.ts의 "리뷰 상세(v3 전)"에서 확인해요.)
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
     await expect(page.getByRole("link", { name: "수정" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "삭제" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "리뷰 추가" })).toHaveCount(0);
@@ -117,21 +119,26 @@ test.describe("글쓴이 기능", () => {
     await page.getByRole("button", { name: "리뷰 저장" }).click();
     await expect(page.getByRole("group", { name: /고칠 곳 \d+개/ })).toBeFocused();
 
-    // 칸 이름 옆 *의 뜻을 폼 위에 글로 알려요. 칸 이름에는 "(영문)"·"(필수)" 같은 덧붙임이 없어요.
-    await expect(page.getByText("* 표시는 꼭 적어야 하는 칸입니다.")).toBeVisible();
+    // 꼭 적어야 하는 칸은 이름 앞에 "[필수]"를 보여요(화면 낭독기는 "필수 주소"로 읽어요). 따로 뜻을 풀이하는 글은 없어요.
+    // 칸 이름에는 "(영문)" 같은 덧붙임이 없고, 제목 칸은 "한글 제목"·"영문 제목"이에요.
+    await expect(page.locator("form")).not.toContainText("표시는 꼭 적어야 하는 칸입니다");
     await expect(page.locator("form")).not.toContainText("(영문)");
-    await expect(page.getByRole("textbox", { name: "주소", exact: true })).toHaveAttribute("required", "");
-    await page.getByLabel(/^주소/).fill("e2e-new-review");
-    await page.getByLabel(/^제목/).fill("E2E 새 리뷰");
-    await page.getByLabel(/^개봉 연도/).fill("2026");
-    await page.getByLabel(/^감독/).fill("시험감독");
+    const slug = page.getByRole("textbox", { name: "필수 주소", exact: true });
+    await expect(slug).toHaveAttribute("required", "");
+    await expect(page.locator(`label[for="${await slug.getAttribute("id")}"]`)).toHaveText("[필수] 주소");
+    await expect(page.getByRole("textbox", { name: "필수 한글 제목", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "영문 제목", exact: true })).not.toHaveAttribute("required", "");
+    await page.getByLabel(/주소$/).fill("e2e-new-review");
+    await page.getByLabel(/한글 제목$/).fill("E2E 새 리뷰");
+    await page.getByLabel(/개봉 연도$/).fill("2026");
+    await page.getByLabel(/감독$/).fill("시험감독");
     // 출연: 배우 이름을 쉼표로 나눠 적어요. 빈칸이 들쭉날쭉해도 원고에는 "A, B"로 가지런히 들어가요.
     await page.getByRole("textbox", { name: "출연", exact: true }).fill("시험배우1,시험배우2 ");
     await page.getByRole("checkbox", { name: "로맨스" }).check();
     // 평점은 처음에 5.0이 골라져 있어요("고르세요"가 없어요).
-    await expect(page.getByLabel(/^평점/)).toHaveValue("5.0");
-    await page.getByLabel(/^평점/).selectOption("3.5");
-    await page.getByLabel(/^한 줄 평/).fill("끝까지 저장되는지 보는 한 줄 평");
+    await expect(page.getByLabel(/평점$/)).toHaveValue("5.0");
+    await page.getByLabel(/평점$/).selectOption("3.5");
+    await page.getByLabel(/한 줄 평$/).fill("끝까지 저장되는지 보는 한 줄 평");
     // 포스터를 고르기 전에는 상세 화면과 같은 기본 포스터(빈 필름 그림 + NO POSTER)가 보여요.
     const posterFrame = page.getByRole("group", { name: "포스터" }).locator(".poster-frame");
     await expect(posterFrame).toContainText("NO POSTER");
@@ -146,7 +153,7 @@ test.describe("글쓴이 기능", () => {
       expect(Math.round((await button.boundingBox())!.width)).toBe(Math.round(frame.width));
     }
     // 평점 칸: ▼와 칸 오른쪽 끝 사이가, 글자와 칸 왼쪽 끝 사이(테두리 + 안쪽 여백)와 같아요(좌우 같은 간격).
-    const inset = await page.getByLabel(/^평점/).evaluate((select) => {
+    const inset = await page.getByLabel(/평점$/).evaluate((select) => {
       const style = getComputedStyle(select);
       const arrow = select.parentElement!.querySelector("svg")!.getBoundingClientRect();
       return {
@@ -198,8 +205,8 @@ test.describe("글쓴이 기능", () => {
     const body = page.getByRole("textbox", { name: "본문(Markdown)" });
 
     // 쓰다 만 글: 주소·제목·포스터·장면 사진만 넣고 [임시 저장](검사하지 않아요).
-    await page.getByLabel(/^주소/).fill("e2e-draft");
-    await page.getByLabel(/^제목/).fill("임시 저장 시험");
+    await page.getByLabel(/주소$/).fill("e2e-draft");
+    await page.getByLabel(/한글 제목$/).fill("임시 저장 시험");
     await page.getByLabel("포스터 고르기").setInputFiles(PICTURE);
     await expect(page.getByText(/포스터로 test-pattern\.png을\(를\) 골랐습니다/)).toBeVisible();
     await body.fill("쓰던 문단");
@@ -218,17 +225,17 @@ test.describe("글쓴이 기능", () => {
     await expect(drafts).toContainText("임시 저장 시험");
     await expectNoA11yViolations(page);
     await drafts.getByRole("button", { name: "불러오기" }).click();
-    await expect(page.getByLabel(/^제목/)).toHaveValue("임시 저장 시험");
-    await expect(page.getByLabel(/^주소/)).toHaveValue("e2e-draft");
+    await expect(page.getByLabel(/한글 제목$/)).toHaveValue("임시 저장 시험");
+    await expect(page.getByLabel(/주소$/)).toHaveValue("e2e-draft");
     await expect(body).toHaveValue("쓰던 문단\n\n![](/images/e2e-draft/scene-1.png)\n\n");
     await expect(page.getByRole("group", { name: "포스터" }).locator("img")).toHaveAttribute("src", /^blob:/);
     await expect(page.getByRole("region", { name: "미리 보기" }).locator("img")).toHaveAttribute("src", /^blob:/);
 
     // 이어 써서 리뷰로 저장해요. 포스터·장면 사진도 함께 올라가요.
-    await page.getByLabel(/^개봉 연도/).fill("2026");
-    await page.getByLabel(/^감독/).fill("시험감독");
+    await page.getByLabel(/개봉 연도$/).fill("2026");
+    await page.getByLabel(/감독$/).fill("시험감독");
     await page.getByRole("checkbox", { name: "드라마" }).check();
-    await page.getByLabel(/^한 줄 평/).fill("임시 저장에서 이어 쓴 한 줄 평");
+    await page.getByLabel(/한 줄 평$/).fill("임시 저장에서 이어 쓴 한 줄 평");
     await body.fill("쓰던 문단\n\n![화면 조정 무늬](/images/e2e-draft/scene-1.png)\n");
     // 저장소(가짜 GitHub)의 답을 늦춰, 저장하는 동안 단추 아래에 로딩 UI가 보이는지 확인해요.
     await request.post(`${GITHUB}/__delay?ms=700`);
@@ -245,7 +252,7 @@ test.describe("글쓴이 기능", () => {
 
     // 다 쓴 글이라 임시 저장본은 지워졌어요.
     await page.goto("/write");
-    await expect(page.getByLabel(/^제목/)).toBeVisible();
+    await expect(page.getByLabel(/한글 제목$/)).toBeVisible();
     await expect(page.getByRole("region", { name: /임시 저장한 글/ })).toHaveCount(0);
   });
 
@@ -270,7 +277,7 @@ test.describe("글쓴이 기능", () => {
     );
     const big = (name: string) => ({ name, mimeType: "image/png", buffer: bigPng });
 
-    await page.getByLabel(/^주소/).fill("e2e-big-photo");
+    await page.getByLabel(/주소$/).fill("e2e-big-photo");
     await page.getByLabel("포스터 고르기").setInputFiles(big("big-poster.png"));
     await expect(page.getByText(/포스터로 big-poster\.png을\(를\) 골랐습니다\. 큰 사진이라 .+에서 .+로 줄였습니다\./)).toBeVisible();
     // 미리보기 그림의 실제 크기가 긴 변 1600px이에요.
@@ -282,11 +289,11 @@ test.describe("글쓴이 기능", () => {
     await expect(body).toHaveValue("![](/images/e2e-big-photo/scene-1.webp)\n\n");
 
     // 나머지 칸을 채워 저장하면, 줄인 파일(.jpg, .webp)이 올라가요(사진 올리기 API가 파일 앞부분으로 형식도 확인해요).
-    await page.getByLabel(/^제목/).fill("큰 사진 시험");
-    await page.getByLabel(/^개봉 연도/).fill("2026");
-    await page.getByLabel(/^감독/).fill("시험감독");
+    await page.getByLabel(/한글 제목$/).fill("큰 사진 시험");
+    await page.getByLabel(/개봉 연도$/).fill("2026");
+    await page.getByLabel(/감독$/).fill("시험감독");
     await page.getByRole("checkbox", { name: "액션" }).check();
-    await page.getByLabel(/^한 줄 평/).fill("줄여서 올라가는지 보는 한 줄 평");
+    await page.getByLabel(/한 줄 평$/).fill("줄여서 올라가는지 보는 한 줄 평");
     await body.fill("![초록 그러데이션](/images/e2e-big-photo/scene-1.webp)\n");
     await page.getByRole("button", { name: "리뷰 저장" }).click();
     await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused();
@@ -333,7 +340,7 @@ test.describe("글쓴이 기능", () => {
   test("Markdown 파일 불러오기 단추는 없다(2.0.0에서 없앴다)", async ({ page }) => {
     await page.goto("/login?next=/write");
     await login(page);
-    await expect(page.getByLabel(/^제목/)).toBeVisible();
+    await expect(page.getByLabel(/한글 제목$/)).toBeVisible();
     await expect(page.getByText("Markdown 파일 불러오기")).toHaveCount(0);
   });
 
@@ -361,21 +368,23 @@ test.describe("글쓴이 기능", () => {
     }
   });
 
-  test("수정: 상세 화면의 [수정]으로 들어가 저장소 원고를 고치면, 고친 원고가 커밋된다", async ({ page, request }) => {
-    await page.goto("/login?next=/reviews/alpha-station");
+  test("수정: [수정](v3 전에는 목록 한 편 아래)으로 들어가 저장소 원고를 고치면, 고친 원고가 커밋된다", async ({ page, request }) => {
+    // v3 전까지는 상세를 글쓴이에게도 열지 않아, [수정]이 목록 한 편 아래에 있어요(상세를 열면 상세 맨 윗줄).
+    await page.goto(REVIEW_DETAIL_PUBLIC ? "/login?next=/reviews/alpha-station" : "/login?next=/");
     await login(page);
-    await page.getByRole("link", { name: "수정" }).click();
+    const where = REVIEW_DETAIL_PUBLIC ? page.getByRole("main") : page.getByRole("article", { name: "알파 정거장" });
+    await where.getByRole("link", { name: "수정" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "리뷰 수정: alpha-station" })).toBeVisible();
-    await expect(page.getByLabel(/^제목/)).toHaveValue("알파 정거장");
+    await expect(page.getByLabel(/한글 제목$/)).toHaveValue("알파 정거장");
     // 출연 칸에 원고의 배우들이 들어 있어요.
     await expect(page.getByRole("textbox", { name: "출연", exact: true })).toHaveValue("이배우, 박배우");
-    // 주소는 바꿀 수 없어요. "(수정할 때는 바꿀 수 없습니다)"는 주소 다음 줄에 보여요.
+    // 주소는 바꿀 수 없어요. "(수정할 때는 바꿀 수 없습니다.)"는 주소 다음 줄에 보여요.
     const slugLabel = (await page.getByText("주소:", { exact: true }).boundingBox())!;
-    const slugNote = (await page.getByText("(수정할 때는 바꿀 수 없습니다)", { exact: true }).boundingBox())!;
+    const slugNote = (await page.getByText("(수정할 때는 바꿀 수 없습니다.)", { exact: true }).boundingBox())!;
     expect(slugNote.y).toBeGreaterThanOrEqual(slugLabel.y + slugLabel.height - 1);
     expect(Math.round(slugNote.x)).toBe(Math.round(slugLabel.x));
 
-    await page.getByLabel(/^한 줄 평/).fill("고친 한 줄 평");
+    await page.getByLabel(/한 줄 평$/).fill("고친 한 줄 평");
     await page.getByRole("button", { name: "수정한 내용 저장" }).click();
     await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeVisible();
 
@@ -384,7 +393,72 @@ test.describe("글쓴이 기능", () => {
     expect(commit.texts["content/reviews/alpha-station.md"]).toContain("oneLiner: 고친 한 줄 평");
   });
 
-  test("삭제: 확인 창에서 [삭제]를 누르면 로딩 UI를 보이고 원고를 지우는 커밋이 올라가며, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
+  test("삭제(v3 전, 목록): 확인 창에서 [삭제]를 누르면 로딩 UI를 보이고 원고를 지우는 커밋이 올라가며, 안내로 초점이 가고, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
+    test.skip(REVIEW_DETAIL_PUBLIC, "상세를 열면(v3) 상세 맨 윗줄에서 지워요(다음 시험)");
+    await page.goto("/login?next=/");
+    await login(page);
+    const item = page.getByRole("article", { name: "엡실론의 밤" });
+    const edit = item.getByRole("link", { name: "수정" });
+    const remove = item.getByRole("button", { name: "삭제" });
+
+    // 한 줄 평 아래(12px)에 [수정] [삭제]가 같은 높이(44px)로 한 줄에 있고, 사이는 8px예요.
+    await expect(page.locator(".boot-overlay")).toBeHidden();
+    await expect(remove).toBeVisible();
+    const [editBox, removeBox] = (await Promise.all([edit, remove].map(async (control) => (await control.boundingBox())!))) as [DOMRect, DOMRect];
+    for (const box of [editBox, removeBox]) expect(Math.round(box.height)).toBe(44);
+    expect(Math.abs(editBox.y - removeBox.y)).toBeLessThan(1);
+    expect(Math.round(removeBox.x - (editBox.x + editBox.width))).toBe(8);
+    const oneLiner = (await item.locator("p", { hasText: "한 줄 평:" }).boundingBox())!;
+    expect(Math.round(editBox.y - (oneLiner.y + oneLiner.height))).toBe(12);
+
+    await remove.click();
+    const dialog = page.getByRole("alertdialog", { name: "리뷰를 삭제할까요?" });
+    await expect(dialog).toBeVisible();
+    // 처음 초점은 되돌리기 쉬운 [취소]에 있어요.
+    await expect(dialog.getByRole("button", { name: "취소" })).toBeFocused();
+    await expectNoA11yViolations(page);
+
+    // 느린 GitHub 흉내(0.8초): 삭제하는 동안 창 안에 로딩 UI가 보이고, 두 단추는 막혀요.
+    await request.post(`${GITHUB}/__delay?ms=800`);
+    try {
+      const confirm = dialog.getByRole("button", { name: "삭제" });
+      await confirm.click();
+      await expect(dialog.getByRole("status")).toHaveText(/리뷰를 삭제하는 중/);
+      await expect(dialog.getByRole("button", { name: "취소" })).toHaveAttribute("aria-disabled", "true");
+      await expect(confirm).toHaveAttribute("aria-disabled", "true");
+      // 막아도 초점은 누른 [삭제]에 그대로 있고, Esc로도 닫히지 않아요. 끝날 때까지 결과를 기다려요.
+      await expect(confirm).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+
+      // 다 지우면 창이 닫히고, 그 리뷰 아래에 안내가 보이며, 초점은 안내로 가요(누른 [삭제]가 사라져서요).
+      const notice = item.getByRole("status").filter({ hasText: "리뷰를 삭제했습니다" });
+      await expect(notice).toBeVisible({ timeout: 15_000 });
+      await expect(dialog).toBeHidden();
+      await expect(notice).toBeFocused();
+      await expect(notice).toHaveText("‘엡실론의 밤’ 리뷰를 삭제했습니다. 블로그를 다시 배포하면(몇 분 뒤) 목록에서도 사라집니다.");
+    } finally {
+      await request.post(`${GITHUB}/__delay?ms=0`);
+    }
+    // 지운 리뷰의 [수정]·[삭제]는 치워요(다른 리뷰의 단추는 그대로예요).
+    await expect(edit).toHaveCount(0);
+    await expect(remove).toHaveCount(0);
+    await expect(page.getByRole("article", { name: "알파 정거장" }).getByRole("link", { name: "수정" })).toBeVisible();
+    await expectNoA11yViolations(page);
+
+    const commits = (await (await request.get(`${GITHUB}/__commits`)).json()) as Commit[];
+    expect(commits.find((commit) => commit.message === "리뷰 삭제: 엡실론의 밤")?.deleted).toEqual(["content/reviews/epsilon-night.md"]);
+
+    // 로그아웃하면 목록의 [수정]·[삭제]가 모두 사라지고, 글쓰기 화면은 다시 로그인 화면으로 보내요.
+    await page.getByRole("contentinfo").getByRole("button", { name: "로그아웃" }).click();
+    await expect(page.getByRole("contentinfo").getByRole("button", { name: "로그아웃" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "수정" })).toHaveCount(0);
+    await page.goto("/write");
+    await expect(page).toHaveURL(/\/login\?next=%2Fwrite$/);
+  });
+
+  test("삭제(상세): 확인 창에서 [삭제]를 누르면 로딩 UI를 보이고 원고를 지우는 커밋이 올라가며, 로그아웃하면 다시 막힌다", async ({ page, request }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, "v3 전까지 리뷰 상세는 아무도(글쓴이도) 열 수 없어요(앞 시험이 목록에서 지워요)");
     await page.goto("/login?next=/reviews/epsilon-night");
     await login(page);
     const back = page.getByRole("link", { name: "목록으로", exact: true });
@@ -527,11 +601,10 @@ test.describe("로그아웃 단추(왼쪽 아래에 고정)", () => {
 });
 
 test.describe("조회수(모두 지움)", () => {
-  test("목록·상세에 조회수가 없고, 조회수 API도 더는 없다(404)", async ({ page, request, baseURL }) => {
-    // v3 전까지 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요.
-    await loginAsAuthor(page, baseURL!);
-    await page.goto("/reviews/theta-court");
-    await expect(page.locator("article > header")).toContainText("감독: 시험감독3");
+  test("목록에 조회수가 없고, 조회수 API도 더는 없다(404)", async ({ page, request }) => {
+    // (상세는 v3 전까지 아무도 열 수 없어요. 상세에 조회수가 없는지는 단위 시험(review-article.test.tsx)에서 봐요.)
+    await page.goto("/");
+    await expect(page.getByRole("article", { name: "세타 궁정" })).toContainText("시험감독3");
     await expect(page.locator("main")).not.toContainText("조회");
     // 2.0.0 핫픽스에서 서버의 조회수 API와 저장소까지 지웠어요.
     expect((await request.get("/api/views")).status()).toBe(404);

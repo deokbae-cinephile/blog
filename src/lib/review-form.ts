@@ -13,7 +13,7 @@
  *
  * 원고 검사 문구와 다른 점
  *   원고 검사 문구는 파일을 직접 쓰는 사람용이라 "title: 겨울 정류장"처럼 YAML 예시를 보여 줘요.
- *   여기서는 칸에 입력하는 사람용으로 "제목을 입력하세요"처럼 칸 이름으로 말해요.
+ *   여기서는 칸에 입력하는 사람용으로 "한글 제목을 입력하세요"처럼 칸 이름으로 말해요.
  */
 
 import { MAX_CAST, splitNames } from "./people";
@@ -26,8 +26,8 @@ export type FieldErrors = Partial<Record<keyof ReviewFormValues, string>>;
 /** 칸마다 보여 줄 오류 문구. 원인과 고치는 방법(예시)을 함께 적어요. */
 export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
   slug: "주소는 영어 소문자, 숫자, 하이픈(-)으로만 적어 주세요. 예: winter-stop",
-  title: "제목을 입력하세요. 예: 겨울 정류장",
-  originalTitle: "원제는 글자로 입력하세요. 원제가 없으면 비워 둡니다.",
+  title: "한글 제목을 입력하세요. 예: 겨울 정류장",
+  originalTitle: "영문 제목은 글자로 입력하세요. 없으면 비워 둡니다.",
   year: "개봉 연도는 1888부터 2100 사이의 숫자 네 자리로 입력하세요. 예: 2024",
   director: "감독을 입력하세요. 여러 명이면 쉼표로 나눕니다. 예: 한서윤, 김도윤",
   cast: "출연은 배우 이름을 쉼표로 나눠 입력하세요. 없으면 비워 둡니다. 예: 레오나르도 디카프리오, 마크 러팔로",

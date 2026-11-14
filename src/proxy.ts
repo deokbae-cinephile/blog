@@ -8,8 +8,8 @@
  *     - 로그인하지 않았으면:
  *         글쓰기 화면(/write...) → 로그인 화면(/login?next=원래 주소)으로 보내요(redirect).
  *         저장 API(/api/reviews..., /api/images) → 401(로그인 필요) JSON으로 바로 답해요.
- *         리뷰 상세(/reviews/...) → v3 전까지(lib/site.ts의 REVIEW_DETAIL_PUBLIC이 false) 처음 화면(목록)으로 보내요.
- *           방문자에게는 "한 줄 평" 목록만 보여요. 글쓴이는 로그인해 있으니 그대로 들어가 [수정]·[삭제]를 써요.
+ *     - 리뷰 상세(/reviews/...)는 로그인과 상관없이 v3 전까지(lib/site.ts의 REVIEW_DETAIL_PUBLIC이 false) 처음 화면(목록)으로 보내요.
+ *       글쓴이도 들어가지 않아요. "한 줄 평" 목록만 보여요(글쓴이의 [수정]·[삭제]는 목록에 있어요. components/review-list-admin.tsx).
  *   그래서 로그인하기 전에는 리뷰를 쓰거나(C) 고치거나(U) 지울(D) 수 없어요. 목록 읽기(R)는 누구나 할 수 있어요.
  *
  * 미리 만든 상세 화면도 막히나요?
@@ -41,22 +41,19 @@ import { REVIEW_DETAIL_PUBLIC } from "@/lib/site";
  * @param request 들어온 요청. request.cookies로 쿠키를, request.nextUrl로 주소를 읽어요.
  */
 export async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  // 리뷰 상세: 열려 있으면(v3 이후) 누구나 통과. 아니면(v3 전) 글쓴이도 방문자도 처음 화면(목록)으로 보내요.
+  // 307(잠시 옮김): 검색엔진에 "이 주소는 나중에 돌아와요"라고 알려요(301처럼 영원히 옮긴 것으로 기억하지 않게).
+  // 로그인 여부와 상관없어서 세션 확인보다 먼저 해요(쿠키는 건드리지 않아요).
+  if (pathname.startsWith("/reviews/")) {
+    return REVIEW_DETAIL_PUBLIC ? NextResponse.next() : NextResponse.redirect(new URL("/", request.url), 307);
+  }
+
   // 1) 세션 쿠키의 표가 진짜이고 기한이 남았으면 통과
   if (await isValidSession(request.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
 
   // 2) 로그인하지 않은 요청
-  const { pathname, search } = request.nextUrl;
-
-  // 리뷰 상세: 방문자에게 열려 있으면 통과, 아니면(v3 전) 처음 화면(목록)으로 보내요.
-  // 307(잠시 옮김): 검색엔진에 "이 주소는 나중에 돌아와요"라고 알려요(301처럼 영원히 옮긴 것으로 기억하지 않게).
-  if (pathname.startsWith("/reviews/")) {
-    if (REVIEW_DETAIL_PUBLIC) return NextResponse.next();
-    const toList = NextResponse.redirect(new URL("/", request.url), 307);
-    // 세션이 끝났는데 "로그인 표시" 쿠키만 남아 있으면(목록 제목이 링크로 보여요) 함께 지워요.
-    toList.cookies.delete(ADMIN_HINT_COOKIE);
-    return toList;
-  }
-
   const response = pathname.startsWith("/api/")
     ? // API: 화면이 알아듣는 JSON으로 "로그인이 필요해요"(401)
       NextResponse.json({ message: "로그인이 필요합니다. 다시 로그인한 뒤 시도하세요." }, { status: 401 })
