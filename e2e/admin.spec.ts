@@ -419,7 +419,23 @@ test.describe("로그아웃 단추(왼쪽 아래에 고정)", () => {
     expect(Math.round(viewport.height - ((await logout.boundingBox())!.y + box.height))).toBe(16);
     await expectNoA11yViolations(page);
 
-    // 누르면 로그아웃되고 단추가 사라져요.
+    // 로그아웃에 실패하면(연결이 끊김) 단추 위에 안내 상자가 뜨고, 화면 오른쪽 밖으로 넘치지 않아요(640px 너비 포함).
+    await page.route("**/api/session", (route) => (route.request().method() === "DELETE" ? route.abort() : route.continue()));
+    for (const width of isMobile ? [viewport.width] : [640, viewport.width]) {
+      await page.setViewportSize({ width, height: viewport.height });
+      await logout.click();
+      const alert = page.getByRole("alert").filter({ hasText: "서버에 연결하지 못했습니다" });
+      await expect(alert).toBeVisible();
+      const alertBox = (await alert.boundingBox())!;
+      expect(alertBox.x).toBeGreaterThanOrEqual(0);
+      expect(alertBox.x + alertBox.width).toBeLessThanOrEqual(width);
+      // 안내 상자는 단추 위에 떠요(단추를 가리지 않아요).
+      expect(alertBox.y + alertBox.height).toBeLessThanOrEqual((await logout.boundingBox())!.y);
+    }
+    await page.setViewportSize(viewport);
+    await page.unroute("**/api/session");
+
+    // 다시 누르면 로그아웃되고 단추가 사라져요.
     await logout.click();
     await expect(page.getByRole("button", { name: "로그아웃" })).toHaveCount(0);
   });

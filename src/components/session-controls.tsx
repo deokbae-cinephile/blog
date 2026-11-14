@@ -54,8 +54,10 @@ export function SessionControls() {
   if (!isAdmin) return null;
 
   return (
-    // relative: 실패 안내(absolute)를 단추 위에 띄우는 기준이에요. 안내가 떠도 단추 줄은 움직이지 않아요.
-    <div className="relative">
+    // 실패 안내(absolute)는 이 단추가 아니라 바깥의 왼쪽 아래 고정 줄(site-footer.tsx, position: fixed, 화면 왼쪽 16px)을 기준으로 떠요.
+    // 그래야 [키보드 조작] 오른쪽에 있어도 안내 상자가 화면 왼쪽 16px부터 시작해, 최대 너비(100vw − 2rem) 안에서 오른쪽 밖으로 넘치지 않아요.
+    // (그래서 이 묶음에는 relative를 주지 않아요.) 안내가 떠도 단추 줄은 움직이지 않아요.
+    <div>
       {/* btn-float: 옆의 [키보드 조작]과 같은 떠 있는 단추 모양(누르는 높이 44px) */}
       <button type="button" onClick={handleLogout} className="btn-float">
         로그아웃
