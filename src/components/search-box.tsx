@@ -156,7 +156,7 @@ export function SearchBox({ id, value, onValueChange, onSearch, reviews, disable
         enterKeyHint="search"
         // 맞춤법 검사 빨간 줄을 꺼요(영화 제목은 고유명사가 많아요).
         spellCheck={false}
-        // field: 글쓰기 화면의 입력 칸(원제·제작 국가 등)과 같은 모양이에요(globals.css). 높이 44px, 2px 테두리,
+        // field: 글쓰기 화면의 입력 칸(원제·출연 등)과 같은 모양이에요(globals.css). 높이 44px, 2px 테두리,
         //   초점이 오면 테두리가 밝아져요.
         // placeholder:text-crt-dim: 안내 글자는 보조 글자색(바탕과의 명도 대비 10:1 이상)으로 또렷하게 보여요.
         className="field w-full caret-crt-fg placeholder:text-crt-dim"
