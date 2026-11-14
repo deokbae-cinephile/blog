@@ -19,7 +19,8 @@
  *
  * 시험용 도구
  *   GET  /__commits : 지금까지 올라온 커밋 목록(메시지, 더한 파일, 지운 파일). 테스트가 결과를 확인할 때 써요.
- *   POST /__reset   : 저장소를 처음 모습으로 되돌려요(테스트를 여러 번 돌려도 결과가 같게).
+ *   POST /__reset   : 저장소를 처음 모습으로 되돌려요(테스트를 여러 번 돌려도 결과가 같게). 답 늦추기도 0으로 돌려요.
+ *   POST /__delay?ms=2000 : 그다음 GitHub 요청들을 ms만큼 늦게 답해요. 느린 GitHub 때문에 로딩 화면이 보이는지 시험할 때 써요.
  *   GET  /__health  : 서버가 떴는지 확인(Playwright가 이 주소가 응답할 때까지 기다려요)
  *
  * 처음 저장소에는 시험용 원고(e2e/fixtures/reviews)와 화면 조정 무늬 포스터가 들어 있어요.
@@ -48,6 +49,8 @@ const trees = new Map();
 const commits = new Map();
 /** 브랜치(main)가 가리키는 커밋 번호 */
 let head = "";
+/** GitHub 요청에 답하기 전에 기다릴 시간(ms). POST /__delay로 정하고, /__reset이 0으로 돌려요. */
+let delayMs = 0;
 
 /** 내용으로 번호를 만들어요(git처럼 같은 내용이면 같은 번호). */
 const hash = (data) => createHash("sha1").update(data).digest("hex");
@@ -122,7 +125,12 @@ const server = createServer(async (request, response) => {
   if (route === "/__health") return send(response, 200, { ok: true });
   if (route === "/__reset" && request.method === "POST") {
     seed();
+    delayMs = 0;
     return send(response, 200, { ok: true });
+  }
+  if (route === "/__delay" && request.method === "POST") {
+    delayMs = Math.max(0, Number(url.searchParams.get("ms") ?? 0));
+    return send(response, 200, { ok: true, delayMs });
   }
   if (route === "/__commits") {
     // 처음 커밋부터 지금까지(부모를 따라 거꾸로 모은 뒤 뒤집어요)
@@ -130,6 +138,9 @@ const server = createServer(async (request, response) => {
     for (let sha = head; sha && commits.get(sha).parent; sha = commits.get(sha).parent) list.push(describeCommit(sha));
     return send(response, 200, list.reverse());
   }
+
+  // 느린 GitHub 흉내: 정해 둔 시간만큼 기다렸다가 답해요(시험용 도구 요청은 빼고).
+  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
 
   // 토큰 확인: 진짜 GitHub처럼 틀리면 401
   if (request.headers.authorization !== `Bearer ${TOKEN}`) return send(response, 401, { message: "Bad credentials" });

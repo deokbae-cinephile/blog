@@ -176,6 +176,30 @@ test.describe("글쓴이 기능", () => {
     await expect(page.getByRole("checkbox", { name: "스릴러" })).toBeChecked();
   });
 
+  test("수정 화면은 저장소에서 원고를 읽는 동안 로딩 UI와 글쓰기 스켈레톤을 보이고, 다 읽으면 폼으로 바뀐다", async ({ page, request }) => {
+    await page.goto("/login?next=/write");
+    await login(page);
+    await expect(page.getByRole("heading", { level: 1, name: "리뷰 추가" })).toBeVisible();
+
+    // 느린 GitHub 흉내: 요청마다 0.7초 늦게 답해요(원고 하나를 읽는 데 요청이 여러 번 들어요).
+    await request.post(`${GITHUB}/__delay?ms=700`);
+    try {
+      // commit: 화면을 다 받기 전, 응답이 시작되자마자 돌아와요. 먼저 오는 로딩 화면을 보려고요.
+      await page.goto("/write/alpha-station", { waitUntil: "commit" });
+      const status = page.getByRole("status").filter({ hasText: "글쓰기 화면을 불러오는 중" });
+      await expect(status).toBeVisible();
+      await expect(page.locator(".skeleton").first()).toBeVisible();
+      await expectNoA11yViolations(page);
+      await expectNoHorizontalScroll(page);
+
+      // 원고를 다 읽으면 로딩 화면은 사라지고 수정 화면이 보여요.
+      await expect(page.getByRole("heading", { level: 1, name: "리뷰 수정: alpha-station" })).toBeVisible({ timeout: 15_000 });
+      await expect(status).toHaveCount(0);
+    } finally {
+      await request.post(`${GITHUB}/__delay?ms=0`);
+    }
+  });
+
   test("수정: 상세 화면의 [수정]으로 들어가 저장소 원고를 고치면, 고친 원고가 커밋된다", async ({ page, request }) => {
     await page.goto("/login?next=/reviews/alpha-station");
     await login(page);

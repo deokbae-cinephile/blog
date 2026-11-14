@@ -56,6 +56,8 @@ const RIGHT: Key = { glyph: "▶", name: "오른쪽 화살표" };
 /** 목록(처음 화면)에서 쓰는 키. 목록은 components/use-list-keys.ts, 검색창 추천은 components/search-box.tsx가 맡아요. */
 const LIST_KEYS: Shortcut[] = [
   { keys: [UP, DOWN], action: "리뷰 고르기" },
+  // ◀ ▶도 리뷰 사이를 오가요(목록 순서대로 위·아래 리뷰). 상세 화면의 ◀ ▶와 같은 "리뷰 사이 이동" 키예요.
+  { keys: [LEFT, RIGHT], action: "이전·다음 리뷰" },
   { keys: [{ glyph: "Home" }, { glyph: "End" }], action: "처음·끝 리뷰" },
   { keys: [{ glyph: "Enter" }], action: "고른 리뷰 열기" },
   { keys: [UP, DOWN], action: "검색창에서 추천 검색어 고르기" },

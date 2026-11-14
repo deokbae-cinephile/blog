@@ -247,6 +247,18 @@ describe("ReviewBrowserView (방향키로 고르기)", () => {
     expect(focused()).toBe("화성 세탁소");
   });
 
+  it("◀ ▶도 ▲ ▼처럼 이전·다음 리뷰를 고른다(목록 밖에서 ▶를 누르면 첫 리뷰로 들어간다)", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.keyboard("{ArrowRight}");
+    expect(focused()).toBe("겨울 정류장");
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(focused()).toBe("필름이 끊기기 전에");
+    await user.keyboard("{ArrowLeft}");
+    expect(focused()).toBe("화성 세탁소");
+  });
+
   it("목록 안에서 Home·End는 처음·끝 리뷰로 간다", async () => {
     const user = userEvent.setup();
     render(<Harness />);

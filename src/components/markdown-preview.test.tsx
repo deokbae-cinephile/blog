@@ -12,11 +12,17 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownPreview } from "./markdown-preview";
 
 describe("MarkdownPreview", () => {
+  // 미리 보기는 변환 도구(lib/markdown.ts)를 처음 쓸 때 따로 받아 와요(import()). 시험을 여럿 함께 돌리면
+  // 처음 받는 데 1초를 넘길 때가 있어서, 시작하기 전에 한 번 받아 둬요. 두 번째부터는 바로 쓰여요.
+  beforeAll(async () => {
+    await import("@/lib/markdown");
+  });
+
   beforeEach(() => {
     URL.createObjectURL = vi.fn(() => "blob:scene");
     URL.revokeObjectURL = vi.fn();
@@ -59,6 +65,16 @@ describe("MarkdownPreview", () => {
     expect(await screen.findByText("글")).toBeInTheDocument();
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("[onerror]")).toBeNull();
+  });
+
+  it("변환 도구를 처음 받는 동안에는 로딩 UI와 글줄 스켈레톤을 보이고, 다 되면 미리 보기로 바뀐다", async () => {
+    const { container } = render(<MarkdownPreview markdown="## 좋았던 점" images={new Map()} />);
+    // 처음 그린 순간: 아직 변환 전이라 "미리 보기를 준비하는 중"을 알리고, 스켈레톤은 숨긴 꾸밈이에요.
+    expect(screen.getByRole("status")).toHaveTextContent("미리 보기를 준비하는 중");
+    expect(container.querySelector(".skeleton")!.closest("[aria-hidden='true']")).not.toBeNull();
+    // 변환이 끝나면 로딩 UI는 사라지고 글이 보여요.
+    expect(await screen.findByRole("heading", { level: 2, name: "좋았던 점" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("본문이 비어 있으면 무엇을 보여 줄지 안내한다", () => {
