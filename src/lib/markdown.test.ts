@@ -104,6 +104,28 @@ describe("renderMarkdown", () => {
     expect(html).toContain(">각주</h2>");
     expect(html).toContain('aria-label="1번 각주를 단 곳으로 돌아가기"');
   });
+
+  describe("미리 보기 설정", () => {
+    it("imageSources: 표에 있는 사진 주소만 바꾸고, 사진 설명(캡션)과 액자는 그대로 둔다", async () => {
+      const imageSources = new Map([["/images/a/scene-1.png", "blob:http://localhost/1234"]]);
+      const html = await renderMarkdown('![영사실](/images/a/scene-1.png "영사기")\n\n![복도](/images/a/scene-2.png)', { imageSources });
+      expect(html).toContain('src="blob:http://localhost/1234"');
+      expect(html).toContain("<figcaption>영사기</figcaption>");
+      // 표에 없는 사진(이미 올라가 있는 사진)은 원래 주소 그대로예요.
+      expect(html).toContain('src="/images/a/scene-2.png"');
+    });
+
+    it("openLinksInNewTab: 링크는 새 탭에서 열고, 같은 쪽 안의 #주소(각주)는 그대로 둔다", async () => {
+      const html = await renderMarkdown("[사이트 안](/reviews/a), [바깥](https://example.com), 본문[^1]\n\n[^1]: 각주", { openLinksInNewTab: true });
+      expect(html).toContain('<a href="/reviews/a" target="_blank" rel="noopener noreferrer">사이트 안</a>');
+      expect(html).toContain('<a href="https://example.com" rel="noopener noreferrer" target="_blank">바깥</a>');
+      expect(html).not.toMatch(/href="#[^"]*"[^>]*target=/);
+    });
+
+    it("설정이 없으면 링크는 새 탭으로 열지 않는다(상세 화면은 그대로)", async () => {
+      expect(await renderMarkdown("[사이트 안](/reviews/a)")).toBe('<p><a href="/reviews/a">사이트 안</a></p>');
+    });
+  });
 });
 
 describe("isSafeHref", () => {

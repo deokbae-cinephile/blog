@@ -5,12 +5,14 @@
  *   모든 화면 맨 위에 보이는 머리글이에요. 옛 단말기 프로그램의 맨 윗줄처럼
  *   왼쪽에 로고와 블로그 이름, 오른쪽에 링크를 두고 그 사이를 점선(....)으로 잇습니다.
  *
- *     [로고] DMB  ······································  [GitHub 아이콘] GitHub
+ *     [로고] DMB: 덕배의 영화 블로그  ·····························  [GitHub 아이콘] GitHub
+ *
+ *   왼쪽과 오른쪽은 같은 모양이에요: 아이콘 24 × 24px, 아이콘과 글자 사이 8px, 글자 16px, 누르는 높이 44px.
  *
  * 맡은 기능
  *   - 블로그 이름을 누르면 처음 화면(목록)으로 가요.
  *   - [GitHub]: 이 블로그의 소스 코드가 있는 저장소로 가요. 아이콘은 사이트에 맞춰 픽셀로 그렸어요(lib/github-mark.ts).
- *   (리뷰 추가 단추는 머리글이 아니라 화면 오른쪽 아래에 떠 있어요. components/floating-buttons.tsx)
+ *   (리뷰 추가 단추는 머리글이 아니라 화면 가운데 아래에 떠 있어요. components/floating-buttons.tsx)
  *
  * 브라우저 코드가 없는 "서버 컴포넌트"예요
  *   미리 HTML로 만들어지고 브라우저에서는 다시 돌지 않아서, 방문자가 받는 자바스크립트가 늘지 않아요.
@@ -23,8 +25,8 @@
 import Link from "next/link";
 
 import { GITHUB_MARK_ROWS } from "@/lib/github-mark";
-// 로고 그림(슬레이트)은 아이콘 스크립트와 함께 쓰려고 lib/logo.ts에 따로 두었어요.
-import { LOGO_ROWS } from "@/lib/logo";
+// 로고 그림(슬레이트)은 lib/logo.ts에 있어요. 머리글용은 GitHub 아이콘과 같은 12 × 12칸 그림이에요.
+import { HEADER_LOGO_ROWS } from "@/lib/logo";
 import { site } from "@/lib/site";
 
 import { PixelArt } from "./pixel-art";
@@ -41,11 +43,13 @@ export function SiteHeader() {
       tabIndex={-1}
       className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-6 outline-none sm:px-8 sm:pt-8 lg:px-12"
     >
-      {/* glow: 형광 번짐 효과(globals.css). shrink-0: 공간이 좁아도 이름이 찌그러지지 않게 해요. */}
-      <Link href="/" className="glow inline-flex shrink-0 items-center gap-3 no-underline hover:underline">
-        {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). */}
-        <PixelArt rows={LOGO_ROWS} cell={2} />
-        <span>{site.name}</span>
+      {/* 오른쪽 GitHub 링크와 같은 모양으로 맞춰요.
+          min-h-11: 누르는 높이 44px, gap-2: 아이콘과 글자 사이 8px, 글자는 기본 16px(형광 번짐도 같은 기본 세기).
+          왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. shrink-0: 공간이 좁아도 이름이 찌그러지지 않게 해요. */}
+      <Link href="/" className="inline-flex min-h-11 shrink-0 items-center gap-2 no-underline hover:underline">
+        {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
+        <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
+        <span>{site.headerTitle}</span>
       </Link>
 
       {/* 이름과 링크 사이의 점선. 꾸밈이라 읽지 않아요. 휴대폰에서는 숨겨요. */}

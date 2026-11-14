@@ -103,11 +103,11 @@ describe("browse", () => {
 describe("countGenres", () => {
   it("리뷰가 있는 장르만 장르 목록 순서로 센다", () => {
     expect(countGenres(reviewMocks)).toEqual([
-      { genre: "액션", count: 1 },
-      { genre: "코미디", count: 1 },
       { genre: "드라마", count: 2 },
-      { genre: "재난", count: 1 },
       { genre: "로맨스", count: 1 },
+      { genre: "액션", count: 1 },
+      { genre: "재난", count: 1 },
+      { genre: "코미디", count: 1 },
     ]);
   });
 

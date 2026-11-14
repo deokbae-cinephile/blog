@@ -1,9 +1,9 @@
 /**
  * @file floating-buttons.tsx 테스트
  *
- * 화면 오른쪽 아래에 떠 있는 단추들이
+ * 화면 아래쪽에 떠 있는 단추들이
  *   - 글쓴이로 로그인했을 때만 "+"(리뷰 추가)를 보이고, 글쓰기 화면에서는 숨기는지
- *   - "+"가 정사각형이고 "맨 위로"와 너비가 같은지
+ *   - "+"가 44 × 44px 정사각형으로 화면 가운데 아래에 있고, "맨 위로"는 오른쪽 아래에 따로 있는지
  * 확인해요.
  *
  * Next.js의 훅(usePathname)을 쓰는 컴포넌트는 어떻게 테스트할까요?
@@ -41,15 +41,17 @@ describe("FloatingButtons", () => {
     expect(screen.queryByRole("link", { name: "리뷰 추가" })).not.toBeInTheDocument();
   });
 
-  it("로그인하면 글쓰기 화면으로 가는 정사각형 + 단추가 보이고, 이름은 '리뷰 추가'다", () => {
+  it("로그인하면 글쓰기 화면으로 가는 + 단추가 화면 가운데 아래에 44 × 44px로 보이고, 이름은 '리뷰 추가'다", () => {
     document.cookie = "blog_admin=1; path=/";
     render(<FloatingButtons />);
     const link = screen.getByRole("link", { name: "리뷰 추가" });
     expect(link).toHaveAttribute("href", "/write");
-    // 보이는 "+"는 픽셀 그림(꾸밈)이라 읽지 않아요.
-    expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    // 너비 6rem(w-24) × 높이 6rem(h-24) 정사각형
-    expect(link).toHaveClass("w-24", "h-24");
+    // 보이는 "+"는 픽셀 그림(꾸밈)이라 읽지 않아요. 8칸 × 3px = 24px
+    const icon = link.querySelector("svg")!;
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect([icon.getAttribute("width"), icon.getAttribute("height")]).toEqual(["24", "24"]);
+    // 가로 2.75rem(h-11·w-11 = 44px) 정사각형, 화면 가운데 아래에 고정
+    expect(link).toHaveClass("h-11", "w-11", "fixed", "bottom-4", "left-1/2", "-translate-x-1/2");
   });
 
   it("글쓰기 화면(/write, /write/<주소>)에서는 + 단추를 숨긴다", () => {
@@ -62,9 +64,9 @@ describe("FloatingButtons", () => {
     }
   });
 
-  it("맨 위로 단추도 너비가 6rem(w-24)이라 + 단추와 같다", () => {
+  it("맨 위로 단추는 + 단추와 따로 오른쪽 아래에 떠 있다", () => {
     // 맨 위로는 내려 읽었을 때만 보여서(hidden) 이름으로는 찾을 수 없어, 글자로 찾아요.
     render(<FloatingButtons />);
-    expect(screen.getByText("맨 위로")).toHaveClass("w-24");
+    expect(screen.getByText("맨 위로")).toHaveClass("fixed", "right-4", "bottom-4");
   });
 });

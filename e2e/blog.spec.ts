@@ -136,12 +136,12 @@ test.describe("처음 화면(목록)", () => {
     await expect.poll(() => listTitles(page)).toEqual([LONG_TITLE, "알파 정거장"]);
   });
 
-  test("장르 칩은 정한 10가지가 정한 순서로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
+  test("장르 칩은 정한 10가지가 가나다순으로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
     await openHome(page);
     const genres = page.getByRole("group", { name: "장르" });
     // 라디오 단추의 접근 이름("드라마 2편"처럼 장르 + 편수)으로 순서를 확인해요. 레이블 연결이 끊기면 이름이 비어 실패해요.
     const radios = genres.getByRole("radio");
-    const names = ["전체", "다큐멘터리", "스릴러", "액션", "코미디", "드라마", "범죄", "스포츠", "공포", "재난", "로맨스"];
+    const names = ["전체", "공포", "다큐멘터리", "드라마", "로맨스", "범죄", "스릴러", "스포츠", "액션", "재난", "코미디"];
     await expect(radios).toHaveCount(names.length);
     for (const [index, name] of names.entries()) {
       await expect(radios.nth(index)).toHaveAccessibleName(new RegExp(`^${name} \\d+편$`));
@@ -452,11 +452,11 @@ test.describe("키보드", () => {
     await page.keyboard.press("ArrowDown");
     await expect(searchBox(page)).toBeFocused();
 
-    // 라디오 단추에서 ▼는 다음 장르(다큐멘터리)를 고르는 원래 기능 그대로예요. 초점도 목록으로 끌려가지 않고 그 단추에 있어요.
+    // 라디오 단추에서 ▼는 다음 장르(가나다순 첫 장르인 공포)를 고르는 원래 기능 그대로예요. 초점도 목록으로 끌려가지 않고 그 단추에 있어요.
     await page.getByRole("radio", { name: "전체 11편" }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("radio", { name: "전체 11편" })).not.toBeChecked();
-    const next = page.getByRole("radio", { name: "다큐멘터리 1편" });
+    const next = page.getByRole("radio", { name: "공포 1편" });
     await expect(next).toBeChecked();
     await expect(next).toBeFocused();
   });

@@ -4,7 +4,8 @@
  * 진짜 브라우저로 글쓴이 기능을 처음부터 끝까지 써 보며 확인해요.
  *   - proxy.ts: 로그인하지 않으면 글쓰기 화면은 로그인 화면으로, 저장 API는 401로 막는지
  *   - 로그인: 틀리면 알리고, 맞으면 원래 가려던 화면으로 돌아가는지
- *   - 리뷰 라이터: 리뷰 추가(포스터·장면 사진 포함)를 저장하면 저장소(가짜 GitHub)에 커밋이 올라가는지
+ *   - 리뷰 라이터: 리뷰 추가(포스터·장면 사진 포함)를 저장하면 저장소(가짜 GitHub)에 커밋이 올라가는지,
+ *     본문 미리 보기가 넓은 화면은 나란히, 좁은 화면은 탭으로 보이는지
  *   - 수정·삭제, 로그아웃
  *   - 접근성: 로그인·글쓰기 화면 axe 검사
  *
@@ -18,7 +19,7 @@ import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 
 import { E2E_ADMIN } from "./admin-account";
-import { expectNoA11yViolations } from "./helpers";
+import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
 
 /** 가짜 GitHub 서버 주소(playwright.config.ts와 같아요) */
 const GITHUB = `http://127.0.0.1:${process.env.MOCK_GITHUB_PORT ?? 3101}`;
@@ -54,7 +55,8 @@ test.describe("로그인 전(proxy.ts가 막기)", () => {
     await expect(page.getByRole("link", { name: "수정" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "삭제" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "리뷰 추가" })).toHaveCount(0);
-    await expect(page.getByRole("contentinfo").getByRole("link", { name: "글쓴이 로그인" })).toBeVisible();
+    // 방문자에게는 로그인 링크도 보이지 않아요(글쓴이는 /login으로 직접 가요).
+    await expect(page.getByRole("contentinfo").getByRole("link", { name: /로그인/ })).toHaveCount(0);
   });
 });
 
@@ -79,12 +81,16 @@ test.describe("글쓴이 기능", () => {
     await expect(page.getByRole("link", { name: "리뷰 추가" })).toHaveCount(0);
     await expectNoA11yViolations(page);
 
-    // 다른 화면에서는 오른쪽 아래에 정사각형 [+]가 떠 있고, 누르면 글쓰기 화면으로 가요.
+    // 다른 화면에서는 화면 가운데 아래에 44 × 44px [+]가 떠 있고, 누르면 글쓰기 화면으로 가요.
     await page.goto("/");
     const add = page.getByRole("link", { name: "리뷰 추가" });
     await expect(add).toBeVisible();
     const box = (await add.boundingBox())!;
-    expect(Math.round(box.width)).toBe(Math.round(box.height));
+    const viewport = page.viewportSize()!;
+    expect([Math.round(box.width), Math.round(box.height)]).toEqual([44, 44]);
+    // 가운데: 단추의 가운데가 화면 가운데와 1px 안쪽으로 같아요. 아래: 화면 아래 끝에서 16px 위
+    expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
+    expect(Math.round(viewport.height - (box.y + box.height))).toBe(16);
     await expectNoA11yViolations(page);
     await add.click();
     await expect(page).toHaveURL(/\/write$/);
@@ -107,14 +113,26 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^평점/).selectOption("3.5");
     await page.getByLabel(/^한줄평/).fill("끝까지 저장되는지 보는 한줄평");
     await page.getByLabel("포스터 고르기").setInputFiles(PICTURE);
-    await page.getByLabel(/^본문/).fill("첫 문단입니다.");
+    const body = page.getByRole("textbox", { name: "본문(Markdown)" });
+    await body.fill("첫 문단입니다.");
     await page.getByLabel("장면 사진 넣기").setInputFiles(PICTURE);
 
     // 사진 줄이 들어가고, 커서는 설명 자리([ ] 안)에 있어요. 설명을 적어요.
-    const body = page.getByLabel(/^본문/);
     await expect(body).toHaveValue("첫 문단입니다.\n\n![](/images/e2e-new-review/scene-1.png)\n\n");
     await page.keyboard.type("화면 조정 무늬");
     await expect(body).toHaveValue("첫 문단입니다.\n\n![화면 조정 무늬](/images/e2e-new-review/scene-1.png)\n\n");
+
+    // 넓은 화면은 본문 칸 오른쪽에 미리 보기가 나란히 있고, 높이가 같아요.
+    // 아직 올리지 않은 사진도 고른 파일(임시 주소 blob:)로 보여요.
+    const preview = page.getByRole("region", { name: "미리 보기" });
+    await expect(preview.getByText("첫 문단입니다.")).toBeVisible();
+    await expect(preview.getByRole("img", { name: "화면 조정 무늬" })).toHaveAttribute("src", /^blob:/);
+    const bodyBox = (await body.boundingBox())!;
+    const previewBox = (await preview.boundingBox())!;
+    expect(previewBox.x).toBeGreaterThan(bodyBox.x + bodyBox.width);
+    expect(Math.abs(previewBox.y - bodyBox.y)).toBeLessThanOrEqual(2);
+    expect(Math.abs(previewBox.height - bodyBox.height)).toBeLessThanOrEqual(2);
+    await expectNoA11yViolations(page);
 
     await page.getByRole("button", { name: "리뷰 저장" }).click();
     await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused();
@@ -176,8 +194,37 @@ test.describe("글쓴이 기능", () => {
 
     // 로그아웃하면 단추가 사라지고, 글쓰기 화면은 다시 로그인 화면으로 보내요.
     await page.getByRole("contentinfo").getByRole("button", { name: "로그아웃" }).click();
-    await expect(page.getByRole("contentinfo").getByRole("link", { name: "글쓴이 로그인" })).toBeVisible();
+    await expect(page.getByRole("contentinfo").getByRole("button", { name: "로그아웃" })).toHaveCount(0);
     await page.goto("/write");
     await expect(page).toHaveURL(/\/login\?next=%2Fwrite$/);
+  });
+});
+
+test.describe("글쓰기 화면(좁은 화면)", () => {
+  test.skip(({ isMobile }) => !isMobile, "좁은 화면에서만 보이는 탭이라 휴대폰 화면에서만 돌려요");
+
+  test("본문은 [Markdown 입력]·[미리 보기] 탭으로 바꿔 보고, 화면이 가로로 넘치지 않는다", async ({ page }) => {
+    await page.goto("/login?next=/write");
+    await login(page);
+    await expect(page.getByRole("heading", { level: 1, name: "리뷰 추가" })).toBeVisible();
+
+    const tabs = page.getByRole("tablist", { name: "본문 보기" });
+    await expect(tabs).toBeVisible();
+    const body = page.getByRole("textbox", { name: "본문(Markdown)" });
+    await body.fill("## 좋았던 점");
+
+    // [미리 보기] 탭을 누르면 쓰기 칸은 숨고, 저장한 뒤의 모습이 보여요.
+    await tabs.getByRole("tab", { name: "미리 보기" }).click();
+    const preview = page.getByRole("tabpanel", { name: "미리 보기" });
+    await expect(preview.getByRole("heading", { level: 2, name: "좋았던 점" })).toBeVisible();
+    await expect(body).toBeHidden();
+    await expectNoA11yViolations(page);
+    await expectNoHorizontalScroll(page);
+
+    // ←로 [Markdown 입력] 탭으로 돌아오면 쓰기 칸이 다시 보여요.
+    await page.keyboard.press("ArrowLeft");
+    await expect(tabs.getByRole("tab", { name: "Markdown 입력" })).toBeFocused();
+    await expect(body).toBeVisible();
+    await expect(body).toHaveValue("## 좋았던 점");
   });
 });

@@ -1,20 +1,24 @@
 /**
- * @file 화면 오른쪽 아래에 떠 있는 단추들 (floating-buttons.tsx)
+ * @file 화면 아래쪽에 떠 있는 단추들 (floating-buttons.tsx)
  *
  * 이 파일이 하는 일
- *   화면 오른쪽 아래 구석에 단추를 띄워요(스크롤해도 그 자리에 있어요).
+ *   화면 아래쪽에 단추를 띄워요(스크롤해도 그 자리에 있어요).
  *
- *       ┌────────┐
- *       │ 맨 위로 │  ← 조금 내려 읽었을 때만(back-to-top.tsx)
- *       └────────┘
- *       ┌────────┐
- *       │        │
- *       │   +    │  ← 글쓴이로 로그인했을 때만: 리뷰 추가(/write)
- *       │        │     너비는 "맨 위로"와 같고, 높이도 너비와 같은 정사각형이에요.
- *       └────────┘
+ *     ┌──────────────────────────────────────────────┐
+ *     │                                              │
+ *     │                    ┌──┐          ┌────────┐ │
+ *     │                    │+ │          │ 맨 위로 │ │
+ *     │                    └──┘          └────────┘ │
+ *     └──────────────────────────────────────────────┘
+ *              가운데 아래: 리뷰 추가(44 × 44px)   오른쪽 아래: 맨 위로(back-to-top.tsx)
  *
- *   "+"는 늘 맨 아래 같은 자리에 있고, "맨 위로"가 나타나면 그 위에 붙어요(누르려던 "+"가 움직이지 않게요).
- *   글쓰기 화면(/write…)에서는 "+"를 숨겨요. 이미 쓰고 있으니까요.
+ *   - "+"는 글쓴이로 로그인했을 때만 보이고, 누르면 리뷰 추가 화면(/write)으로 가요.
+ *   - 글쓰기 화면(/write…)에서는 "+"를 숨겨요. 이미 쓰고 있으니까요.
+ *   - "맨 위로"는 조금 내려 읽었을 때만 보여요.
+ *   (왼쪽 아래의 키보드 조작 안내는 keyboard-help.tsx가 그려요.)
+ *
+ * 크기
+ *   "+"는 가로·세로 44px이에요. 손가락으로 누르기 충분한 최소 크기예요(KWCAG 6.1.3 조작 가능).
  *
  * 접근성
  *   "+"는 그림 글자라 화면 낭독기에서는 숨기고, 대신 화면에 보이지 않는 "리뷰 추가"를 링크 이름으로 읽어 줘요.
@@ -33,10 +37,10 @@ import { BackToTop } from "./back-to-top";
 import { PixelArt } from "./pixel-art";
 import { useIsAdmin } from "./use-is-admin";
 
-/** "+" 그림(8×8 칸). GitHub 아이콘처럼 픽셀로 그려 사이트 모양에 맞춰요. 칸 하나 5px → 40px */
+/** "+" 그림(8×8 칸). GitHub 아이콘처럼 픽셀로 그려 사이트 모양에 맞춰요. 칸 하나 3px → 24px */
 const PLUS_ROWS = ["...##...", "...##...", "...##...", "########", "########", "...##...", "...##...", "...##..."] as const;
 
-/** 화면 오른쪽 아래의 떠 있는 단추들 */
+/** 화면 아래쪽에 떠 있는 단추들 */
 export function FloatingButtons() {
   // 글쓴이로 로그인했는지(쿠키 표시). 미리 만든 HTML에서는 늘 false예요.
   const isAdmin = useIsAdmin();
@@ -46,22 +50,17 @@ export function FloatingButtons() {
 
   return (
     <>
-      {/* "+"가 떠 있으면 바닥글 마지막 줄을 가리지 않게, 그 높이만큼 빈자리를 둬요. 꾸밈이라 읽지 않아요. */}
-      {showAdd && <div aria-hidden="true" className="h-24" />}
-
-      {/* fixed right-4 bottom-4: 화면 오른쪽 아래에 떠 있어요. z-[52]: CRT 화면 효과 막보다 위라서 또렷해요.
-          flex-col items-end gap-2: 단추를 위아래로 쌓고 오른쪽 끝을 맞춰요. print:hidden: 인쇄할 때는 빼요. */}
-      <div className="fixed right-4 bottom-4 z-[52] flex flex-col items-end gap-2 print:hidden">
-        <BackToTop />
-        {showAdd && (
-          // w-24 h-24: 너비 6rem("맨 위로"와 같아요), 높이도 6rem인 정사각형. no-underline: 링크 밑줄을 없애요.
-          <Link href="/write" className="btn-float h-24 w-24 justify-center no-underline">
-            {/* 픽셀 "+" 그림은 꾸밈이라 읽지 않고(label 없음), 대신 화면에 보이지 않는 "리뷰 추가"를 이름으로 읽어요. */}
-            <PixelArt rows={PLUS_ROWS} cell={5} />
-            <span className="sr-only">리뷰 추가</span>
-          </Link>
-        )}
-      </div>
+      <BackToTop />
+      {showAdd && (
+        // fixed bottom-4 left-1/2 -translate-x-1/2: 화면 가운데 아래에 떠 있어요(왼쪽 끝을 가운데에 두고, 자기 너비의 반만큼 왼쪽으로 당겨요).
+        // h-11 w-11: 가로·세로 44px 정사각형. p-0: 단추 기본 안쪽 여백을 없애 그림이 가운데에 오게 해요.
+        // z-[52]: CRT 화면 효과 막보다 위라서 또렷해요. no-underline: 링크 밑줄을 없애요. print:hidden: 인쇄할 때는 빼요.
+        <Link href="/write" className="btn-float fixed bottom-4 left-1/2 z-[52] h-11 w-11 -translate-x-1/2 justify-center p-0 no-underline print:hidden">
+          {/* 픽셀 "+" 그림(24px)은 꾸밈이라 읽지 않고(label 없음), 대신 화면에 보이지 않는 "리뷰 추가"를 이름으로 읽어요. */}
+          <PixelArt rows={PLUS_ROWS} cell={3} />
+          <span className="sr-only">리뷰 추가</span>
+        </Link>
+      )}
     </>
   );
 }

@@ -3,7 +3,7 @@
  *
  * 이 파일이 하는 일
  *   화면 오른쪽 아래에 떠 있는 "맨 위로" 단추예요. 누르면 화면 맨 위로 올라가요.
- *   떠 있는 자리(오른쪽 아래)는 함께 떠 있는 "+" 단추와 묶어서 floating-buttons.tsx가 정해요.
+ *   (리뷰 추가 "+" 단추는 따로 화면 가운데 아래에 떠 있어요. floating-buttons.tsx)
  *
  * 맡은 기능
  *   - 조금(400px 넘게) 내려 읽었을 때만 보여요. 맨 위에서는 필요 없으니까요.
@@ -16,7 +16,7 @@
  *   (투명하게만 만들면 보이지 않는 단추에 Tab 초점이 들어가 사용자가 길을 잃어요.)
  *
  * 누가 쓰나요?
- *   components/floating-buttons.tsx가 "+"(리뷰 추가) 단추 위에 놓아요.
+ *   components/floating-buttons.tsx가 "+"(리뷰 추가) 단추와 함께 바닥글에 놓아요.
  */
 
 "use client";
@@ -57,8 +57,9 @@ export function BackToTop() {
   }
 
   return (
-    // w-24 justify-center: 너비를 6rem으로 정해 아래 "+" 단추와 같게 맞추고, 글자는 가운데에 놓아요.
-    <button type="button" hidden={!visible} onClick={handleClick} className="btn-float w-24 justify-center">
+    // fixed right-4 bottom-4: 화면 오른쪽 아래에 떠 있어요. z-[52]: CRT 화면 효과 막(z-index 50, 51)보다 위라서 또렷해요.
+    // print:hidden: 인쇄할 때는 빼요.
+    <button type="button" hidden={!visible} onClick={handleClick} className="btn-float fixed right-4 bottom-4 z-[52] print:hidden">
       맨 위로
     </button>
   );

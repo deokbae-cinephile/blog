@@ -35,7 +35,10 @@ export default defineConfig([
       ...jsxA11y.flatConfigs.recommended.rules,
       // 가로로 스크롤되는 영역(표)은 키보드로도 스크롤할 수 있게 tabIndex={0}을 줘야 해요.
       // 원래 "초점을 받지 않는 요소에 tabIndex 금지" 규칙이 있는데, 이름 있는 region 역할에는 허락해요.
-      "jsx-a11y/no-noninteractive-tabindex": ["error", { tags: [], roles: ["region"] }],
+      // 탭 내용(tabpanel)도 허락해요. WAI-ARIA 탭 패턴은 탭 내용에 tabIndex={0}을 줘서 Tab 키로 들어가게 해요.
+      // allowExpressionValues: 역할을 조건식으로 정한 요소(예: 좁은 화면에서만 tabpanel)는 검사에서 빼요.
+      // 이 규칙은 조건식 역할을 읽지 못해서, 맞게 쓴 코드도 틀렸다고 해요. (tabpanel·allowExpressionValues 모두 jsx-a11y 기본 권장값과 같아요)
+      "jsx-a11y/no-noninteractive-tabindex": ["error", { tags: [], roles: ["region", "tabpanel"], allowExpressionValues: true }],
     },
   },
 
