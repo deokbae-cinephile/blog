@@ -15,9 +15,6 @@
  *   그래서 같은 보안 헤더를 public/_headers에도 적어 두었어요. 헤더를 바꾸면 두 곳을 함께 고쳐요.
  */
 
-import { readdirSync } from "node:fs";
-import path from "node:path";
-
 import type { NextConfig } from "next";
 
 /**
@@ -36,31 +33,7 @@ const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
 ];
 
-/**
- * 빌드할 때 올라가 있는 리뷰 주소 목록을 "a,b,c" 글자로 만들어요.
- * 조회수 API가 목록에 있는 리뷰만 세도록 아래 env(DMB_REVIEW_SLUGS)로 넣어 줘요(lib/review-slugs.ts).
- * 주소 규칙은 원고 읽기(lib/load-reviews.ts)와 같아요: .md로 끝나고 _로 시작하지 않는 파일의 이름(.md 뺀 것)이 주소예요.
- * 원고 폴더는 content/reviews예요. E2E는 REVIEWS_DIR로 시험용 원고 폴더(e2e/fixtures/reviews)를 읽어요.
- */
-function publishedReviewSlugs(): string {
-  const dir = path.resolve(process.cwd(), process.env.REVIEWS_DIR ?? "content/reviews");
-  try {
-    return readdirSync(dir)
-      .filter((name) => name.endsWith(".md") && !name.startsWith("_"))
-      .map((name) => name.slice(0, -".md".length))
-      .sort()
-      .join(",");
-  } catch {
-    // 폴더가 없으면 올라간 리뷰가 없는 것으로 봐요(조회수를 세지 않아요).
-    return "";
-  }
-}
-
 const nextConfig: NextConfig = {
-  // env: 빌드할 때 코드 속 process.env.DMB_REVIEW_SLUGS를 이 글자로 바꿔 넣어요.
-  //   Cloudflare Workers에서는 원고 파일을 읽을 수 없어서, 주소 목록을 코드에 박아 두는 거예요.
-  //   리뷰 주소는 사이트맵에도 있는 공개 정보라 코드에 들어가도 괜찮아요(그래도 서버 코드에서만 써요).
-  env: { DMB_REVIEW_SLUGS: publishedReviewSlugs() },
   // 응답 헤더에 "X-Powered-By: Next.js"를 붙이지 않아요(굳이 알릴 필요가 없는 정보예요).
   poweredByHeader: false,
   // 포스터는 Next.js 이미지 최적화를 거쳐요. 목록의 작은 썸네일은 작게 줄인 파일을 받아서 화면이 가벼워져요.

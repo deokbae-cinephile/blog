@@ -5,7 +5,7 @@
  *   리뷰 한 편의 상세 화면 내용을 그립니다. 넓은 화면(1024px~)에서는 두 칸, 좁은 화면에서는 한 칸으로 놓여요.
  *   내용은 화면 너비를 다 써요(풀 페이지). 글줄 길이를 따로 줄이지 않아요.
  *
- *     ◀ 목록으로                                              [수정] [삭제] ← 로그인했을 때만
+ *     ◀ 목록으로                                    [공유하기] [수정] [삭제] ← 수정·삭제는 로그인했을 때만
  *     ┌ 반전 안내판(화면 너비 전체) ───────────────────────────────┐
  *     │ [드라마]                              ← 장르(제목 위)          │
  *     │ 필름이 끊기기 전에                    ← 영화 제목(h1)    5.0  │ ← 평점(크게, 오른쪽)
@@ -21,6 +21,8 @@
  * 맡은 기능
  *   - 반전 안내판에 장르(제목 위), 제목, 한 줄 정보(원제·연도·국가·상영 시간·감독), 큰 평점(오른쪽) 보여 주기
  *   - 포스터(없으면 기본 포스터)를 왼쪽 칸에 보여 주기
+ *   - 맨 윗줄 오른쪽 [공유하기]: 휴대폰 공유 창으로 리뷰 링크 보내기. 받는 쪽 미리 보기에 포스터가 보여요(share-button.tsx)
+ *     (왼쪽 칸 포스터 아래에 두면, 키가 작은 화면에서 왼쪽 아래에 떠 있는 [키보드 조작] 단추에 가려져서 맨 윗줄에 둬요.)
  *   - 한줄평과 본문(사진과 글을 섞은 HTML)을 오른쪽 칸에 보여 주기
  *   - 장르를 누르면 그 장르로 거른 목록으로 가기
  *   - 쓴 날 순서로 이전·다음 리뷰로 가기(링크, 그리고 키보드 ◀▶ — review-keys.tsx)
@@ -36,14 +38,16 @@
 
 import Link from "next/link";
 
-import { joinFacts, labeled } from "@/lib/format";
+import { formatRating, joinFacts, labeled } from "@/lib/format";
 import type { Review, ReviewSummary } from "@/lib/review";
+import { siteUrl } from "@/lib/site";
 
 import { AdminReviewActions } from "./admin-review-actions";
 import { GenreTags } from "./genre-tags";
 import { Poster } from "./poster";
 import { Rating } from "./rating";
 import { ReviewKeys } from "./review-keys";
+import { ShareButton } from "./share-button";
 
 /** ReviewArticle이 받는 값 */
 type Props = {
@@ -74,7 +78,12 @@ export function ReviewArticle({ review, newer, older }: Props) {
         <Link href="/" className="term-link inline-block py-2">
           <span aria-hidden="true">◀ </span>목록으로
         </Link>
-        <AdminReviewActions slug={slug} title={title} />
+        {/* 오른쪽 묶음: [공유하기]는 누구에게나, [수정]·[삭제]는 로그인했을 때만.
+            공유하는 것은 리뷰의 대표 주소예요. 받는 쪽 메신저가 이 주소의 공유 미리 보기(포스터)를 카드로 보여 줘요. */}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <ShareButton url={`${siteUrl}/reviews/${slug}`} title={`${title} 리뷰`} text={`평점 ${formatRating(rating)} · ${oneLiner}`} />
+          <AdminReviewActions slug={slug} title={title} />
+        </div>
       </div>
 
       {/* 반전 안내판: 장르, 영화 제목, 한 줄 정보, 그리고 오른쪽에 큰 평점. <header>는 이 글(article)의 머리라는 뜻이에요.

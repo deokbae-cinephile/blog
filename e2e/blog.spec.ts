@@ -347,6 +347,9 @@ test.describe("리뷰 상세", () => {
     // 포스터가 있는 리뷰: 공유 그림은 포스터, X(트위터)는 작은 카드
     await page.goto("/reviews/alpha-station");
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/posters\/test-pattern\.png$/);
+    // 포스터의 가로·세로도 알려 줘요(메신저가 링크를 처음 받았을 때도 포스터를 바로 그리게). 시험 포스터는 200×300이에요.
+    await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute("content", "200");
+    await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute("content", "300");
     await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute("content", "summary");
     const data = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent())!);
     expect(data).toMatchObject({
@@ -374,6 +377,45 @@ test.describe("리뷰 상세", () => {
       alternateName: "덕배의 영화 블로그",
     });
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/og\.png$/);
+  });
+
+  test("[공유하기]는 휴대폰 공유 창에 리뷰 제목·평점·대표 주소를 넘기고, 공유 창이 없으면 주소를 복사해 알린다", async ({ page, context, browserName }) => {
+    // 공유 창(navigator.share)을 가짜로 심어, 넘긴 값을 모아 둬요(시험 브라우저에는 진짜 공유 창이 없어요).
+    await page.addInitScript(() => {
+      const shared: ShareData[] = [];
+      Object.assign(window, { __shared: shared });
+      Object.defineProperty(navigator, "share", { configurable: true, value: async (data: ShareData) => void shared.push(data) });
+    });
+    await page.goto("/reviews/alpha-station");
+    const share = page.getByRole("button", { name: "공유하기" });
+    // 맨 윗줄 오른쪽([◀ 목록으로]와 같은 줄)에 있고, 떠 있는 단추들에 가려지지 않아요(가운데를 누르면 이 단추가 받아요).
+    // 첫 화면 로딩 레이어가 걷힌 뒤에 재요(레이어는 잠깐 화면 전체를 덮어요).
+    await expect(page.locator("html")).toHaveAttribute("data-booted", "");
+    const back = await page.getByRole("link", { name: "목록으로" }).boundingBox();
+    const button = await share.boundingBox();
+    expect(Math.abs(button!.y + button!.height / 2 - (back!.y + back!.height / 2))).toBeLessThan(4);
+    expect(button!.x).toBeGreaterThan(back!.x + back!.width);
+    expect(
+      await share.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+      }),
+    ).toBe(true);
+    await share.click();
+    // 공유하는 것은 대표 주소(링크)예요. 받는 쪽 미리 보기 카드에는 이 주소의 공유 그림(포스터)이 보여요.
+    expect(await page.evaluate(() => (window as unknown as { __shared: ShareData[] }).__shared)).toEqual([
+      { title: "알파 정거장 리뷰", text: expect.stringMatching(/^평점 4\.5 · /), url: "https://deokbae.blog/reviews/alpha-station" },
+    ]);
+    await expectNoA11yViolations(page);
+
+    // 공유 창이 없는 브라우저(예: 컴퓨터의 Firefox)는 주소를 복사하고 안내해요.
+    test.skip(browserName !== "chromium", "클립보드 권한은 Chromium에서만 줄 수 있어요");
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    // 공유 창을 없는 것으로 만들어요(브라우저에 원래 있던 것도 가리도록 undefined로 덮어요).
+    await page.evaluate(() => Object.defineProperty(navigator, "share", { configurable: true, value: undefined }));
+    await share.click();
+    await expect(page.getByRole("status").filter({ hasText: "링크를 복사했어요" })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://deokbae.blog/reviews/alpha-station");
   });
 
   test("목록에서 제목을 누르면 상세로 가고, 포스터·머리 안내판·본문을 보인다(본 날·쓴 날은 없다)", async ({ page }) => {

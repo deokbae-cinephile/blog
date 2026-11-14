@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EMPTY_VALUES, type ReviewFormValues } from "./review-values";
-import { FIELD_MESSAGES, findBodyImages, todayInSeoul, validateReviewForm } from "./review-form";
+import { FIELD_MESSAGES, findBodyImages, nowInSeoul, validateReviewForm } from "./review-form";
 
 /** 꼭 필요한 칸을 모두 채운 올바른 값 */
 const valid: ReviewFormValues = {
@@ -24,7 +24,7 @@ const valid: ReviewFormValues = {
 
 describe("validateReviewForm", () => {
   it("빈 칸이면 꼭 채워야 하는 칸마다 칸 이름으로 된 문구를 돌려준다", () => {
-    const result = validateReviewForm(EMPTY_VALUES, { checkSlug: true, today: "2026-11-13" });
+    const result = validateReviewForm(EMPTY_VALUES, { checkSlug: true, now: "2026-11-13" });
     expect(result).toEqual({
       ok: false,
       errors: {
@@ -40,7 +40,7 @@ describe("validateReviewForm", () => {
   });
 
   it("통과하면 원고에 넣을 정보를 돌려주고, 글 쓴 날이 비어 있으면 오늘 날짜를 넣는다", () => {
-    const result = validateReviewForm(valid, { checkSlug: true, today: "2026-11-13" });
+    const result = validateReviewForm(valid, { checkSlug: true, now: "2026-11-13" });
     expect(result).toEqual({
       ok: true,
       frontmatter: {
@@ -58,7 +58,7 @@ describe("validateReviewForm", () => {
   it("불러온 원고의 글 쓴 날과 선택 칸(원제·국가·상영 시간·포스터)은 그대로 넣는다", () => {
     const result = validateReviewForm(
       { ...valid, publishedAt: "2026-01-02", originalTitle: "Winter Stop", country: "한국", runtime: "112", poster: "winter-stop.jpg", posterAlt: "정류장" },
-      { checkSlug: true, today: "2026-11-13" },
+      { checkSlug: true, now: "2026-11-13" },
     );
     expect(result.ok && result.frontmatter).toMatchObject({
       publishedAt: "2026-01-02",
@@ -102,9 +102,18 @@ describe("findBodyImages", () => {
   });
 });
 
-describe("todayInSeoul", () => {
-  it("서버 시간대와 상관없이 한국 시간 날짜를 돌려준다", () => {
+describe("nowInSeoul", () => {
+  it("서버 시간대와 상관없이 한국 시간 날짜와 시각을 ISO 모양(+09:00)으로 돌려준다", () => {
     // UTC 2026-11-12 16:00 = 한국 2026-11-13 01:00
-    expect(todayInSeoul(new Date(Date.UTC(2026, 10, 12, 16)))).toBe("2026-11-13");
+    expect(nowInSeoul(new Date(Date.UTC(2026, 10, 12, 16)))).toBe("2026-11-13T01:00:00+09:00");
+    // 한국 자정은 24시가 아니라 00시로 적어요.
+    expect(nowInSeoul(new Date(Date.UTC(2026, 10, 13, 15, 0, 5)))).toBe("2026-11-14T00:00:05+09:00");
+  });
+
+  it("새 리뷰(글 쓴 날이 빈 칸)에는 지금 시각까지 넣고, 수정은 원래 값을 그대로 둔다", () => {
+    const fresh = validateReviewForm({ ...valid, publishedAt: "" }, { checkSlug: true, now: "2026-11-14T19:35:48+09:00" });
+    expect(fresh.ok && fresh.frontmatter.publishedAt).toBe("2026-11-14T19:35:48+09:00");
+    const kept = validateReviewForm({ ...valid, publishedAt: "2026-11-14" }, { checkSlug: true, now: "2026-11-15T09:00:00+09:00" });
+    expect(kept.ok && kept.frontmatter.publishedAt).toBe("2026-11-14");
   });
 });

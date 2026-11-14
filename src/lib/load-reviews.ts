@@ -40,6 +40,7 @@ import { VFile } from "vfile";
 import { matter } from "vfile-matter";
 
 import { findImages, type ImageSize, renderMarkdown } from "./markdown";
+import { type PhotoVariant, RESIZABLE, variantFile, variantUrl, variantWidths } from "./photo-variants";
 import { compareLatest, type Review, type ReviewSummary } from "./review";
 // SLUG: 원고 파일 이름(= 주소) 규칙, imageRefProblems: 사진 설명·주소 규칙. 글쓰기 저장 API(lib/review-form.ts)와 함께 써요.
 import { checkFrontmatter, imageRefProblems, safeDecode, SLUG, WEB_IMAGE_TYPES } from "./review-schema";
@@ -144,9 +145,16 @@ export async function loadReviews(
     // 2-5) 포스터를 적었다면 그 파일이 public/posters에 정말 있는지 확인해요.
     //      파일 이름 모양은 검사 규칙이 이미 봤지만, 파일을 빠뜨리고 올리는 실수는 여기서만 잡을 수 있어요.
     const { poster, ...frontmatter } = parsed.value;
+    // 포스터의 가로·세로(공유 미리 보기에 알려 줘요). 크기를 못 재도 화면은 그대로라, 그때는 크기 없이 둬요.
+    let posterSize: { width: number; height: number } | undefined;
     if (poster) {
       try {
-        await access(path.join(publicDir, "posters", poster));
+        const file = path.join(publicDir, "posters", poster);
+        await access(file);
+        posterSize = await imageSizeFromFile(file).then(
+          ({ width, height }) => ({ width, height }),
+          () => undefined,
+        );
       } catch {
         problems.push(
           `${where}: 포스터 파일을 찾을 수 없습니다: public/posters/${poster}. 그 폴더에 파일을 넣었는지, 이름이 똑같은지 확인하세요.`,
@@ -170,7 +178,8 @@ export async function loadReviews(
       slug,
       ...frontmatter,
       ...(poster ? { poster: `/posters/${poster}` } : {}),
-      html: await renderMarkdown(body, { imageSizes: images.sizes }),
+      ...(posterSize ? { posterSize } : {}),
+      html: await renderMarkdown(body, { imageSizes: images.sizes, imageVariants: images.variants }),
     });
   }
 
@@ -189,12 +198,17 @@ export async function loadReviews(
  *        → 글쓰기 저장 API도 똑같이 검사해서 lib/review-schema.ts의 imageRefProblems로 나눠 두었어요.
  *   4. 파일이 public 폴더에 정말 있고, 브라우저가 보여 줄 수 있는 그림 형식(JPG·PNG·WebP·AVIF·GIF)인지: 크기를 재 보면서 함께 확인해요.
  *
+ * 함께 찾는 것
+ *   빌드 직전에 만든 작은 사본(public/_resized, lib/resize-photos.ts)이 있으면 모아 둬요. 본문 <img>의 srcset이 돼요.
+ *   사본이 없으면(pnpm dev, 사본을 만들지 않은 빌드) srcset 없이 원본만 써요.
+ *
  * @param markdown 원고 본문
  * @param publicDir public 폴더 경로
- * @returns sizes: 사진 크기 표(주소 → 크기), problems: 고칠 곳 목록(파일 경로는 부르는 쪽이 붙여요)
+ * @returns sizes: 사진 크기 표(주소 → 크기), variants: 작은 사본 표(주소 → 사본들), problems: 고칠 곳 목록(파일 경로는 부르는 쪽이 붙여요)
  */
 export async function checkImages(markdown: string, publicDir: string) {
   const sizes = new Map<string, ImageSize>();
+  const variants = new Map<string, PhotoVariant[]>();
   const problems: string[] = [];
 
   for (const { src, alt } of await findImages(markdown)) {
@@ -213,9 +227,11 @@ export async function checkImages(markdown: string, publicDir: string) {
     const { pathname } = new URL(src, "http://localhost");
 
     let info: Awaited<ReturnType<typeof imageSizeFromFile>>;
+    // 주소 → 파일 경로(아래 try 안에서 정해요). 작은 사본을 찾을 때도 써요.
+    let file: string;
     try {
       // 주소 → 파일 경로. decodeURIComponent는 %EA%B2%A8 같은 글자를 한글로 되돌려요.
-      const file = path.join(publicDir, decodeURIComponent(pathname));
+      file = path.join(publicDir, decodeURIComponent(pathname));
       // %2F(/를 바꾼 글자)로 숨긴 "../"가 public 폴더 밖의 파일을 가리키지 못하게 막아요. relative가 ".."로 시작하면 폴더 밖이에요.
       if (path.relative(publicDir, file).startsWith("..")) throw new Error("public 폴더 밖");
       info = await imageSizeFromFile(file);
@@ -237,10 +253,26 @@ export async function checkImages(markdown: string, publicDir: string) {
     // 휴대폰 사진에는 "돌려서 보여 줘"라는 표시(orientation)가 들어 있기도 해요. 5~8은 90도로 돌리라는 뜻이라,
     // 브라우저가 보여 주는 모양에 맞춰 가로와 세로를 바꿔 적어요.
     const { width, height, orientation } = info;
-    sizes.set(src, orientation !== undefined && orientation >= 5 ? { width: height, height: width } : { width, height });
+    const size = orientation !== undefined && orientation >= 5 ? { width: height, height: width } : { width, height };
+    sizes.set(src, size);
+
+    // 빌드할 때 만든 작은 사본(public/_resized/<너비>/...)을 찾아요. 있는 것만 srcset에 넣어요(GIF는 사본을 만들지 않아요).
+    if (!RESIZABLE.test(file)) continue;
+    // public 기준 경로(예: "images/a/scene-1.jpg"). 사본 파일 이름이 이 경로로 정해져요(lib/photo-variants.ts).
+    const publicPath = path.relative(publicDir, file).split(path.sep).join("/");
+    const found: PhotoVariant[] = [];
+    for (const target of variantWidths(size.width)) {
+      try {
+        await access(path.join(publicDir, ...variantFile(publicPath, target).split("/")));
+        found.push({ width: target, url: variantUrl(src, target) });
+      } catch {
+        // 사본이 없으면(사본을 만들지 않은 빌드) 넘어가요. 원본만으로도 화면은 그대로예요.
+      }
+    }
+    if (found.length > 0) variants.set(src, found);
   }
 
-  return { sizes, problems };
+  return { sizes, variants, problems };
 }
 
 
@@ -280,10 +312,11 @@ export function getAllReviews(): Promise<Review[]> {
  * 처음 화면은 목록 전체를 브라우저로 보내므로 본문을 빼 가볍게 해요.
  */
 function toSummary(review: Review): ReviewSummary {
-  // 구조 분해: html은 따로 꺼내고, 나머지 항목은 모두 summary에 모아요.
-  const { html, ...summary } = review;
-  // html은 쓰지 않는다고 분명히 해 둡니다. (안 쓰는 변수가 있다는 린트 경고를 피하는 관용 표현이에요.)
+  // 구조 분해: html·포스터 크기(상세 화면에서만 써요)는 따로 꺼내고, 나머지 항목은 모두 summary에 모아요.
+  const { html, posterSize, ...summary } = review;
+  // 둘은 쓰지 않는다고 분명히 해 둡니다. (안 쓰는 변수가 있다는 린트 경고를 피하는 관용 표현이에요.)
   void html;
+  void posterSize;
   return summary;
 }
 

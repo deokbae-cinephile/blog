@@ -21,6 +21,9 @@
     "strict": true,
     // 검사만 하고 .js 파일은 만들지 않아요(만드는 일은 Next.js가 해요).
     "noEmit": true,
+    // import 경로에 .ts를 적어도 돼요. 빌드 스크립트(scripts/resize-photos.mjs)가 Node.js로 바로 부르는 파일은
+    // 확장자를 적어야 찾을 수 있어서 써요(lib/resize-photos.ts). noEmit일 때만 켤 수 있어요.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     // import/export 문법(ES 모듈)을 쓰고, 모듈 위치는 번들러(Next.js) 방식으로 찾아요.
     "module": "esnext",

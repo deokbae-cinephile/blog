@@ -16,6 +16,8 @@
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadReviews, ReviewContentError } from "./load-reviews";
@@ -142,6 +144,28 @@ describe("loadReviews", () => {
       expect(first?.html).toContain('<figure class="photo" style="--photo-ratio: 0.6667; --photo-width: 200px">');
       expect(first?.html).toContain('alt="눈 내리는 정류장" width="200" height="300"');
       expect(first?.html).toContain("<figcaption>첫 장면</figcaption>");
+      // 200px 사진은 사본을 만들지 않아서 srcset이 없어요.
+      expect(first?.html).not.toContain("srcset");
+    });
+
+    it("빌드할 때 만든 작은 사본(_resized)이 있으면 srcset에 넣고, 만들지 않은 너비는 넣지 않는다", async () => {
+      // 1600 × 900 사진과, 그 사본 가운데 480·800만 있는 상황(1200 사본은 없어요)
+      await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#c87828" } })
+        .jpeg()
+        .toFile(path.join(dir, "images", "넓은.jpg"));
+      for (const width of [480, 800]) {
+        const file = path.join(dir, "_resized", String(width), "images", "넓은.jpg.webp");
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeFile(file, "사본");
+      }
+      await writeFile(path.join(dir, "winter-stop.md"), review(base, "![넓은 장면](/images/넓은.jpg)"));
+
+      const [first] = await loadReviews(dir, { publicDir: dir });
+
+      // 원고의 한글 주소는 %로 바뀌어 들어가요(브라우저가 같은 파일을 찾아요).
+      const src = "/images/%EB%84%93%EC%9D%80.jpg";
+      expect(first?.html).toContain(`srcset="/_resized/480${src}.webp 480w, /_resized/800${src}.webp 800w, ${src} 1600w"`);
+      expect(first?.html).toContain('sizes="(min-width: 1024px) min(calc(100vw - 27rem), 1600px, calc(80vh * 1.7778))');
     });
 
     it("사진 설명(대체 텍스트)이 비어 있으면 적으라고 알려 준다", async () => {

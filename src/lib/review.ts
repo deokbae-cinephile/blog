@@ -66,13 +66,29 @@ export type ReviewSummary = {
 export type Review = ReviewSummary & {
   /** 원고 본문(Markdown)을 HTML로 바꾼 글자 */
   html: string;
+  /**
+   * 포스터의 가로·세로(px). 포스터가 있을 때만 있어요(원고를 읽을 때 파일에서 재요).
+   * 공유 미리 보기(og:image:width·height)에 알려 주면, 메신저·SNS가 링크를 처음 받았을 때도 포스터를 바로 보여 줘요.
+   * 목록에는 쓰지 않아서 목록용 요약(ReviewSummary)에는 넣지 않아요(lib/load-reviews.ts의 toSummary).
+   */
+  posterSize?: { width: number; height: number };
 };
 
 /** 정렬에 필요한 항목만 골라 둔 타입. `Pick<T, "a" | "b">`는 T에서 a, b만 뽑아 만든 타입이에요. */
 type Sortable = Pick<ReviewSummary, "publishedAt" | "title" | "rating">;
 
 /**
- * "최신순" 정렬 규칙: 최근에 쓴 글이 앞에 옵니다. 같은 날 쓴 글은 제목 가나다순이에요.
+ * 글 쓴 날 글자를 견줄 수 있는 시각(1970년부터의 ms)으로 바꿔요.
+ * 날짜만 있으면(예전 원고) 그날 한국 시간 0시로 봐요. 그래서 같은 날 시각까지 적힌 글보다 뒤(더 예전)로 가요.
+ * @example publishedTime("2026-11-14T19:35:48+09:00") > publishedTime("2026-11-14T17:12:40+09:00"); // true
+ */
+export function publishedTime(publishedAt: string): number {
+  return Date.parse(publishedAt.length === 10 ? `${publishedAt}T00:00:00+09:00` : publishedAt);
+}
+
+/**
+ * "최신순" 정렬 규칙: 최근에 쓴 글이 앞에 옵니다. 같은 날 쓴 글은 시각으로 가르고(새 리뷰는 시각까지 적혀요),
+ * 시각까지 같으면(날짜만 적힌 예전 원고끼리) 제목 가나다순이에요.
  *
  * 정렬 규칙 함수(비교 함수)를 읽는 법
  *   배열의 `.sort(규칙)`은 두 항목 a, b를 규칙에 넣어 보고, 돌아온 숫자로 순서를 정해요.
@@ -81,14 +97,14 @@ type Sortable = Pick<ReviewSummary, "publishedAt" | "title" | "rating">;
  *   - 0이면 순서를 그대로 둡니다
  *
  * @example
- * reviews.sort(compareLatest); // 2026-11-08 글 → 2026-10-30 글 → ...
+ * reviews.sort(compareLatest); // 2026-11-14 19:35 글 → 2026-11-14 17:12 글 → 2026-10-30 글 → ...
  */
 export function compareLatest(a: Sortable, b: Sortable): number {
-  // 1) 날짜 글자(YYYY-MM-DD)는 글자 순서가 곧 날짜 순서라 localeCompare로 비교할 수 있어요.
-  //    b를 앞에 두고 비교하면(b.localeCompare(a)) 큰 값, 즉 최근 날짜가 앞에 옵니다(내림차순).
-  // 2) `||`는 왼쪽이 0(=같음)일 때만 오른쪽을 계산해요. 날짜가 같을 때만 제목으로 한 번 더 비교하는 거죠.
+  // 1) 쓴 시각을 숫자(ms)로 바꿔 b − a: 큰 값, 즉 최근에 쓴 글이 앞에 옵니다(내림차순).
+  //    (글자로 견주면 "2026-11-14"와 "2026-11-14T…"처럼 모양이 다른 값을 바르게 가르지 못해요.)
+  // 2) `||`는 왼쪽이 0(=같음)일 때만 오른쪽을 계산해요. 시각까지 같을 때만 제목으로 한 번 더 비교하는 거죠.
   //    "ko"는 한국어 규칙(가나다순)으로 비교하라는 뜻입니다.
-  return b.publishedAt.localeCompare(a.publishedAt) || a.title.localeCompare(b.title, "ko");
+  return publishedTime(b.publishedAt) - publishedTime(a.publishedAt) || a.title.localeCompare(b.title, "ko");
 }
 
 /**

@@ -65,6 +65,19 @@ describe("checkFrontmatter", () => {
     expect(result.publishedAt).toBe("2026-11-08");
   });
 
+  it("글 쓴 날은 시각과 시간대까지 적어도 그대로 받는다(같은 날 쓴 글끼리 최신순을 가르려고)", () => {
+    expect(parse({ ...valid, publishedAt: "2026-11-14T19:35:48+09:00" }).publishedAt).toBe("2026-11-14T19:35:48+09:00");
+    expect(parse({ ...valid, publishedAt: "2026-11-14T10:35Z" }).publishedAt).toBe("2026-11-14T10:35Z");
+  });
+
+  // 빈칸으로 띄운 시각, 시간대가 없는 시각(어디서 읽느냐에 따라 순간이 달라져요), 25시, 없는 날을 거절해요.
+  it.each(["2026-11-14 19:35:48", "2026-11-14T19:35:48", "2026-11-14T25:00:00+09:00", "2026-02-30T09:00:00+09:00"])(
+    "글 쓴 날 %s는 고치는 방법과 함께 거절한다",
+    (publishedAt) => {
+      expect(messages({ ...valid, publishedAt })).toEqual([expect.stringContaining("publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고")]);
+    },
+  );
+
   // 0.5 단위가 아닌 값(4.3), 범위 밖의 값(0점은 없어요, 5.5), 글자("4.5")를 모두 거절하는지 한 번에 확인해요.
   it.each([4.3, 0, 5.5, "4.5"])("평점 %s는 고치는 방법과 함께 거절한다", (rating) => {
     expect(messages({ ...valid, rating })).toEqual([
@@ -102,13 +115,13 @@ describe("checkFrontmatter", () => {
       "genres(장르)를 하나 이상 적어 주세요. 예: genres: [드라마, 로맨스]",
       "rating(평점)은 0.5부터 5까지 0.5 단위 숫자로 적습니다(0점은 없습니다). 예: rating: 4.5",
       "oneLiner(한줄평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
-      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적습니다. 예: publishedAt: 2026-10-05",
+      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
     ]);
   });
 
   it("날짜 형식이 틀리면 거절한다", () => {
     expect(messages({ ...valid, publishedAt: "2026.11.08" })).toEqual([
-      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적습니다. 예: publishedAt: 2026-10-05",
+      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
     ]);
   });
 
@@ -160,7 +173,7 @@ describe("checkFrontmatter", () => {
 
   it("달력에 없는 날짜(2월 30일)는 거절한다", () => {
     expect(messages({ ...valid, publishedAt: "2026-02-30" })).toEqual([
-      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적습니다. 예: publishedAt: 2026-10-05",
+      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
     ]);
   });
 

@@ -70,8 +70,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   // 공유 미리 보기 그림: 포스터가 있으면 포스터, 없으면 블로그 기본 그림(public/og.png, layout.tsx와 같아요).
   // 포스터는 세로로 긴 그림이라 X(트위터)에서는 작은 네모 카드(summary)로, 기본 그림은 큰 카드로 보여요.
+  // 가로·세로(og:image:width·height)도 알려 줘요. 메신저·SNS가 링크를 처음 받았을 때 그림을 다 받기 전에도 포스터를 그려 줘요.
+  // ([공유하기] 단추로 링크를 보내면 받는 쪽 미리 보기에 이 포스터가 보여요. components/share-button.tsx)
   const image = review.poster
-    ? { url: review.poster, alt: review.posterAlt ?? `영화 ‘${review.title}’ 포스터` }
+    ? { url: review.poster, alt: review.posterAlt ?? `영화 ‘${review.title}’ 포스터`, ...review.posterSize }
     : { ...DEFAULT_SHARE_IMAGE };
 
   return {

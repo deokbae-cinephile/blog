@@ -42,6 +42,8 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
 
+import { type PhotoVariant, photoSizes } from "./photo-variants";
+
 /** 사진 한 장의 크기(px). 가로(width)와 세로(height) */
 export type ImageSize = { width: number; height: number };
 
@@ -54,6 +56,12 @@ export type BodyImage = { src: string; alt: string };
  * ReadonlyMap: 읽기만 하는 Map이라는 뜻이에요. 이 파일은 표를 고치지 않아요.
  */
 export type ImageSizes = ReadonlyMap<string, ImageSize>;
+
+/**
+ * 작은 사본 표. "사진 주소 → 빌드할 때 만든 작은 사본들(너비·주소)"이에요(lib/photo-variants.ts).
+ * 원고 검사(lib/load-reviews.ts)가 사본 파일이 정말 있는 것만 담아 renderMarkdown에 넘겨줘요.
+ */
+export type ImageVariants = ReadonlyMap<string, readonly PhotoVariant[]>;
 
 /**
  * [우리 도구 1] 본문의 가장 큰 제목을 h2로 맞춥니다.
@@ -110,17 +118,28 @@ function remarkNormalizeHeadings() {
  * 사진 크기를 알면(imageSizes) <img>에 width·height를 달아요.
  * 그러면 브라우저가 사진이 도착하기 전에 자리를 미리 비워 둬서, 사진이 늦게 와도 글이 밀려 흔들리지 않아요.
  *
+ * 작은 사본이 있으면(imageVariants) srcset·sizes도 달아요. 브라우저가 화면 크기에 맞는 가장 작은 사진을 골라 받아요.
+ *
+ *   <img src="/images/a/s.jpg" srcset="/_resized/480/images/a/s.jpg.webp 480w, …, /images/a/s.jpg 1600w" sizes="(min-width: 1024px) …">
+ *
  * @param options.imageSizes 사진 크기 표(주소 → 크기)
+ * @param options.imageVariants 작은 사본 표(주소 → 사본들)
  */
-function rehypePhotos({ imageSizes }: { imageSizes: ImageSizes }) {
+function rehypePhotos({ imageSizes, imageVariants }: { imageSizes: ImageSizes; imageVariants: ImageVariants }) {
   return (tree: HastRoot) => {
     // [1번째 방문] 모든 <img>에 크기를 달아요. 크기 표의 열쇠는 원고에 적은 사진 주소예요.
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "img") return;
-      const size = imageSizes.get(String(node.properties.src));
-      if (size) {
-        node.properties.width = size.width;
-        node.properties.height = size.height;
+      const src = String(node.properties.src);
+      const size = imageSizes.get(src);
+      if (!size) return;
+      node.properties.width = size.width;
+      node.properties.height = size.height;
+      // 사본들 + 원본을 "주소 너비w" 목록으로. 원본도 넣어야 넓은 화면에서 원본을 고를 수 있어요.
+      const variants = imageVariants.get(src);
+      if (variants && variants.length > 0) {
+        node.properties.srcSet = [...variants.map((variant) => `${variant.url} ${variant.width}w`), `${src} ${size.width}w`].join(", ");
+        node.properties.sizes = photoSizes(size);
       }
     });
 
@@ -133,6 +152,14 @@ function rehypePhotos({ imageSizes }: { imageSizes: ImageSizes }) {
       // 문단이 "사진과 빈칸(줄바꿈)"으로만 되어 있는지. every: 모든 칸이 조건을 만족하면 true예요.
       const onlyImages = node.children.every((child) => isImage(child) || (child.type === "text" && child.value.trim() === ""));
       if (images.length === 0 || !onlyImages) return;
+
+      // 나란히 놓이는 사진은 화면에서 더 작게 보여서, 브라우저가 더 작은 사본을 고르게 sizes를 바꿔요.
+      if (images.length > 1) {
+        for (const image of images) {
+          const { width, height, srcSet } = image.properties;
+          if (srcSet && typeof width === "number" && typeof height === "number") image.properties.sizes = photoSizes({ width, height }, true);
+        }
+      }
 
       // 사진마다 액자(figure)를 만들고, 한 장이면 그대로, 여러 장이면 나란히 놓는 상자로 묶어요.
       const figures = images.map(toFigure);
@@ -274,6 +301,8 @@ function rehypeSiteContent({ imageSources, openLinksInNewTab }: Pick<RenderOptio
 type RenderOptions = {
   /** 사진 크기 표(주소 → 크기). 주면 사진에 width·height를 달아요. 기본은 빈 표 */
   imageSizes?: ImageSizes;
+  /** 작은 사본 표(빌드할 때만 넘겨요). 있으면 본문 <img>에 srcset·sizes를 달아요. */
+  imageVariants?: ImageVariants;
   /**
    * 사진 주소 바꾸기 표(원고의 주소 → 실제로 보여 줄 주소).
    * 글쓰기 화면의 미리 보기가 써요. 아직 올리지 않은 사진은 브라우저 안의 임시 주소(blob:)로만 볼 수 있거든요.
@@ -291,7 +320,7 @@ type RenderOptions = {
  *
  * @param options 사진 크기 표와 미리 보기용 설정
  */
-function createProcessor({ imageSizes = new Map(), imageSources, openLinksInNewTab = false }: RenderOptions) {
+function createProcessor({ imageSizes = new Map(), imageVariants = new Map(), imageSources, openLinksInNewTab = false }: RenderOptions) {
   return unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -301,7 +330,7 @@ function createProcessor({ imageSizes = new Map(), imageSources, openLinksInNewT
       footnoteLabel: "각주",
       footnoteBackLabel: (referenceIndex) => `${referenceIndex + 1}번 각주를 단 곳으로 돌아가기`,
     })
-    .use(rehypePhotos, { imageSizes })
+    .use(rehypePhotos, { imageSizes, imageVariants })
     .use(rehypeSiteContent, { imageSources, openLinksInNewTab })
     .use(rehypeStringify);
 }

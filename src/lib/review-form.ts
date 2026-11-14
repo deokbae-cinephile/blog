@@ -36,7 +36,8 @@ export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
   oneLiner: "한줄평을 입력하세요. 예: 버스는 오지 않아도, 기다림은 끝내 도착한다.",
   poster: "포스터 파일 이름이 올바르지 않습니다. 포스터를 다시 골라 주세요.",
   posterAlt: "포스터 설명은 글자로 입력하세요. 없으면 비워 둡니다.",
-  publishedAt: "글 쓴 날이 날짜 모양(YYYY-MM-DD)이 아닙니다. 저장소의 원고 파일에서 publishedAt을 고친 뒤 다시 열어 주세요.",
+  publishedAt:
+    "글 쓴 날이 날짜 모양(YYYY-MM-DD, 시각까지면 YYYY-MM-DDTHH:mm:ss+09:00)이 아닙니다. 저장소의 원고 파일에서 publishedAt을 고친 뒤 다시 열어 주세요.",
   body: "본문을 확인해 주세요.",
 };
 
@@ -44,15 +45,29 @@ export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
 export type FormCheck = { ok: true; frontmatter: ReviewFrontmatter } | { ok: false; errors: FieldErrors };
 
 /**
- * 오늘 날짜를 한국 시간 기준 "YYYY-MM-DD"로 돌려줘요. 새 리뷰의 "글 쓴 날"에 넣어요.
+ * 지금 시각을 한국 시간 기준 "YYYY-MM-DDTHH:mm:ss+09:00"으로 돌려줘요. 새 리뷰의 "글 쓴 날"에 넣어요.
+ * 날짜뿐 아니라 시각까지 적어야, 같은 날 쓴 리뷰끼리도 "최신순"에서 나중에 쓴 글이 앞에 와요(lib/review.ts의 compareLatest).
  *
  * 서버는 다른 나라 시간대에 있을 수 있어서(timeZone 지정 없이 쓰면 한국의 새벽이 전날이 될 수 있어요),
- * 시간대를 "Asia/Seoul"로 정해 계산해요. "sv-SE"(스웨덴) 날짜 모양이 마침 YYYY-MM-DD라서 빌려 써요.
+ * 시간대를 "Asia/Seoul"로 정해 계산해요. "sv-SE"(스웨덴) 모양이 마침 "2026-11-14 19:35:48"이라서 빌려 쓰고,
+ * 가운데 빈칸을 T로 바꾼 뒤 한국 시간대(+09:00)를 붙여 국제 표준(ISO 8601) 모양으로 만들어요.
  *
  * @param now 기준 시각. 테스트에서 시각을 정해 넣으려고 받아요. 기본은 지금
+ * @example nowInSeoul(new Date(Date.UTC(2026, 10, 14, 10, 35, 48))); // "2026-11-14T19:35:48+09:00"
  */
-export function todayInSeoul(now = new Date()): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(now);
+export function nowInSeoul(now = new Date()): string {
+  const text = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    // h23: 자정을 24시가 아니라 00시로 적어요.
+    hourCycle: "h23",
+  }).format(now);
+  return `${text.replace(" ", "T")}+09:00`;
 }
 
 /** 입력란의 숫자 글자를 숫자로 바꿔요. 숫자 모양이 아니면 글자 그대로 두어, 검사가 "숫자가 아니에요"라고 알려 주게 해요. */
@@ -107,7 +122,7 @@ function toFrontmatterInput(values: ReviewFormValues, publishedAt: string): Reco
  *
  * @param values 칸 값
  * @param options.checkSlug 주소(영문)도 검사할지. 새 글이면 true(수정 화면은 주소를 바꾸지 않아요)
- * @param options.today "글 쓴 날"이 비어 있을 때 넣을 날짜. 기본은 오늘(한국 시간)
+ * @param options.now "글 쓴 날"이 비어 있을 때(새 리뷰) 넣을 날짜·시각. 기본은 지금(한국 시간, 시각까지)
  * @returns 통과하면 { ok: true, frontmatter }, 아니면 { ok: false, errors }
  * @example
  * validateReviewForm({ ...EMPTY_VALUES, title: "겨울 정류장" }, { checkSlug: true });
@@ -115,7 +130,7 @@ function toFrontmatterInput(values: ReviewFormValues, publishedAt: string): Reco
  */
 export function validateReviewForm(
   values: ReviewFormValues,
-  { checkSlug, today = todayInSeoul() }: { checkSlug: boolean; today?: string },
+  { checkSlug, now = nowInSeoul() }: { checkSlug: boolean; now?: string },
 ): FormCheck {
   const errors: FieldErrors = {};
 
@@ -123,7 +138,7 @@ export function validateReviewForm(
   if (checkSlug && !SLUG.test(values.slug)) errors.slug = FIELD_MESSAGES.slug;
 
   // 2) 정보 칸: 빌드할 때와 같은 규칙(checkFrontmatter)으로 검사하고, 틀린 칸에는 칸 이름으로 된 문구를 달아요.
-  const parsed = checkFrontmatter(toFrontmatterInput(values, values.publishedAt.trim() || today));
+  const parsed = checkFrontmatter(toFrontmatterInput(values, values.publishedAt.trim() || now));
   if (!parsed.ok) {
     for (const issue of parsed.issues) {
       // issue.path: 어느 항목이 틀렸는지(예: "year"). 칸 이름과 같아요.

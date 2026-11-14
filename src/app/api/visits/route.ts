@@ -9,7 +9,7 @@
  * 세지 않는 때
  *   - 글쓴이로 로그인한 상태(세션 쿠키가 올바름): 글쓴이 자신의 방문은 넣지 않아요.
  *   - 검색엔진 로봇·링크 미리 보기 수집기(브라우저 정보로 알아봐요, lib/visitor-key.ts의 isBot)
- *   - 같은 사람이 같은 날 다시 옴(저장소가 걸러요, worker/view-counter.ts)
+ *   - 같은 사람이 같은 날 다시 옴(저장소가 걸러요, worker/visit-counter.ts)
  *   - 다른 사이트에서 보낸 요청(Origin이 우리 주소가 아님, 403)
  *
  * 누가 부르나요?
@@ -22,7 +22,7 @@ import type { NextRequest } from "next/server";
 import { isSameOrigin } from "@/lib/admin-auth";
 import { SESSION_COOKIE } from "@/lib/auth-cookies";
 import { isValidSession } from "@/lib/session";
-import { getViewStore } from "@/lib/view-store";
+import { getVisitStore } from "@/lib/visit-store";
 import { isBot, seoulDay, visitorKey } from "@/lib/visitor-key";
 
 /** 요청마다 새로 처리해요(미리 만들어 두지 않아요). */
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   // 글쓴이와 로봇은 세지 않아요. 결과를 알려 줄 필요가 없어서 내용 없이 답해요(204).
   if ((await isAuthor(request)) || isBot(request.headers.get("user-agent"))) return new Response(null, { status: 204 });
   try {
-    await getViewStore().visit(await visitorKey(request), seoulDay());
+    await getVisitStore().visit(await visitorKey(request), seoulDay());
     return new Response(null, { status: 204 });
   } catch {
     return unavailable();
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   }
   try {
     // no-store: 숫자는 늘 바뀌고 글쓴이만 보는 값이라, 브라우저·중간 서버가 저장해 두지 않게 해요.
-    return Response.json(await getViewStore().visits(), { headers: { "Cache-Control": "no-store" } });
+    return Response.json(await getVisitStore().visits(), { headers: { "Cache-Control": "no-store" } });
   } catch {
     return unavailable();
   }
