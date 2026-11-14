@@ -99,11 +99,14 @@ export function DeleteReview({ slug, title, onDeleted }: Props) {
           <p id={`${id}-desc`}>
             ‘{title}’ 리뷰와 이 리뷰의 포스터·장면 사진을 저장소에서 삭제합니다. 삭제한 뒤에는 이 화면에서 되돌릴 수 없습니다.
           </p>
-          {/* 삭제하는 동안의 로딩 UI(깜빡이는 커서와 16칸 막대). 안내 칸(role="status")은 늘 두고 안쪽만 바꿔요.
-              (몇 초 걸려요: 저장소에서 원고·사진을 지우는 커밋을 만들어요.) */}
-          <div role="status">{deleting && <LoadingStatus label="리뷰를 삭제하는 중" live={false} />}</div>
-          {/* role="alert": 실패하면 바로 읽어 줘요. 영역은 늘 두고 글자만 바꿔요. */}
-          <p role="alert">{error}</p>
+          {/* 진행·실패 안내를 한 칸에 묶어요. 둘 다 비어 있을 때 그리드 줄(과 사이 간격)이 하나만 생겨, 평소 창 모양이 예전과 같아요. */}
+          <div>
+            {/* 삭제하는 동안의 로딩 UI(깜빡이는 커서와 16칸 막대). 안내 칸(role="status")은 늘 두고 안쪽만 바꿔요.
+                (몇 초 걸려요: 저장소에서 원고·사진을 지우는 커밋을 만들어요.) */}
+            <div role="status">{deleting && <LoadingStatus label="리뷰를 삭제하는 중" live={false} />}</div>
+            {/* role="alert": 실패하면 바로 읽어 줘요. 영역은 늘 두고 글자만 바꿔요. */}
+            <p role="alert">{error}</p>
+          </div>
           <div className="flex flex-wrap justify-end gap-2">
             {/* autoFocus: 창이 열리면 [취소]에 먼저 초점이 가요(되돌리기 어려운 [삭제]가 아니라). */}
             {/* eslint-disable-next-line jsx-a11y/no-autofocus -- 확인 창의 처음 초점은 덜 위험한 단추에 두는 것이 APG 권장이에요. */}
