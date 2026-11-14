@@ -42,7 +42,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+// flushSync: 화면 바꾸기를 바로 끝내게 하는 React 기능이에요. 숨어 있던 본문 칸을 보인 "다음"에 초점을 옮길 때 써요.
+import { flushSync } from "react-dom";
 
 import { type ApiResult, createReview, updateReview, uploadImage } from "@/lib/admin-api";
 import { GENRES, type Genre } from "@/lib/genres";
@@ -359,6 +361,16 @@ export function ReviewWriter(props: Props) {
 
   /* ── 저장 ── */
 
+  /**
+   * 고칠 곳 목록의 "본문" 링크를 누르면: 좁은 화면에서 [미리 보기]를 보고 있었어도 쓰기 칸을 보이고 본문 칸으로 초점을 옮겨요.
+   * (그냥 #주소로 가면 숨은 칸으로는 갈 수 없어요.) 다른 칸 링크는 #주소로 가는 기본 동작 그대로예요.
+   */
+  function goToBody(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    flushSync(() => setBodyView("input"));
+    bodyRef.current?.focus();
+  }
+
   /** 틀린 칸을 보여 주고, 고칠 곳 목록으로 초점을 옮겨요. */
   function showErrors(next: FieldErrors) {
     setErrors(next);
@@ -514,7 +526,11 @@ export function ReviewWriter(props: Props) {
                 {field === "publishedAt" ? (
                   `${FIELD_LABELS[field]}: ${message}`
                 ) : (
-                  <a href={`#${field === "genres" ? `${fieldId("genres")}-0` : fieldId(field)}`} className="term-link">
+                  <a
+                    href={`#${field === "genres" ? `${fieldId("genres")}-0` : fieldId(field)}`}
+                    onClick={field === "body" ? goToBody : undefined}
+                    className="term-link"
+                  >
                     {FIELD_LABELS[field]}: {message}
                   </a>
                 )}

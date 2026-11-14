@@ -110,9 +110,26 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel(/^개봉 연도/).fill("2026");
     await page.getByLabel(/^감독/).fill("시험감독");
     await page.getByRole("checkbox", { name: "로맨스" }).check();
+    // 평점은 처음에 5.0이 골라져 있어요("고르세요"가 없어요).
+    await expect(page.getByLabel(/^평점/)).toHaveValue("5.0");
     await page.getByLabel(/^평점/).selectOption("3.5");
     await page.getByLabel(/^한줄평/).fill("끝까지 저장되는지 보는 한줄평");
     await page.getByLabel("포스터 고르기").setInputFiles(PICTURE);
+    // [포스터 고르기]·[포스터 빼기]는 포스터와 같은 너비예요.
+    const frame = (await page.getByRole("group", { name: "포스터" }).locator(".poster-frame").boundingBox())!;
+    for (const button of [page.getByText("포스터 고르기", { exact: true }), page.getByRole("button", { name: "포스터 빼기" })]) {
+      expect(Math.round((await button.boundingBox())!.width)).toBe(Math.round(frame.width));
+    }
+    // 평점 칸: ▼와 칸 오른쪽 끝 사이가, 글자와 칸 왼쪽 끝 사이(테두리 + 안쪽 여백)와 같아요(좌우 같은 간격).
+    const inset = await page.getByLabel(/^평점/).evaluate((select) => {
+      const style = getComputedStyle(select);
+      const arrow = select.parentElement!.querySelector("svg")!.getBoundingClientRect();
+      return {
+        left: parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+        right: select.getBoundingClientRect().right - arrow.right,
+      };
+    });
+    expect(Math.round(inset.right)).toBe(Math.round(inset.left));
     const body = page.getByRole("textbox", { name: "본문(Markdown)" });
     await body.fill("첫 문단입니다.");
     await page.getByLabel("장면 사진 넣기").setInputFiles(PICTURE);

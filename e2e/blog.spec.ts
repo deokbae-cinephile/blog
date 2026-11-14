@@ -71,6 +71,40 @@ test.describe("처음 화면(목록)", () => {
     await expect(page.locator("#intro-title")).toHaveCount(0);
   });
 
+  test("머리글 왼쪽 이름(DMB: 덕배의 영화 블로그)과 오른쪽 GitHub 링크는 아이콘 크기·간격·글자 모양이 같다", async ({ page }) => {
+    await page.goto("/");
+    const banner = page.getByRole("banner");
+    const home = banner.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
+    await expect(home).toHaveAttribute("href", "/");
+    // 링크마다 아이콘 크기, 아이콘과 글자 사이 간격, 글자 크기·형광 번짐을 재요.
+    const measure = (link: typeof home) =>
+      link.evaluate((element) => {
+        const icon = element.querySelector("svg")!.getBoundingClientRect();
+        // 링크 안의 첫 글자 마디(빈칸 아닌 것)를 찾아 그 글자가 차지한 상자를 재요.
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let text: Text | null = null;
+        while (walker.nextNode()) {
+          if (walker.currentNode.textContent!.trim()) {
+            text = walker.currentNode as Text;
+            break;
+          }
+        }
+        const range = document.createRange();
+        range.selectNodeContents(text!);
+        const style = getComputedStyle(text!.parentElement!);
+        return {
+          icon: [icon.width, icon.height],
+          gap: Math.round(range.getBoundingClientRect().left - icon.right),
+          fontSize: style.fontSize,
+          textShadow: style.textShadow,
+          height: Math.round(element.getBoundingClientRect().height),
+        };
+      });
+    const [left, right] = await Promise.all([measure(home), measure(banner.getByRole("link", { name: "GitHub", exact: true }))]);
+    expect(left.icon).toEqual([24, 24]);
+    expect(left).toEqual(right);
+  });
+
   test("픽셀 글꼴(Neo둥근모)을 받아서 쓴다", async ({ page }) => {
     await page.goto("/");
     // document.fonts.ready: 글꼴을 다 받을 때까지 기다려요. 그다음 받은 글꼴 목록에서 neodgm을 찾아요.
@@ -380,6 +414,9 @@ test.describe("맨 위로 단추", () => {
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(toTop).toBeVisible();
     await expect(toTop).toHaveText("맨 위로");
+    // 화면 오른쪽 아래 구석(오른쪽·아래 끝에서 16px)에 떠 있어요.
+    const box = (await toTop.boundingBox())!;
+    expect([Math.round(800 - (box.x + box.width)), Math.round(600 - (box.y + box.height))]).toEqual([16, 16]);
     await toTop.click();
 
     // 부드럽게 올라가는 데 시간이 조금 걸려서, 0이 될 때까지 다시 확인해요(expect.poll).

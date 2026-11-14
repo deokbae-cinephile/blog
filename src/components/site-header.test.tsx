@@ -22,17 +22,16 @@ describe("SiteHeader", () => {
     expect(screen.queryByText("평론가를 꿈꾸는 덕배의 상영 기록")).not.toBeInTheDocument();
   });
 
-  it("왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)이고, 글자 효과도 같다", () => {
+  it("왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)로 그리고, 둘 다 읽지 않는 꾸밈이다", () => {
     render(<SiteHeader />);
     const home = screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
     const github = screen.getByRole("link", { name: "GitHub" });
     for (const link of [home, github]) {
       const icon = link.querySelector("svg")!;
       expect([icon.getAttribute("width"), icon.getAttribute("height")]).toEqual(["24", "24"]);
-      // 왼쪽에만 강한 형광 번짐(glow)이 있으면 글자가 달라 보여서, 둘 다 쓰지 않아요.
-      expect(link).not.toHaveClass("glow");
-      expect(link).toHaveClass("gap-2");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
     }
+    // 아이콘과 글자 사이 간격, 글자 크기·효과가 같은지는 진짜 브라우저 E2E에서 재요(e2e/blog.spec.ts).
   });
 
   it("오른쪽에 소스 코드 저장소로 가는 GitHub 링크(픽셀 아이콘 + 글자)를 둔다", () => {

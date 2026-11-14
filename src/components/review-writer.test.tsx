@@ -176,7 +176,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
     }
   });
 
-  it("평점은 처음에 5.0이 골라져 있고 '고르세요'가 없으며, ▼ 그림은 꾸밈으로 칸 오른쪽에 겹쳐 있다", () => {
+  it("평점은 처음에 5.0이 골라져 있고 '고르세요'가 없으며, ▼ 그림은 읽지 않는 꾸밈이다", () => {
     render(<ReviewWriter mode="create" />);
     const rating = screen.getByLabelText(/^평점/);
     expect(rating).toHaveValue("5.0");
@@ -184,11 +184,8 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(within(rating).getAllByRole("option").map((option) => option.textContent)).toEqual(
       ["0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0"],
     );
-    // 브라우저 기본 ▼는 지우고(appearance-none), 픽셀 ▼를 오른쪽 12px(right-3) 안쪽에 그려요. 왼쪽 글자 여백(12px)과 같아요.
-    expect(rating).toHaveClass("appearance-none");
-    const arrow = rating.parentElement!.querySelector("svg")!;
-    expect(arrow).toHaveAttribute("aria-hidden", "true");
-    expect(arrow).toHaveClass("right-3", "pointer-events-none");
+    // ▼는 칸 옆에 겹쳐 그린 꾸밈 그림이라 화면 낭독기가 읽지 않아요. (좌우 간격이 같은지는 진짜 브라우저 E2E에서 재요)
+    expect(rating.parentElement!.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 
   it("평점이 없는 원고를 불러오면 지금 평점(처음 5.0)을 그대로 둔다", async () => {
@@ -198,20 +195,6 @@ describe("ReviewWriter(리뷰 추가)", () => {
     await user.upload(screen.getByLabelText("Markdown 파일 불러오기"), file);
     await vi.waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
     expect(screen.getByLabelText(/^평점/)).toHaveValue("5.0");
-  });
-
-  it("[포스터 고르기]·[포스터 빼기] 단추는 포스터와 같은 너비다", async () => {
-    const user = userEvent.setup();
-    render(<ReviewWriter mode="create" />);
-    await user.upload(screen.getByLabelText("포스터 고르기"), new File(["jpg"], "poster.jpg", { type: "image/jpeg" }));
-    // 포스터 미리보기·단추가 한 칸(w-40, 넓은 화면은 칸 너비 최대 18rem)에 들어 있고, 단추는 그 너비를 꽉 채워요(w-full).
-    const choose = screen.getByText("포스터 고르기");
-    const remove = screen.getByRole("button", { name: "포스터 빼기" });
-    expect(choose).toHaveClass("w-full", "justify-center");
-    expect(remove).toHaveClass("w-full", "justify-center");
-    const column = choose.closest(".w-40")!;
-    expect(column).toHaveClass("lg:w-full", "lg:max-w-[18rem]");
-    expect(column.querySelector(".poster-frame")).toHaveClass("w-full");
   });
 
   it("본문 미리 보기: 쓴 글을 저장한 뒤의 모습(같은 변환)으로 보여 주고, 아직 올리지 않은 사진은 임시 주소로 보여 준다", async () => {
@@ -227,6 +210,24 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(await within(preview).findByRole("heading", { level: 2, name: "좋았던 점" })).toBeInTheDocument();
     // 사진: 본문에는 저장될 주소(/images/…)가 적혀 있지만, 미리 보기는 고른 파일의 임시 주소(blob:)로 보여 줘요.
     await vi.waitFor(() => expect(preview.querySelector("img")).toHaveAttribute("src", "blob:preview"));
+  });
+
+  it("좁은 화면에서 [미리 보기]를 보고 있어도, 고칠 곳 목록의 본문 링크를 누르면 쓰기 칸이 보이고 본문 칸으로 초점이 간다", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWriter mode="create" />);
+    await fillRequired(user);
+    // 설명이 없는 사진 줄을 넣어 본문 오류를 만들어요. ([ ]는 user.type에서 특별한 글자라 붙여 넣기로 넣어요.)
+    await user.click(bodyBox());
+    await user.paste("![](/images/winter-stop/scene-1.png)");
+    await user.click(screen.getByRole("button", { name: "리뷰 저장" }));
+    const summary = await screen.findByRole("group", { name: /^고칠 곳/ });
+
+    await user.click(screen.getByRole("tab", { name: "미리 보기" }));
+    expect(screen.queryByRole("textbox", { name: "본문(Markdown)" })).not.toBeInTheDocument();
+
+    await user.click(within(summary).getByRole("link", { name: /^본문:/ }));
+    expect(screen.getByRole("tab", { name: "Markdown 입력" })).toHaveAttribute("aria-selected", "true");
+    expect(bodyBox()).toHaveFocus();
   });
 
   it("주소를 바꾸면 이미 넣은 사진 주소도 따라 바뀐다", async () => {
