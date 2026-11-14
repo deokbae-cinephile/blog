@@ -3,6 +3,7 @@ title: 셔터 아일랜드
 originalTitle: Shutter Island
 year: 2010
 director: 마틴 스코세이지
+cast: 레오나르도 디카프리오, 마크 러팔로
 runtime: 138
 genres: [공포, 드라마, 스릴러]
 rating: 4.5
