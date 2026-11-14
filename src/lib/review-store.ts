@@ -23,10 +23,12 @@
 
 import "server-only";
 
-import { commitChanges, createBlob, type FileChange, getSnapshot, readTextBlob, readTextFiles } from "./github";
+import { commitChanges, createBlob, type FileChange, readTextBlob, readTextFiles } from "./github";
 import { type BodyImage, findImages } from "./markdown";
 import { parseReviewFile, serializeReviewFile } from "./review-file";
 import { type FieldErrors, validateReviewForm } from "./review-form";
+// 원고 읽기와 원고 파일 경로는 수정 화면도 쓰는데, 그쪽에 Markdown 변환 도구가 따라가지 않게 따로 두었어요.
+import { loadReviewSource, reviewPath } from "./review-source";
 import { imageRefProblems, safeDecode, SLUG } from "./review-schema";
 import { EMPTY_VALUES, type ReviewFormValues } from "./review-values";
 
@@ -120,8 +122,6 @@ export function readSavePayload(input: unknown): SavePayload | null {
 /** 파일 내용 번호(sha)의 모양: 0-9a-f 40글자 */
 const SHA = /^[0-9a-f]{40}$/;
 
-/** 원고 파일 경로 */
-const reviewPath = (slug: string) => `content/reviews/${slug}.md`;
 /** 포스터 파일 경로 */
 const posterPath = (file: string) => `public/posters/${file}`;
 /** 이 리뷰의 장면 사진 폴더(끝에 / 포함) */
@@ -193,20 +193,6 @@ async function withoutReferenced(candidates: string[], commitSha: string, slug: 
     const written = path.startsWith("public/posters/") ? path.slice("public/posters/".length) : path.slice("public".length);
     return !others.some((text) => text.includes(written));
   });
-}
-
-/**
- * 수정 화면에 보여 줄 원고를 저장소에서 읽어요.
- *
- * @param slug 리뷰 주소
- * @returns 원고 글자(source), 그 내용 번호(sha, 저장할 때 바뀌었는지 비교해요). 없는 리뷰면 null
- */
-export async function loadReviewSource(slug: string): Promise<{ source: string; sha: string } | null> {
-  if (!SLUG.test(slug)) return null;
-  const snapshot = await getSnapshot();
-  const sha = snapshot.files.get(reviewPath(slug));
-  if (!sha) return null;
-  return { source: await readTextBlob(sha), sha };
 }
 
 /**

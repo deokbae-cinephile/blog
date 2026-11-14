@@ -19,7 +19,8 @@ import { type EditSource, ReviewWriter } from "@/components/review-writer";
 import { isAdmin } from "@/lib/admin-auth";
 import { GitHubError, isGitHubConfigured } from "@/lib/github";
 import { parseReviewFile } from "@/lib/review-file";
-import { loadReviewSource } from "@/lib/review-store";
+// 원고 읽기만 따로 불러요(lib/review-source.ts). 저장 쪽(review-store)을 부르면 Markdown 변환 도구까지 서버 묶음에 들어가요.
+import { loadReviewSource } from "@/lib/review-source";
 
 /** 탭 제목, 그리고 검색엔진에 올리지 않기 */
 export const metadata: Metadata = {
