@@ -51,6 +51,7 @@ src/
 │  ├─ drafts.ts, shrink-image.ts                       임시 저장(이 브라우저의 IndexedDB), 사진 줄이기(올리기 전 브라우저에서)
 │  ├─ structured-data.ts, upload-rules.ts              검색엔진용 정보(JSON-LD), 사진 올리기 규칙(파일 앞부분으로 형식 알아내기)
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
+│  ├─ review-source.ts                                 수정 화면용 원고 읽기(Markdown 변환 도구를 부르지 않아 서버 묶음이 가벼워요)
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
 │  ├─ visit-rules.ts, visit-store.ts                  방문자 규칙(하루 한 번, 어제·오늘 기록), 저장소 고르기(Durable Object·메모리)
 │  ├─ visitor-key.ts                                   사람 구별 값(SHA-256), 로봇 거르기, 한국 시간 오늘 날짜
