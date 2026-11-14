@@ -72,6 +72,19 @@ test.describe("처음 화면(목록)", () => {
     await expect(github).toHaveAttribute("href", "https://github.com/deokbae-cinephile/blog");
     await expect(github).toHaveAccessibleDescription("이 블로그의 소스 코드 저장소(새 창)");
     await expect(github).toHaveAttribute("target", "_blank");
+    // 누르기 전에 새 창이라는 것을 눈으로도 알 수 있어요: 가리키거나 초점이 가면 말풍선이 뜨고, Esc로 닫혀요(KWCAG 7.2.1).
+    const tip = page.getByRole("tooltip");
+    await expect(tip).toBeHidden();
+    await github.focus();
+    await expect(tip).toHaveText("이 블로그의 소스 코드 저장소(새 창)");
+    // 말풍선이 화면 오른쪽 밖으로 잘리지 않아요(좁은 휴대폰 포함).
+    const box = await tip.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    await expectNoA11yViolations(page);
+    await page.keyboard.press("Escape");
+    await expect(tip).toBeHidden();
+    await expect(github).toBeFocused();
     await expect(banner).not.toContainText("평론가를 꿈꾸는");
     // 처음 화면 머리(촬영기 그림과 안내판)도 없어요.
     await expect(page.locator("#intro-title")).toHaveCount(0);

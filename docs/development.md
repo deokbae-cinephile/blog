@@ -42,7 +42,7 @@ src/
 │  ├─ floating-buttons.tsx  오른쪽 아래 [맨 위로]와 그 오른쪽의 [+](리뷰 추가, 로그인했을 때만)
 │  ├─ loading-status.tsx, skeleton.tsx, boot-overlay.tsx  로딩 UI, 글쓰기 스켈레톤, 첫 화면 로딩 레이어
 │  ├─ intent-link.tsx     마우스를 올리거나 초점이 갈 때만 다음 화면을 미리 받는 링크(목록의 리뷰, 상세의 장르)
-│  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
+│  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx(+ github-link.tsx) …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
 │  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사(손으로 짠 checkFrontmatter)·HTML 바꾸기
 │  ├─ review-form.ts, review-values.ts                 글쓰기 칸 검사, 칸 값 모양(화면·서버가 함께 써요)
@@ -208,6 +208,7 @@ GET  /api/views        ─> 리뷰마다의 조회수
 - **머리글:** 왼쪽 [로고] DMB: 덕배의 영화 블로그 (v2.0.0), 오른쪽 GitHub 아이콘.
   - 로고는 본문 왼쪽 끝, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞고, 둘 다 24 × 24px(누르는 높이 44px)예요. 휴대폰(360px 이상)에서도 한 줄이에요.
   - GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름). 저장소는 새 창으로 열리고, 설명에 "(새 창)"을 붙여 미리 알려요.
+  - 눈으로도 미리 알 수 있게, 가리키거나 초점이 가면 "이 블로그의 소스 코드 저장소(새 창)" 말풍선(`role="tooltip"`)이 떠요. Esc로 닫혀요(`github-link.tsx`, 머리글에서 브라우저 코드는 이것뿐이에요).
   - 버전은 보조 글자색으로 보이고 `package.json`에서 읽어요(`lib/version.ts`).
   - 탭 제목과 설치 앱 이름은 짧게 "DMB"예요.
 - **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
