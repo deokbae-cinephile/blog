@@ -27,6 +27,8 @@ import { useId, useRef, useState } from "react";
 
 import { deleteReview } from "@/lib/admin-api";
 
+import { LoadingStatus } from "./loading-status";
+
 /** DeleteReview가 받는 값 */
 type Props = {
   /** 지울 리뷰 주소 */
@@ -77,13 +79,17 @@ export function DeleteReview({ slug, title, onDeleted }: Props) {
       </button>
 
       {/* 확인 창. 닫혀 있으면 화면에 보이지 않아요(브라우저 기본). confirm-dialog: 모양(globals.css)
-          onClose: Esc로 닫혀도 실패 문구를 지워, 다음에 열 때 깨끗하게 보여요. */}
+          onClose: Esc로 닫혀도 실패 문구를 지워, 다음에 열 때 깨끗하게 보여요.
+          onCancel: 삭제하는 동안에는 Esc로 창을 닫지 못하게 막아요(끝날 때까지 결과를 기다려요). */}
       <dialog
         ref={dialogRef}
         role="alertdialog"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-desc`}
         onClose={() => setError("")}
+        onCancel={(event) => {
+          if (deleting) event.preventDefault();
+        }}
         className="confirm-dialog"
       >
         <h2 id={`${id}-title`} className="inverse px-4 py-1">
@@ -93,16 +99,20 @@ export function DeleteReview({ slug, title, onDeleted }: Props) {
           <p id={`${id}-desc`}>
             ‘{title}’ 리뷰와 이 리뷰의 포스터·장면 사진을 저장소에서 삭제합니다. 삭제한 뒤에는 이 화면에서 되돌릴 수 없습니다.
           </p>
+          {/* 삭제하는 동안의 로딩 UI(깜빡이는 커서와 16칸 막대). 안내 칸(role="status")은 늘 두고 안쪽만 바꿔요.
+              (몇 초 걸려요: 저장소에서 원고·사진을 지우는 커밋을 만들어요.) */}
+          <div role="status">{deleting && <LoadingStatus label="리뷰를 삭제하는 중" live={false} />}</div>
           {/* role="alert": 실패하면 바로 읽어 줘요. 영역은 늘 두고 글자만 바꿔요. */}
           <p role="alert">{error}</p>
           <div className="flex flex-wrap justify-end gap-2">
             {/* autoFocus: 창이 열리면 [취소]에 먼저 초점이 가요(되돌리기 어려운 [삭제]가 아니라). */}
             {/* eslint-disable-next-line jsx-a11y/no-autofocus -- 확인 창의 처음 초점은 덜 위험한 단추에 두는 것이 APG 권장이에요. */}
-            <button type="button" autoFocus onClick={() => dialogRef.current?.close()} className="btn-line">
+            <button type="button" autoFocus onClick={() => dialogRef.current?.close()} disabled={deleting} className="btn-line">
               취소
             </button>
+            {/* 삭제하는 동안에는 두 단추를 모두 막아요(로딩 UI가 진행을 알려요). */}
             <button type="button" onClick={handleConfirm} disabled={deleting} className="btn-inverse">
-              {deleting ? "삭제하는 중…" : "삭제"}
+              삭제
             </button>
           </div>
         </div>

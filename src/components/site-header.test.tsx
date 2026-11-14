@@ -11,21 +11,24 @@ import { afterEach, describe, expect, it } from "vitest";
 import packageJson from "../../package.json";
 import { SiteHeader } from "./site-header";
 
+/** 처음 화면 링크의 이름: 블로그 이름과 버전 */
+const HOME = `DMB: 덕배의 영화 블로그 (v${packageJson.version})`;
+
 describe("SiteHeader", () => {
   afterEach(() => {
     // 로그인 표시 쿠키를 지워 다음 테스트가 로그인 전 상태에서 시작하게 해요.
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("블로그 이름(DMB: 덕배의 영화 블로그)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
+  it("블로그 이름과 버전(DMB: 덕배의 영화 블로그 (v2.0.0))이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
     render(<SiteHeader />);
-    expect(screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: HOME })).toHaveAttribute("href", "/");
     expect(screen.queryByText("평론가를 꿈꾸는 덕배의 상영 기록")).not.toBeInTheDocument();
   });
 
   it("왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)로 그리고, 둘 다 읽지 않는 꾸밈이다", () => {
     render(<SiteHeader />);
-    const home = screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
+    const home = screen.getByRole("link", { name: HOME });
     const github = screen.getByRole("link", { name: "GitHub" });
     for (const link of [home, github]) {
       const icon = link.querySelector("svg")!;
@@ -35,12 +38,12 @@ describe("SiteHeader", () => {
     // 아이콘이 본문 양 끝·같은 줄에 있는지는 진짜 브라우저 E2E에서 재요(e2e/blog.spec.ts).
   });
 
-  it("이름 옆에 지금 버전(package.json)을 '(v2.0.0)'처럼 보이고, 버전은 이름 링크 밖에 둔다", () => {
+  it("이름 옆에 지금 버전(package.json)을 '(v2.0.0)'처럼 보이고, 버전도 처음 화면으로 가는 링크 안에 있다", () => {
     render(<SiteHeader />);
     const version = screen.getByText(/^\(v\d+\.\d+\.\d+\)$/);
     expect(version).toHaveTextContent(`(v${packageJson.version})`);
-    // 링크 이름은 블로그 이름만이에요(버전은 링크 밖).
-    expect(screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" })).not.toContainElement(version);
+    // 버전을 눌러도 처음 화면으로 가요(링크 이름에도 버전이 들어가요).
+    expect(screen.getByRole("link", { name: HOME })).toContainElement(version);
   });
 
   it("오른쪽에 소스 코드 저장소로 가는 GitHub 링크를 아이콘만 보이게 두고, 글자 'GitHub'는 화면 낭독기용으로 남긴다", () => {

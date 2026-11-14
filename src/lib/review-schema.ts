@@ -24,6 +24,7 @@
  */
 
 import { GENRES, type Genre } from "./genres.ts";
+import { joinNames, splitNames } from "./people.ts";
 
 /**
  * 원고 맨 위에 쓸 수 있는 항목 이름들.
@@ -33,8 +34,8 @@ export const FRONTMATTER_KEYS = [
   "title",
   "originalTitle",
   "year",
-  "country",
   "director",
+  "cast",
   "runtime",
   "genres",
   "rating",
@@ -54,8 +55,8 @@ const MESSAGE = {
   title: "title(한국어 제목)을 적어 주세요. 예: title: 겨울 정류장",
   originalTitle: "originalTitle(원제)은 글자로 적습니다. 원제가 없으면 그 줄을 지웁니다. 예: originalTitle: Winter Stop",
   year: "year(개봉 연도)는 숫자 네 자리로 적습니다. 예: year: 2024",
-  country: "country(제작 국가)는 글자로 적습니다. 예: country: 한국",
   director: "director(감독)를 적어 주세요. 여러 명이면 쉼표로 나눕니다. 예: director: 한서윤",
+  cast: "cast(출연)에는 배우 이름을 적습니다. 여러 명이면 쉼표로 나눕니다. 출연을 적지 않으려면 그 줄을 지웁니다. 예: cast: 레오나르도 디카프리오, 마크 러팔로",
   runtime: "runtime(상영 시간)은 분 단위 숫자로 적습니다. 예: runtime: 112",
   genres: "genres(장르)를 하나 이상 적어 주세요. 예: genres: [드라마, 로맨스]",
   genresDuplicate: "genres(장르)에 같은 장르를 두 번 적었습니다. 하나만 남겨 주세요.",
@@ -98,8 +99,9 @@ export type ReviewFrontmatter = {
   title: string;
   originalTitle?: string;
   year: number;
-  country?: string;
   director: string;
+  /** 출연(배우들). 여러 명이면 "A, B"처럼 쉼표로 이어 한 줄이에요(목록 [A, B]로 적어도 이 모양으로 맞춰요). */
+  cast?: string;
   runtime?: number;
   genres: Genre[];
   rating: number;
@@ -118,6 +120,17 @@ export type FrontmatterResult = { ok: true; value: ReviewFrontmatter } | { ok: f
 /** 앞뒤 공백을 지우고 한 글자 이상인 글자면 그 글자, 아니면 null. "   "(공백만)은 빈 글자로 봐요. */
 function filledText(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+/**
+ * 출연 값을 "A, B" 한 줄로 다듬어요. 목록이면 글자 칸만 모아 잇고, 글자면 쉼표로 나눠 다듬어요. 이름이 하나도 없으면 null.
+ * @example castText(["레오나르도 디카프리오", "마크 러팔로"]); // "레오나르도 디카프리오, 마크 러팔로"
+ */
+function castText(value: unknown): string | null {
+  const text = Array.isArray(value) ? value.filter((item) => typeof item === "string").join(", ") : value;
+  if (typeof text !== "string") return null;
+  const names = splitNames(text);
+  return names.length > 0 ? joinNames(names) : null;
 }
 
 /** min 이상(max가 있으면 max 이하)의 정수면 true. 따옴표로 감싼 "2024"는 글자라서 false예요. */
@@ -192,12 +205,14 @@ export function checkFrontmatter(input: unknown): FrontmatterResult {
   const year = isIntIn(data.year, 1888, 2100) ? data.year : null;
   if (year === null) fail("year", MESSAGE.year);
 
-  const country = has("country") ? filledText(data.country) : undefined;
-  if (country === null) fail("country", MESSAGE.country);
-
   // 감독이 여러 명이라 목록([A, B])으로 적었다면 "A, B" 한 줄로 이어 검사해요.
   const director = filledText(Array.isArray(data.director) ? data.director.join(", ") : data.director);
   if (director === null) fail("director", MESSAGE.director);
+
+  // 출연: 목록([A, B])이든 "A, B" 한 줄이든 받아, 사람마다 나눠 다듬은 뒤 "A, B" 한 줄로 맞춰요(같은 이름은 한 번만).
+  // 적었는데 이름이 하나도 없으면(빈칸, 숫자 등) 고치는 방법을 알려 줘요.
+  const cast = has("cast") ? castText(data.cast) : undefined;
+  if (cast === null) fail("cast", MESSAGE.cast);
 
   const runtime = has("runtime") ? (isIntIn(data.runtime, 1) ? data.runtime : null) : undefined;
   if (runtime === null) fail("runtime", MESSAGE.runtime);
@@ -260,8 +275,8 @@ export function checkFrontmatter(input: unknown): FrontmatterResult {
       title: title!,
       ...(originalTitle ? { originalTitle } : {}),
       year: year!,
-      ...(country ? { country } : {}),
       director: director!,
+      ...(cast ? { cast } : {}),
       ...(runtime ? { runtime } : {}),
       genres: genres!,
       rating: rating!,

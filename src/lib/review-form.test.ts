@@ -55,15 +55,23 @@ describe("validateReviewForm", () => {
     });
   });
 
-  it("불러온 원고의 글 쓴 날과 선택 칸(원제·국가·상영 시간·포스터)은 그대로 넣는다", () => {
+  it("불러온 원고의 글 쓴 날과 선택 칸(원제·출연·상영 시간·포스터)은 그대로 넣는다(출연은 \"A, B\" 모양으로 다듬어요)", () => {
     const result = validateReviewForm(
-      { ...valid, publishedAt: "2026-01-02", originalTitle: "Winter Stop", country: "한국", runtime: "112", poster: "winter-stop.jpg", posterAlt: "정류장" },
+      {
+        ...valid,
+        publishedAt: "2026-01-02",
+        originalTitle: "Winter Stop",
+        cast: "레오나르도 디카프리오,마크 러팔로",
+        runtime: "112",
+        poster: "winter-stop.jpg",
+        posterAlt: "정류장",
+      },
       { checkSlug: true, now: "2026-11-13" },
     );
     expect(result.ok && result.frontmatter).toMatchObject({
       publishedAt: "2026-01-02",
       originalTitle: "Winter Stop",
-      country: "한국",
+      cast: "레오나르도 디카프리오, 마크 러팔로",
       runtime: 112,
       poster: "winter-stop.jpg",
       posterAlt: "정류장",

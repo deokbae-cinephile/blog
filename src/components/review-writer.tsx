@@ -8,7 +8,7 @@
  *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────┐
  *     │ [미리보기]     │ │ 주소(영문)        │ 제목              │
  *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도          │  ← 단추는 포스터와 같은 너비
- *     │ [포스터 빼기]  │ │ 제작 국가         │ 감독              │
+ *     │ [포스터 빼기]  │ │ 감독              │ 출연(쉼표로 구분)  │
  *     │               │ │ 상영 시간         │ 장르(여러 개)      │
  *     │               │ │ 평점(처음 5.0)    │ 한줄평            │
  *     └───────────────┘ └──────────────────────────────────────┘
@@ -65,12 +65,13 @@ import { indentText } from "@/lib/indent";
 import { formatBytes, shrinkImage } from "@/lib/shrink-image";
 import { type FieldErrors, validateReviewForm } from "@/lib/review-form";
 import { SLUG } from "@/lib/review-schema";
-import { EMPTY_VALUES, type ReviewFormValues } from "@/lib/review-values";
+import { EMPTY_VALUES, type ReviewFormValues, withFormDefaults } from "@/lib/review-values";
 import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/upload-rules";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
 import { LoadingStatus } from "./loading-status";
 import { PixelArt } from "./pixel-art";
+import { DefaultPoster } from "./poster";
 import { PreviewLoading } from "./preview-loading";
 import { type PaneView, WritePreviewPanes } from "./write-preview-panes";
 
@@ -139,8 +140,8 @@ const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
   title: "제목",
   originalTitle: "원제",
   year: "개봉 연도",
-  country: "제작 국가",
   director: "감독",
+  cast: "출연",
   runtime: "상영 시간",
   genres: "장르",
   rating: "평점",
@@ -673,8 +674,10 @@ export function ReviewWriter(props: Props) {
     }
     // 줄이던 포스터가 있으면 그 결과는 버려요(불러온 포스터가 이겨요).
     posterJobRef.current += 1;
+    // 예전 칸 모양으로 저장한 글도 지금 칸에 맞춰요(없는 칸은 빈 값, 사라진 칸은 버림 — lib/review-values.ts).
     // 수정 화면은 주소를 바꾸지 않아요(그 리뷰를 고치는 화면이니까요).
-    const nextValues = editSlug === null ? draft.values : { ...draft.values, slug: editSlug };
+    const loadedValues = withFormDefaults(draft.values);
+    const nextValues = editSlug === null ? loadedValues : { ...loadedValues, slug: editSlug };
     const nextScenes = new Map(draft.scenes);
     setValues(nextValues);
     // 포스터 미리보기용 임시 주소(blob:)는 새로 만들어요. 예전 주소는 정리 함수가 지워요(위의 useEffect).
@@ -881,7 +884,12 @@ export function ReviewWriter(props: Props) {
                 // unoptimized: 브라우저 안의 blob: 주소는 이미지 최적화를 거칠 수 없어서 원본 그대로 보여 줘요.
                 <Image src={posterSrc} alt="" fill unoptimized sizes="(min-width: 1024px) 288px, 160px" className="poster-image object-cover" />
               ) : (
-                <span className="grid h-full place-items-center text-crt-dim">없음</span>
+                // 포스터를 아직 고르지 않았으면 상세 화면과 같은 기본 포스터(빈 필름 그림 + NO POSTER)를 보여 줘요.
+                // 그림은 꾸밈이라 읽지 않고, 화면 낭독기에는 "고른 포스터 없음"이라고 알려 줘요.
+                <>
+                  <DefaultPoster alt="" size="large" />
+                  <span className="sr-only">고른 포스터 없음</span>
+                </>
               )}
             </span>
             {/* 단추는 포스터와 같은 너비(w-full)로 위아래로 놓아요. 글자는 가운데(justify-center). */}
@@ -926,8 +934,11 @@ export function ReviewWriter(props: Props) {
               autoCapitalize="none"
             />
           ) : (
+            // 주소는 수정할 때 바꿀 수 없어요. 괄호 안내는 다음 줄에 보여요(<br>, 화면 낭독기는 이어서 읽어요).
             <p>
-              <span className="text-crt-dim">주소(영문): </span>/reviews/{values.slug} <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다)</span>
+              <span className="text-crt-dim">주소(영문): </span>/reviews/{values.slug}
+              <br />
+              <span className="text-crt-dim">(수정할 때는 바꿀 수 없습니다)</span>
             </p>
           )}
 
@@ -949,7 +960,6 @@ export function ReviewWriter(props: Props) {
             onChange={(value) => setField("year", value)}
             inputMode="numeric"
           />
-          <TextField id={fieldId("country")} label={FIELD_LABELS.country} error={errors.country} value={values.country} onChange={(value) => setField("country", value)} />
           <TextField
             id={fieldId("director")}
             label={FIELD_LABELS.director}
@@ -957,6 +967,15 @@ export function ReviewWriter(props: Props) {
             error={errors.director}
             value={values.director}
             onChange={(value) => setField("director", value)}
+          />
+          {/* 출연: 배우 이름을 쉼표로 나눠 적어요(예: 레오나르도 디카프리오, 마크 러팔로). 칸 이름에 적는 방법을 함께 적어요("상영 시간(분)"처럼).
+              저장하면 이름마다 나눠, 상세 화면에서 이름을 누르면 그 배우로 찾은 목록으로 가요. */}
+          <TextField
+            id={fieldId("cast")}
+            label={`${FIELD_LABELS.cast}(쉼표로 구분)`}
+            error={errors.cast}
+            value={values.cast}
+            onChange={(value) => setField("cast", value)}
           />
           <TextField
             id={fieldId("runtime")}

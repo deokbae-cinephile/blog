@@ -6,7 +6,7 @@
  *   - role "navigation": <nav>
  *
  * 상세 화면의 키보드 조작(review-keys.tsx)이 Next.js의 useRouter를 써서, 가짜 라우터를 넣어 줘요.
- * (키 조작 자체는 review-keys.test.tsx, 수정·삭제는 admin-review-actions.test.tsx에서 확인해요.)
+ * (키 조작 자체는 review-keys.test.tsx, 맨 윗줄은 review-toolbar.test.tsx, 수정·삭제는 admin-review-actions.test.tsx에서 확인해요.)
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -34,10 +34,42 @@ describe("ReviewArticle", () => {
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("영화 제목(h1)과, 감독까지 이어 쓴 한 줄 정보를 보인다", () => {
+  it("영화 제목(h1)과, 원제·연도·상영 시간·감독·출연을 이어 쓴 한 줄 정보를 보인다(제작 국가는 없다)", () => {
     renderAlone();
-    expect(screen.getByRole("heading", { level: 1, name: "겨울 정류장" })).toBeInTheDocument();
-    expect(screen.getByText("Winter Stop · 2024 · 한국 · 112분 · 감독 한서윤")).toBeInTheDocument();
+    const heading = screen.getByRole("heading", { level: 1, name: "겨울 정류장" });
+    // 화면에 보이는 글자만 비교하려고, 숨긴 링크 설명(hidden)을 뺀 사본의 글자를 읽어요.
+    const facts = heading.nextElementSibling!.cloneNode(true) as HTMLElement;
+    facts.querySelectorAll("[hidden]").forEach((node) => node.remove());
+    // \u00a0: 줄바꿈되지 않는 빈칸(NBSP). 이름표와 이름, 가운뎃점 앞을 붙여요.
+    expect(facts.textContent).toBe("Winter Stop\u00a0· 2024\u00a0· 112분\u00a0· 감독\u00a0한서윤\u00a0· 출연\u00a0김배우, 이배우");
+  });
+
+  it("감독·배우 이름은 한 사람씩 그 이름으로 찾은 목록(/?q=이름)으로 가는 링크다", () => {
+    renderAlone({ ...reviewDetailMock, director: "한서윤, 김도윤" });
+    // 링크 이름은 보이는 이름 그대로이고, 어디로 가는지는 설명(aria-describedby)으로 읽어 줘요.
+    const people = [
+      ["한서윤", "이 감독의 리뷰 찾기"],
+      ["김도윤", "이 감독의 리뷰 찾기"],
+      ["김배우", "이 배우의 리뷰 찾기"],
+      ["이배우", "이 배우의 리뷰 찾기"],
+    ] as const;
+    for (const [name, hint] of people) {
+      const link = screen.getByRole("link", { name });
+      expect(link).toHaveAttribute("href", `/?q=${encodeURIComponent(name)}`);
+      expect(link).toHaveAccessibleDescription(hint);
+      // 장르 링크와 같은 점선 밑줄 모양이에요.
+      expect(link).toHaveClass("term-link");
+    }
+    // 설명은 화면에는 보이지 않아요.
+    expect(screen.getByText("이 배우의 리뷰 찾기")).not.toBeVisible();
+  });
+
+  it("출연을 적지 않았으면 한 줄 정보에 출연이 없다", () => {
+    renderAlone({ ...reviewDetailMock, cast: undefined, runtime: undefined, originalTitle: undefined });
+    const facts = screen.getByRole("heading", { level: 1 }).nextElementSibling!;
+    expect(facts).not.toHaveTextContent("출연");
+    // toHaveTextContent는 NBSP도 보통 빈칸으로 바꿔 비교해요.
+    expect(facts).toHaveTextContent(/^2024 · 감독 한서윤/);
   });
 
   it("포스터가 있으면 제목으로 만든 대체 텍스트와 함께 크게 보인다", () => {
@@ -104,6 +136,12 @@ describe("ReviewArticle", () => {
   it("다른 리뷰가 없으면 이동 영역을 두지 않는다", () => {
     renderAlone();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
+  it("맨 윗줄에 [◀ 목록으로]와 [공유하기]가 있다", () => {
+    renderAlone();
+    expect(screen.getByRole("link", { name: "목록으로" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("button", { name: "공유하기" })).toBeInTheDocument();
   });
 
   it("로그인 전에는 수정·삭제가 없고, 로그인하면 보인다", () => {

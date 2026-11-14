@@ -7,7 +7,8 @@
  *
  *     [로고] DMB: 덕배의 영화 블로그 (v2.0.0)  ·····························  [GitHub 아이콘]
  *
- *   이름 옆의 (v2.0.0)은 지금 버전이에요(lib/version.ts가 package.json에서 읽어요). 링크 밖에 둬서, 링크 이름은 블로그 이름만 읽어요.
+ *   이름 옆의 (v2.0.0)은 지금 버전이에요(lib/version.ts가 package.json에서 읽어요). 버전까지 처음 화면으로 가는 링크예요
+ *   (링크 이름: "DMB: 덕배의 영화 블로그 (v2.0.0)").
  *
  *   왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)이고, 누르는 높이도 44px로 같아요.
  *   로고는 본문 왼쪽 끝에, GitHub 아이콘은 본문 오른쪽 끝에 딱 맞춰요. 휴대폰에서도 줄을 바꾸지 않고 첫 줄 오른쪽 끝에 있어요.
@@ -51,19 +52,18 @@ export function SiteHeader() {
       tabIndex={-1}
       className="flex w-full items-center px-4 pt-6 outline-none sm:gap-x-3 sm:px-8 sm:pt-8 lg:px-12"
     >
-      {/* 이름 링크와 버전을 한 묶음으로 둬요. gap-x-2: 이름과 버전 사이 8px(글자 한 칸 너비)
-          min-w-0 + flex-wrap: 아주 좁은 화면(약 340px 아래)에서는 아이콘을 밀어내지 않고, 이 묶음 안에서 버전이 다음 줄로 내려가요. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2">
-        {/* min-h-11: 누르는 높이 44px(오른쪽 GitHub 링크와 같아요). gap-2: 로고와 이름 사이 8px.
-            왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. */}
-        <Link href="/" className="inline-flex min-h-11 items-center gap-2 no-underline hover:underline">
-          {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
-          <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
-          <span>{site.headerTitle}</span>
-        </Link>
+      {/* 로고·이름·버전이 모두 처음 화면으로 가는 링크 하나예요.
+          min-h-11: 누르는 높이 44px(오른쪽 GitHub 링크와 같아요). gap-x-2: 로고·이름·버전 사이 8px(글자 한 칸 너비).
+          min-w-0 + flex-wrap: 아주 좁은 화면(약 340px 아래)에서는 아이콘을 밀어내지 않고, 링크 안에서 버전이 다음 줄로 내려가요.
+          왼쪽 끝은 아래 본문과 줄을 맞추려고 안쪽 여백을 두지 않아요. */}
+      <Link href="/" className="inline-flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 no-underline hover:underline">
+        {/* 로고는 옆의 블로그 이름과 같은 뜻이라 꾸밈 그림으로 둬요(label 없음 → 읽지 않음). 12칸 × 2px = 24px */}
+        <PixelArt rows={HEADER_LOGO_ROWS} cell={2} />
+        <span>{site.headerTitle}</span>
+        {/* 이름과 버전 사이 빈칸: 화면에서는 gap이 띄우고(flex 안의 빈칸 글자는 그리지 않아요), 화면 낭독기는 이 빈칸으로 띄워 읽어요. */}{" "}
         {/* 지금 버전. 보조 글자색(text-crt-dim)으로 이름보다 덜 눈에 띄게 해요. */}
         <span className="text-crt-dim">(v{APP_VERSION})</span>
-      </div>
+      </Link>
 
       {/* 이름과 링크 사이의 점선. 꾸밈이라 읽지 않아요. 휴대폰에서는 숨겨요. */}
       <span aria-hidden="true" className="leader hidden sm:block" />

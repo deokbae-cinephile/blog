@@ -2,8 +2,8 @@
  * @file structured-data.ts 테스트
  *
  * 검색엔진용 정보(JSON-LD)가
- *   - 리뷰: 영화(제목·원제·연도·감독 여러 명·장르·국가·상영 시간·포스터), 평점(0.5~5), 글쓴이, 글 쓴 날을 담는지
- *   - 없는 항목(원제·국가·상영 시간·포스터)은 넣지 않는지
+ *   - 리뷰: 영화(제목·원제·연도·감독 여러 명·출연 여러 명·장르·상영 시간·포스터), 평점(0.5~5), 글쓴이, 글 쓴 날을 담는지
+ *   - 없는 항목(원제·출연·상영 시간·포스터)은 넣지 않는지
  *   - <script> 안에 넣어도 "</script>"로 끊기지 않게 바꾸는지
  * 확인해요.
  */
@@ -18,8 +18,8 @@ const review: Review = {
   title: "겨울 정류장",
   originalTitle: "Winter Stop",
   year: 2024,
-  country: "한국",
   director: "한서윤, 김도윤",
+  cast: "레오나르도 디카프리오, 마크 러팔로",
   runtime: 112,
   genres: ["드라마", "로맨스"],
   rating: 4.5,
@@ -50,17 +50,20 @@ describe("reviewJsonLd", () => {
           { "@type": "Person", name: "한서윤" },
           { "@type": "Person", name: "김도윤" },
         ],
+        actor: [
+          { "@type": "Person", name: "레오나르도 디카프리오" },
+          { "@type": "Person", name: "마크 러팔로" },
+        ],
         genre: ["드라마", "로맨스"],
-        countryOfOrigin: { "@type": "Country", name: "한국" },
         duration: "PT112M",
         image: "https://deokbae.blog/posters/winter-stop.jpg",
       },
     });
   });
 
-  it("없는 항목(원제·국가·상영 시간·포스터)은 넣지 않는다", () => {
-    const { originalTitle, country, runtime, poster, ...required } = review;
-    void [originalTitle, country, runtime, poster];
+  it("없는 항목(원제·출연·상영 시간·포스터)은 넣지 않는다", () => {
+    const { originalTitle, cast, runtime, poster, ...required } = review;
+    void [originalTitle, cast, runtime, poster];
     const movie = reviewJsonLd(required).itemReviewed;
     expect(Object.keys(movie)).toEqual(["@type", "name", "dateCreated", "director", "genre"]);
   });

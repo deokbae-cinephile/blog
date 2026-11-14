@@ -18,8 +18,8 @@ const valid = {
   title: "겨울 정류장",
   originalTitle: "Winter Stop",
   year: 2024,
-  country: "한국",
   director: "한서윤",
+  cast: "김배우, 이배우",
   runtime: 112,
   genres: ["드라마", "로맨스"],
   rating: 4.5,
@@ -45,11 +45,27 @@ describe("checkFrontmatter", () => {
     expect(parse(valid)).toEqual(valid);
   });
 
-  it("선택 항목(원제·국가·상영 시간)은 없어도 된다", () => {
+  it("선택 항목(원제·출연·상영 시간)은 없어도 된다", () => {
     // 구조 분해로 선택 항목을 빼고 나머지(required)만 남겨요. void [...]는 "안 쓰는 변수" 경고를 피하는 표시예요.
-    const { originalTitle, country, runtime, ...required } = valid;
-    void [originalTitle, country, runtime];
+    const { originalTitle, cast, runtime, ...required } = valid;
+    void [originalTitle, cast, runtime];
     expect(checkFrontmatter(required).ok).toBe(true);
+  });
+
+  it("출연은 목록으로 적어도, 쉼표 간격이 들쭉날쭉해도 \"A, B\" 한 줄로 맞추고 같은 이름은 한 번만 남긴다", () => {
+    expect(parse({ ...valid, cast: ["레오나르도 디카프리오", "마크 러팔로"] }).cast).toBe("레오나르도 디카프리오, 마크 러팔로");
+    expect(parse({ ...valid, cast: " 레오나르도 디카프리오,마크 러팔로 ,  레오나르도 디카프리오, " }).cast).toBe("레오나르도 디카프리오, 마크 러팔로");
+  });
+
+  it("출연을 적었는데 이름이 하나도 없으면(빈칸·쉼표만·숫자) 고치는 방법과 함께 거절한다", () => {
+    const message = "cast(출연)에는 배우 이름을 적습니다. 여러 명이면 쉼표로 나눕니다. 출연을 적지 않으려면 그 줄을 지웁니다. 예: cast: 레오나르도 디카프리오, 마크 러팔로";
+    expect(messages({ ...valid, cast: "  " })).toEqual([message]);
+    expect(messages({ ...valid, cast: " , ," })).toEqual([message]);
+    expect(messages({ ...valid, cast: 7 })).toEqual([message]);
+  });
+
+  it("2.0.0 핫픽스에서 뺀 제작 국가(country)는 알 수 없는 항목으로 알려 준다(그 줄을 지우면 돼요)", () => {
+    expect(messages({ ...valid, country: "한국" })[0]).toContain("알 수 없는 항목입니다: country");
   });
 
   it("장르가 하나면 괄호 없이 적어도 받는다", () => {

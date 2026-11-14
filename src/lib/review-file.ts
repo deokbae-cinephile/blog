@@ -112,9 +112,9 @@ export function parseReviewFile(text: string): ParsedReviewFile {
       title: asText(record.title),
       originalTitle: asText(record.originalTitle),
       year: asText(record.year),
-      country: asText(record.country),
-      // 감독을 [A, B] 목록으로 적었으면 "A, B"로 이어요.
+      // 감독·출연을 [A, B] 목록으로 적었으면 "A, B"로 이어요.
       director: Array.isArray(record.director) ? record.director.map(asText).filter(Boolean).join(", ") : asText(record.director),
+      cast: Array.isArray(record.cast) ? record.cast.map(asText).filter(Boolean).join(", ") : asText(record.cast),
       runtime: asText(record.runtime),
       genres: asGenres(record.genres),
       rating: asRating(record.rating),
@@ -155,8 +155,8 @@ export function serializeReviewFile(frontmatter: ReviewFrontmatter, body: string
     ["title", frontmatter.title],
     ["originalTitle", frontmatter.originalTitle],
     ["year", frontmatter.year],
-    ["country", frontmatter.country],
     ["director", frontmatter.director],
+    ["cast", frontmatter.cast],
     ["runtime", frontmatter.runtime],
     ["genres", undefined],
     ["rating", frontmatter.rating],

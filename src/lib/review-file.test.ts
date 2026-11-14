@@ -16,8 +16,8 @@ const SOURCE = `---
 title: 겨울 정류장
 originalTitle: Winter Stop
 year: 2024
-country: 한국
 director: 한서윤
+cast: 레오나르도 디카프리오, 마크 러팔로
 runtime: 112
 genres: [드라마, 로맨스]
 rating: 4.5
@@ -48,8 +48,8 @@ describe("parseReviewFile", () => {
         title: "겨울 정류장",
         originalTitle: "Winter Stop",
         year: "2024",
-        country: "한국",
         director: "한서윤",
+        cast: "레오나르도 디카프리오, 마크 러팔로",
         runtime: "112",
         genres: ["드라마", "로맨스"],
         rating: "4.5",

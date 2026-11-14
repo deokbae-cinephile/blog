@@ -34,10 +34,10 @@ export type ReviewSummary = {
   originalTitle?: string;
   /** 개봉 연도 */
   year: number;
-  /** 제작 국가(없어도 됨) */
-  country?: string;
   /** 감독. 여러 명이면 쉼표로 이어 적어요. */
   director: string;
+  /** 출연(배우들, 없어도 됨). 여러 명이면 "A, B"처럼 쉼표로 이어 적어요(lib/people.ts로 나눠 써요). */
+  cast?: string;
   /** 상영 시간(분, 없어도 됨) */
   runtime?: number;
   /** 장르 목록. lib/genres.ts에 있는 이름만 쓸 수 있어요. */

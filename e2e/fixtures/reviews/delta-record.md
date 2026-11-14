@@ -3,7 +3,6 @@
 title: 델타 기록
 originalTitle: Delta Record
 year: 2017
-country: 독일
 director: 정시험
 runtime: 77
 genres: [다큐멘터리]

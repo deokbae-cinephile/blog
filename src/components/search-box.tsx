@@ -179,7 +179,7 @@ export function SearchBox({ id, value, onValueChange, onSearch, reviews, disable
             className="search-option"
           >
             <span className="min-w-0">{suggestion.value}</span>
-            {/* 무엇의 이름인지(제목·원제·감독). 화면 낭독기도 "겨울 정류장 제목"처럼 함께 읽어요.
+            {/* 무엇의 이름인지(제목·원제·감독·출연). 화면 낭독기도 "겨울 정류장 제목"처럼 함께 읽어요.
                 {" "}: 두 글자 사이의 띄어쓰기. 없으면 이름이 "겨울 정류장제목"처럼 붙어 읽혀요. */}{" "}
             <span className="shrink-0 text-crt-dim">{suggestion.kind}</span>
           </li>

@@ -4,8 +4,8 @@
 title: 알파 정거장
 originalTitle: Alpha Station
 year: 2020
-country: 한국
 director: 김시험
+cast: 이배우, 박배우
 runtime: 101
 genres: [드라마, 재난]
 rating: 4.5

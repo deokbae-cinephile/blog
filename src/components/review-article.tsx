@@ -5,11 +5,11 @@
  *   리뷰 한 편의 상세 화면 내용을 그립니다. 넓은 화면(1024px~)에서는 두 칸, 좁은 화면에서는 한 칸으로 놓여요.
  *   내용은 화면 너비를 다 써요(풀 페이지). 글줄 길이를 따로 줄이지 않아요.
  *
- *     ◀ 목록으로                                    [공유하기] [수정] [삭제] ← 수정·삭제는 로그인했을 때만
+ *     [◀ 목록으로]                                  [공유하기] [수정] [삭제] ← 수정·삭제는 로그인했을 때만(review-toolbar.tsx)
  *     ┌ 반전 안내판(화면 너비 전체) ───────────────────────────────┐
  *     │ [드라마]                              ← 장르(제목 위)          │
  *     │ 필름이 끊기기 전에                    ← 영화 제목(h1)    5.0  │ ← 평점(크게, 오른쪽)
- *     │ Avant la dernière bobine · 2023 · 프랑스 · 104분 · 감독 카미유 루셀 │
+ *     │ Avant la dernière bobine · 2023 · 104분 · 감독 카미유 루셀 · 출연 A, B │  ← 감독·배우 이름은 링크
  *     └──────────────────────────────────────────────────────────┘
  *     ┌ 왼쪽 칸(스크롤해도 붙어 있음) ┐  ┌ 오른쪽 칸(남는 너비 전부) ────────┐
  *     │ [포스터 또는 기본 포스터]      │  │ “한줄평”                           │
@@ -19,7 +19,8 @@
  *     └──────────────────────────────┘  └────────────────────────────────────┘
  *
  * 맡은 기능
- *   - 반전 안내판에 장르(제목 위), 제목, 한 줄 정보(원제·연도·국가·상영 시간·감독), 큰 평점(오른쪽) 보여 주기
+ *   - 반전 안내판에 장르(제목 위), 제목, 한 줄 정보(원제·연도·상영 시간·감독·출연), 큰 평점(오른쪽) 보여 주기
+ *   - 감독·배우 이름을 누르면 그 이름으로 찾은 처음 화면 목록으로 가기(/?q=이름, lib/people.ts)
  *   - 포스터(없으면 기본 포스터)를 왼쪽 칸에 보여 주기
  *   - 맨 윗줄 오른쪽 [공유하기]: 휴대폰 공유 창으로 리뷰 링크 보내기. 받는 쪽 미리 보기에 포스터가 보여요(share-button.tsx)
  *     (왼쪽 칸 포스터 아래에 두면, 키가 작은 화면에서 왼쪽 아래에 떠 있는 [키보드 조작] 단추에 가려져서 맨 윗줄에 둬요.)
@@ -39,16 +40,19 @@
 
 import Link from "next/link";
 
-import { formatRating, joinFacts, labeled } from "@/lib/format";
+import { Fragment, type ReactNode } from "react";
+
+import { FACT_SEPARATOR, formatRating, NBSP } from "@/lib/format";
+import { personSearchHref, splitNames } from "@/lib/people";
 import type { Review, ReviewSummary } from "@/lib/review";
 import { siteUrl } from "@/lib/site";
 
-import { AdminReviewActions } from "./admin-review-actions";
 import { GenreTags } from "./genre-tags";
+import { IntentLink } from "./intent-link";
 import { Poster } from "./poster";
 import { Rating } from "./rating";
 import { ReviewKeys } from "./review-keys";
-import { ShareButton } from "./share-button";
+import { ReviewToolbar } from "./review-toolbar";
 
 /** ReviewArticle이 받는 값 */
 type Props = {
@@ -63,29 +67,20 @@ type Props = {
 /** 리뷰 상세 내용 */
 export function ReviewArticle({ review, previous, next }: Props) {
   // 필요한 항목을 꺼내 둬요(구조 분해 할당).
-  const { slug, title, originalTitle, year, country, director, runtime, genres, rating, oneLiner, poster, posterAlt, html } =
-    review;
-
-  // 제목 아래 한 줄 정보: "Winter Stop · 2024 · 한국 · 112분 · 감독 한서윤"
-  // 없는 값(undefined)은 빼고 " · "로 이어요. 가운뎃점은 앞 항목에 붙어 줄 첫머리에 오지 않아요(lib/format.ts의 joinFacts).
-  const facts = joinFacts([originalTitle, year, country, runtime ? `${runtime}분` : undefined, labeled("감독", director)]);
+  const { slug, title, originalTitle, year, director, cast, runtime, genres, rating, oneLiner, poster, posterAlt, html } = review;
 
   return (
     // 화면 너비를 다 써요(풀 페이지). 본문 글줄도 오른쪽 칸 너비를 모두 써요.
     <article aria-labelledby="review-title">
-      {/* 첫 줄: 목록으로 돌아가는 링크 + (로그인했을 때만) 수정·삭제 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* ◀는 꾸밈이라 읽지 않아요. (키보드로는 Esc도 같은 일을 해요) */}
-        <Link href="/" className="term-link inline-block py-2">
-          <span aria-hidden="true">◀ </span>목록으로
-        </Link>
-        {/* 오른쪽 묶음: [공유하기]는 누구에게나, [수정]·[삭제]는 로그인했을 때만.
-            공유하는 것은 리뷰의 대표 주소예요. 받는 쪽 메신저가 이 주소의 공유 미리 보기(포스터)를 카드로 보여 줘요. */}
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <ShareButton url={`${siteUrl}/reviews/${slug}`} title={`${title} 리뷰`} text={`평점 ${formatRating(rating)} · ${oneLiner}`} />
-          <AdminReviewActions slug={slug} title={title} />
-        </div>
-      </div>
+      {/* 첫 줄: [◀ 목록으로] … [공유하기] [수정] [삭제](수정·삭제는 로그인했을 때만), 삭제한 뒤의 안내(review-toolbar.tsx)
+          공유하는 것은 리뷰의 대표 주소예요. 받는 쪽 메신저가 이 주소의 공유 미리 보기(포스터)를 카드로 보여 줘요. */}
+      <ReviewToolbar
+        slug={slug}
+        title={title}
+        shareUrl={`${siteUrl}/reviews/${slug}`}
+        shareTitle={`${title} 리뷰`}
+        shareText={`평점 ${formatRating(rating)} · ${oneLiner}`}
+      />
 
       {/* 반전 안내판: 장르, 영화 제목, 한 줄 정보, 그리고 오른쪽에 큰 평점. <header>는 이 글(article)의 머리라는 뜻이에요.
           flex justify-between: 왼쪽 글 묶음과 오른쪽 평점을 양 끝에 놓아요. items-center: 평점을 글 묶음의 세로 가운데에 맞춰요. */}
@@ -97,8 +92,8 @@ export function ReviewArticle({ review, previous, next }: Props) {
           <h1 id="review-title" className="mt-2 text-big">
             {title}
           </h1>
-          {/* 한 줄 정보(원제 · 연도 · 국가 · 상영 시간 · 감독) */}
-          <p className="mt-2">{facts}</p>
+          {/* 한 줄 정보(원제 · 연도 · 상영 시간 · 감독 · 출연). 감독·배우 이름은 그 이름으로 찾은 목록으로 가는 링크예요. */}
+          <ReviewFacts originalTitle={originalTitle} year={year} runtime={runtime} director={director} cast={cast} />
         </div>
         {/* 평점: 크게, 오른쪽에 따로. 화면 낭독기는 "평점 5점 만점에 4.5점"으로 읽어요(components/rating.tsx).
             shrink-0: 좁은 화면에서도 숫자가 찌그러지지 않게 해요. */}
@@ -147,6 +142,73 @@ export function ReviewArticle({ review, previous, next }: Props) {
       {/* 키보드 조작: ◀▶ 이전·다음 리뷰, Esc 목록으로. 화면에는 아무것도 그리지 않아요. */}
       <ReviewKeys previousHref={previous ? `/reviews/${previous.slug}` : null} nextHref={next ? `/reviews/${next.slug}` : null} />
     </article>
+  );
+}
+
+/**
+ * 제목 아래 한 줄 정보: "Avant la dernière bobine · 2023 · 104분 · 감독 카미유 루셀 · 출연 김태리, 류준열"
+ *
+ * - 없는 값(원제·상영 시간·출연)은 빼고 " · "로 이어요. 가운뎃점 앞 빈칸은 줄바꿈되지 않는 빈칸(NBSP)이라
+ *   줄이 넘쳐도 가운뎃점은 앞 항목 끝에 남아요(lib/format.ts의 FACT_SEPARATOR, 목록의 joinFacts와 같은 모양).
+ * - 감독·배우 이름은 한 사람씩 링크예요. 누르면 그 이름으로 찾은 처음 화면 목록으로 가요(/?q=이름).
+ *   링크 이름은 보이는 이름 그대로("마크 러팔로")이고, 화면 낭독기에는 어디로 가는지 설명("이 배우의 리뷰 찾기")을 덧붙여 읽어 줘요.
+ */
+function ReviewFacts({ originalTitle, year, runtime, director, cast }: Pick<Review, "originalTitle" | "year" | "runtime" | "director" | "cast">) {
+  const items: ReactNode[] = [];
+  if (originalTitle) items.push(originalTitle);
+  items.push(String(year));
+  if (runtime) items.push(`${runtime}분`);
+  items.push(<People label="감독" names={splitNames(director)} />);
+  const actors = splitNames(cast);
+  if (actors.length > 0) items.push(<People label="출연" names={actors} />);
+
+  return (
+    <p className="mt-2">
+      {items.map((item, index) => (
+        // 항목 사이에만 " · "를 넣어요(첫 항목 앞에는 없어요).
+        <Fragment key={index}>
+          {index > 0 && FACT_SEPARATOR}
+          {item}
+        </Fragment>
+      ))}
+    </p>
+  );
+}
+
+/**
+ * 감독·배우 이름 링크의 설명(aria-describedby). 링크 이름은 보이는 이름 그대로 두고(KWCAG 6.5.3 레이블과 네임),
+ * 어디로 가는지는 설명으로 덧붙여요. 상세 화면은 한 화면에 하나뿐이라 id가 겹치지 않아요.
+ */
+const PEOPLE_HINTS = {
+  감독: { id: "director-search-hint", text: "이 감독의 리뷰 찾기" },
+  출연: { id: "cast-search-hint", text: "이 배우의 리뷰 찾기" },
+} as const;
+
+/**
+ * 이름표 + 사람 이름 링크들: "감독 한서윤, 김도윤"
+ * 이름표와 첫 이름 사이는 NBSP라 줄바꿈으로 떨어지지 않아요. 이름 사이(", ")에서는 줄이 바뀔 수 있어요.
+ * 화면 낭독기는 "마크 러팔로, 링크, 이 배우의 리뷰 찾기"처럼 읽어요.
+ */
+function People({ label, names }: { label: keyof typeof PEOPLE_HINTS; names: string[] }) {
+  const hint = PEOPLE_HINTS[label];
+  return (
+    <span>
+      {label}
+      {NBSP}
+      {names.map((name, index) => (
+        <Fragment key={name}>
+          {index > 0 && ", "}
+          {/* term-link: 장르 링크와 같은 점선 밑줄. IntentLink: 가리키거나 초점이 갈 때만 목록 화면을 미리 받아요. */}
+          <IntentLink href={personSearchHref(name)} aria-describedby={hint.id} className="term-link">
+            {name}
+          </IntentLink>
+        </Fragment>
+      ))}
+      {/* 링크 설명. hidden이라 화면에는 보이지 않지만, aria-describedby로 가리키면 화면 낭독기가 읽어 줘요. */}
+      <span id={hint.id} hidden>
+        {hint.text}
+      </span>
+    </span>
   );
 }
 

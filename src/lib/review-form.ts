@@ -28,8 +28,8 @@ export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
   title: "제목을 입력하세요. 예: 겨울 정류장",
   originalTitle: "원제는 글자로 입력하세요. 원제가 없으면 비워 둡니다.",
   year: "개봉 연도는 1888부터 2100 사이의 숫자 네 자리로 입력하세요. 예: 2024",
-  country: "제작 국가는 글자로 입력하세요. 없으면 비워 둡니다.",
   director: "감독을 입력하세요. 여러 명이면 쉼표로 나눕니다. 예: 한서윤, 김도윤",
+  cast: "출연은 배우 이름을 쉼표로 나눠 입력하세요. 없으면 비워 둡니다. 예: 레오나르도 디카프리오, 마크 러팔로",
   runtime: "상영 시간은 1 이상의 분 단위 숫자로 입력하세요. 모르면 비워 둡니다. 예: 112",
   genres: "장르를 하나 이상 고르세요.",
   rating: "평점을 고르세요. 0.5점부터 5점까지 0.5점 단위입니다.",
@@ -110,7 +110,7 @@ function toFrontmatterInput(values: ReviewFormValues, publishedAt: string): Reco
   };
   // 선택 칸: 무엇이든 적었을 때만 넣어요. (trim(): 공백만 친 칸은 빈 칸으로 봐요)
   if (values.originalTitle.trim() !== "") input.originalTitle = values.originalTitle;
-  if (values.country.trim() !== "") input.country = values.country;
+  if (values.cast.trim() !== "") input.cast = values.cast;
   if (values.runtime.trim() !== "") input.runtime = toNumber(values.runtime);
   if (values.poster.trim() !== "") input.poster = values.poster;
   if (values.posterAlt.trim() !== "") input.posterAlt = values.posterAlt;

@@ -93,7 +93,8 @@ test.describe("처음 화면(목록)", () => {
   test("머리글 오른쪽에는 GitHub 아이콘만 보이고, 왼쪽 로고와 같은 크기로 본문 양 끝·같은 줄에 붙는다(좁은 휴대폰 포함)", async ({ page }) => {
     await page.goto("/");
     const banner = page.getByRole("banner");
-    await expect(banner.getByRole("link", { name: "DMB: 덕배의 영화 블로그" })).toHaveAttribute("href", "/");
+    // 로고·이름·버전(v…)이 모두 처음 화면으로 가는 링크 하나예요.
+    await expect(banner.getByRole("link", { name: `DMB: 덕배의 영화 블로그 (v${version})`, exact: true })).toHaveAttribute("href", "/");
     // 글자 "GitHub"는 화면 낭독기용으로만 남아요(화면에는 아이콘만).
     await expect(banner.getByRole("link", { name: "GitHub", exact: true }).locator(".sr-only")).toHaveText("GitHub");
     // 머리글의 본문 칸(안쪽 여백을 뺀 자리) 양 끝과 두 아이콘의 위치·크기, GitHub 링크의 누르는 영역을 재요.
@@ -204,6 +205,16 @@ test.describe("처음 화면(목록)", () => {
     await expect(listbox).toBeHidden();
     await expect(page).toHaveURL(/\?q=/);
     await expect(listStatus(page)).toHaveText(/^11편 중 \d+편$/);
+  });
+
+  test("자동완성은 출연 배우도 한 사람씩 추천하고, 고르면 그 배우가 나온 리뷰를 찾는다", async ({ page }) => {
+    await openHome(page);
+    await searchBox(page).pressSequentially("배우");
+    const listbox = page.getByRole("listbox", { name: "추천 검색어" });
+    await expect(listbox.getByRole("option")).toHaveText([/^박배우\s*출연$/, /^이배우\s*출연$/, /^최배우\s*출연$/]);
+    await listbox.getByRole("option", { name: "이배우 출연" }).click();
+    await expect(searchBox(page)).toHaveValue("이배우");
+    await expect.poll(() => listTitles(page)).toEqual(["알파 정거장", "엡실론의 밤"]);
   });
 
   test("자동완성 추천을 마우스로 눌러도 바로 찾는다", async ({ page }) => {
@@ -326,7 +337,7 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect((await aside.boundingBox())!.y).toBeLessThan(80);
   });
 
-  test("목록 한 편은 제목 바로 옆에 장르 태그를 둔다(둘째 줄에는 원제·연도·감독)", async ({ page }) => {
+  test("목록 한 편은 제목 바로 옆에 장르 태그를 둔다(둘째 줄에는 원제·연도·감독·출연, 이름은 링크가 아니다)", async ({ page }) => {
     await openHome(page);
     const item = page.getByRole("article", { name: "알파 정거장" });
     const title = (await item.getByRole("heading", { level: 3 }).boundingBox())!;
@@ -336,8 +347,10 @@ test.describe("넓은 화면의 목록 배치", () => {
     // 같은 줄(세로 가운데가 같음), 제목 오른쪽
     expect(Math.abs(box.y + box.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
     expect(box.x).toBeGreaterThan(title.x + title.width);
-    // 둘째 줄은 원제·연도·감독만이에요(장르는 제목 옆으로 옮겼어요).
-    await expect(item.getByText(/^Alpha Station\s·\s2020\s·\s감독\s\S+$/)).toBeVisible();
+    // 둘째 줄은 원제·연도·감독·출연이에요(장르는 제목 옆으로 옮겼어요).
+    await expect(item.getByText(/^Alpha Station\s·\s2020\s·\s감독\s김시험\s·\s출연\s이배우, 박배우$/)).toBeVisible();
+    // 목록 한 편 전체가 상세로 가는 링크라, 감독·배우 이름은 링크가 아니에요(이름으로 찾기는 상세 화면에서 해요).
+    await expect(item.getByRole("link")).toHaveCount(1);
   });
 
   test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고, 한줄평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
@@ -407,7 +420,10 @@ test.describe("리뷰 상세", () => {
     await expect(page.locator(".boot-overlay")).toBeHidden();
     const back = await page.getByRole("link", { name: "목록으로" }).boundingBox();
     const button = await share.boundingBox();
-    expect(Math.abs(button!.y + button!.height / 2 - (back!.y + back!.height / 2))).toBeLessThan(4);
+    // [◀ 목록으로]도 [공유하기]와 같은 단추 모양(높이 44px)이라, 세로 가운데가 정확히 같아요.
+    expect(Math.round(back!.height)).toBe(44);
+    expect(Math.round(button!.height)).toBe(44);
+    expect(Math.abs(button!.y + button!.height / 2 - (back!.y + back!.height / 2))).toBeLessThan(1);
     expect(button!.x).toBeGreaterThan(back!.x + back!.width);
     await expect
       .poll(() =>
@@ -448,11 +464,11 @@ test.describe("리뷰 상세", () => {
     // evaluate: 브라우저 안에서 함수를 실행해요. getComputedStyle로 실제 적용된 CSS 값을 읽어요.
     expect(await poster.evaluate((img) => getComputedStyle(img).filter)).toContain("url(");
 
-    // 머리 안내판: 장르(제목 위), 감독까지 이어 쓴 정보 줄, 큰 평점. 예전 정보표(dl)와 본 날·쓴 날은 없어요.
+    // 머리 안내판: 장르(제목 위), 원제·연도·상영 시간·감독·출연을 이어 쓴 정보 줄, 큰 평점. 예전 정보표(dl)와 본 날·쓴 날, 제작 국가는 없어요.
     const header = page.locator("article > header");
     await expect(header.getByRole("list", { name: "장르" })).toHaveText("[드라마][재난]");
-    // 정보 줄의 빈칸 일부는 줄바꿈되지 않는 빈칸(NBSP)이라 정규식은 \s(NBSP 포함)로 찾아요.
-    await expect(header.getByText(/·\s감독\s/)).toBeVisible();
+    // 화면에 보이는 글자(innerText)로 비교해요. 숨긴 링크 설명은 빠지고, NBSP는 보통 빈칸으로 맞춰 비교해요.
+    await expect(header.locator("h1 + p")).toHaveText("Alpha Station · 2020 · 101분 · 감독 김시험 · 출연 이배우, 박배우", { useInnerText: true });
     await expect(header.getByText("평점 5점 만점에 4.5점")).toBeAttached();
     await expect(page.getByRole("term")).toHaveCount(0);
     // 본문 제목과 사이트 안 링크
@@ -485,6 +501,29 @@ test.describe("리뷰 상세", () => {
     await page.goto("/reviews/alpha-station");
     await page.getByRole("link", { name: "재난", exact: true }).click();
     await expect(page.getByRole("radio", { name: "재난 1편" })).toBeChecked();
+    await expect.poll(() => listTitles(page)).toEqual(["알파 정거장"]);
+  });
+
+  test("감독·배우 이름을 누르면 그 이름으로 찾은 목록으로 간다", async ({ page }) => {
+    await page.goto("/reviews/alpha-station");
+    const header = page.locator("article > header");
+    // 링크 이름은 보이는 이름 그대로이고, 화면 낭독기에는 어디로 가는지 설명을 덧붙여요.
+    const director = header.getByRole("link", { name: "김시험", exact: true });
+    await expect(director).toHaveAccessibleDescription("이 감독의 리뷰 찾기");
+    const actor = header.getByRole("link", { name: "이배우", exact: true });
+    await expect(actor).toHaveAccessibleDescription("이 배우의 리뷰 찾기");
+    await expectNoA11yViolations(page);
+
+    // 배우 "이배우"는 알파 정거장과 엡실론의 밤에 나와요(최신순).
+    await actor.click();
+    await expect(page).toHaveURL(new RegExp(`/\\?q=${encodeURIComponent("이배우")}$`));
+    await expect(searchBox(page)).toHaveValue("이배우");
+    await expect.poll(() => listTitles(page)).toEqual(["알파 정거장", "엡실론의 밤"]);
+
+    // 감독 이름도 같아요.
+    await page.goto("/reviews/alpha-station");
+    await director.click();
+    await expect(searchBox(page)).toHaveValue("김시험");
     await expect.poll(() => listTitles(page)).toEqual(["알파 정거장"]);
   });
 
