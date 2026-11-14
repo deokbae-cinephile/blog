@@ -94,7 +94,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 본문 사진은 빌드할 때 작은 사본(가로 480·800·1200px WebP, 원본 너비의 90% 이하만)을 `public/_resized`에 만들어 `srcset`으로 화면 크기에 맞게 받아요.
   - 순서: `pnpm build`(배포의 OpenNext도 이것을 불러요) → `scripts/resize-photos.mjs`(`lib/resize-photos.ts`, sharp) → `next build`. 원고 읽기(`lib/load-reviews.ts`)가 사본이 정말 있는 것만 `srcset`에 넣어요.
   - `sizes`는 본문 칸 너비(1024px 이상 `100vw − 27rem`, 640px 이상 `100vw − 4rem`, 그 밖 `100vw − 2rem`)와 원본 너비, 화면 높이 80% × 비율 가운데 가장 작은 값이에요(`lib/photo-variants.ts`의 `photoSizes`). 나란히 놓인 사진은 칸을 둘로 나눠요. Chromium·Firefox·WebKit에서 `min()`이 든 `sizes`를 바르게 읽는 것을 확인했어요.
-  - 실행 중인 워커는 아무 일도 하지 않아요(다른 정적 파일처럼 Cloudflare가 바로 내줘요). 깨진 사진은 빌드를 멈추지 않고 경고만 남기고 원본만 써요. 사본은 저장소에 올리지 않아요(`.gitignore`).
+  - 실행 중인 워커는 아무 일도 하지 않아요(다른 정적 파일처럼 Cloudflare가 바로 내줘요). 깨진 사진은 빌드를 멈추지 않고 경고만 남기고 원본만 써요. 움직이는 그림(GIF, 여러 장 WebP·AVIF, 움직이는 PNG)은 사본이 첫 장만 남아 멈춰 버려서 사본을 만들지 않고 원본만 써요. 사본은 저장소에 올리지 않아요(`.gitignore`).
 - 새 리뷰의 "글 쓴 날"(`publishedAt`)은 저장할 때 서버가 한국 시간 날짜와 시각까지 넣어요(`2026-11-14T19:35:48+09:00`, `lib/review-form.ts`의 `nowInSeoul`). 같은 날 쓴 리뷰끼리도 최신순이 맞아요. 날짜만 적힌 예전 원고(`2026-11-14`)도 그대로 읽고, 그날 0시로 봐요.
 - 임시 저장(`lib/drafts.ts`)은 검사 없이 지금 칸 값과 고른 사진을 이 브라우저에 저장해요. 서버 코드를 늘리지 않고, 공개 저장소에 쓰다 만 글을 올리지 않으려고요.
   - 이 브라우저에서만 다시 불러올 수 있어요(다른 기기·브라우저에는 없어요). 저장할 때 "오래 보관"을 부탁해요(`navigator.storage.persist`).

@@ -389,18 +389,20 @@ test.describe("리뷰 상세", () => {
     await page.goto("/reviews/alpha-station");
     const share = page.getByRole("button", { name: "공유하기" });
     // 맨 윗줄 오른쪽([◀ 목록으로]와 같은 줄)에 있고, 떠 있는 단추들에 가려지지 않아요(가운데를 누르면 이 단추가 받아요).
-    // 첫 화면 로딩 레이어가 걷힌 뒤에 재요(레이어는 잠깐 화면 전체를 덮어요).
-    await expect(page.locator("html")).toHaveAttribute("data-booted", "");
+    // 첫 화면 로딩 레이어가 다 걷힌 뒤에 재요(레이어는 data-booted가 붙은 뒤에도 0.3초 동안 흐려지며 화면을 덮어요).
+    await expect(page.locator(".boot-overlay")).toBeHidden();
     const back = await page.getByRole("link", { name: "목록으로" }).boundingBox();
     const button = await share.boundingBox();
     expect(Math.abs(button!.y + button!.height / 2 - (back!.y + back!.height / 2))).toBeLessThan(4);
     expect(button!.x).toBeGreaterThan(back!.x + back!.width);
-    expect(
-      await share.evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
-      }),
-    ).toBe(true);
+    await expect
+      .poll(() =>
+        share.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+        }),
+      )
+      .toBe(true);
     await share.click();
     // 공유하는 것은 대표 주소(링크)예요. 받는 쪽 미리 보기 카드에는 이 주소의 공유 그림(포스터)이 보여요.
     expect(await page.evaluate(() => (window as unknown as { __shared: ShareData[] }).__shared)).toEqual([

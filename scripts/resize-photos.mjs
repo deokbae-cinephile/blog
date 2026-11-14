@@ -13,7 +13,9 @@ import path from "node:path";
 import { resizePhotos } from "../src/lib/resize-photos.ts";
 
 const publicDir = path.resolve(process.cwd(), "public");
-const { photos, variants, failed } = await resizePhotos(publicDir);
+const { photos, variants, animated, failed } = await resizePhotos(publicDir);
 console.log(photos === 0 ? "본문 사진이 없어 작은 사본을 만들지 않았어요." : `본문 사진 ${photos}장 → 작은 사본 ${variants}개(public/_resized)`);
+// 움직이는 그림은 사본을 만들지 않고 원본만 써요(사본은 첫 장만 남아 움직임이 사라져서).
+if (animated > 0) console.log(`움직이는 그림 ${animated}장은 사본 없이 원본만 써요.`);
 // 읽지 못한 사진은 빌드를 멈추지 않고 알리기만 해요(그 사진은 원본만 보여요).
 for (const file of failed) console.warn(`경고: public/${file}의 작은 사본을 만들지 못했어요. 그림 파일이 깨지지 않았는지 확인하세요.`);

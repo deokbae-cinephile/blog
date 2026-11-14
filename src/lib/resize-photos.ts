@@ -23,7 +23,7 @@
  *   이 파일은 빌드 스크립트만 불러서, 방문자 화면이나 워커 코드에는 들어가지 않아요.
  */
 
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import sharp from "sharp";
@@ -34,8 +34,8 @@ import { RESIZABLE, RESIZED_DIR, variantFile, variantWidths } from "./photo-vari
 /** 사본의 WebP 품질(0~100). 78이면 눈으로는 원본과 거의 같고 크기는 크게 줄어요. */
 const QUALITY = 78;
 
-/** 만든 결과: 살펴본 사진 수, 만든 사본 수, 사본을 만들지 못한 사진(public 기준 경로) */
-export type ResizeResult = { photos: number; variants: number; failed: string[] };
+/** 만든 결과: 살펴본 사진 수, 만든 사본 수, 움직이는 그림이라 건너뛴 수, 사본을 만들지 못한 사진(public 기준 경로) */
+export type ResizeResult = { photos: number; variants: number; animated: number; failed: string[] };
 
 /**
  * public/images의 사진마다 작은 사본을 만들어요. 예전 사본(public/_resized)은 먼저 모두 지우고 새로 만들어요
@@ -51,7 +51,7 @@ export async function resizePhotos(publicDir: string): Promise<ResizeResult> {
   const out = path.join(publicDir, RESIZED_DIR);
   await rm(out, { recursive: true, force: true });
 
-  const result: ResizeResult = { photos: 0, variants: 0, failed: [] };
+  const result: ResizeResult = { photos: 0, variants: 0, animated: 0, failed: [] };
   for (const file of await listFiles(path.join(publicDir, "images"))) {
     if (!RESIZABLE.test(file)) continue;
     result.photos += 1;
@@ -59,8 +59,15 @@ export async function resizePhotos(publicDir: string): Promise<ResizeResult> {
     const publicPath = path.relative(publicDir, file).split(path.sep).join("/");
 
     try {
+      const { width = 0, height = 0, orientation, pages = 1, format } = await sharp(file).metadata();
+      // 움직이는 그림(여러 장으로 된 WebP·AVIF, 움직이는 PNG)은 사본을 만들지 않아요(GIF와 같아요).
+      // sharp는 기본으로 첫 장만 읽어서 사본이 멈춘 그림이 되고, 브라우저가 그 사본을 고르면 움직임이 사라지거든요.
+      // 사본이 없으면 원고 읽기가 srcset을 달지 않아서 원본(움직이는 그림)만 보여요.
+      if (pages > 1 || (format === "png" && isAnimatedPng(await readFile(file)))) {
+        result.animated += 1;
+        continue;
+      }
       // 휴대폰 사진에는 "돌려서 보여 줘"(orientation)가 들어 있기도 해요. 5~8은 90도로 돌리라는 뜻이라 가로·세로를 바꿔 봐요.
-      const { width = 0, height = 0, orientation } = await sharp(file).metadata();
       const shownWidth = orientation !== undefined && orientation >= 5 ? height : width;
 
       for (const target of variantWidths(shownWidth)) {
@@ -76,6 +83,17 @@ export async function resizePhotos(publicDir: string): Promise<ResizeResult> {
     }
   }
   return result;
+}
+
+/**
+ * 움직이는 PNG(APNG)인지. APNG는 그림 자료(IDAT) 앞에 "움직임 정보"(acTL) 칸이 있어요.
+ * sharp(libvips)는 APNG의 첫 장만 읽고 여러 장이라고 알려 주지 않아서, 파일 안의 칸 이름을 직접 찾아봐요.
+ */
+export function isAnimatedPng(bytes: Uint8Array): boolean {
+  const text = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const animation = text.indexOf("acTL");
+  const data = text.indexOf("IDAT");
+  return animation !== -1 && (data === -1 || animation < data);
 }
 
 /** 폴더 안의 모든 파일 경로(하위 폴더까지). 폴더가 없으면 빈 목록이에요(아직 본문 사진이 없는 블로그). */
