@@ -383,6 +383,50 @@ test.describe("글쓴이 기능", () => {
   });
 });
 
+test.describe("방문자 수(글쓴이만 봄)", () => {
+  test("방문자는 그날 한 번만 세기 요청을 보내고 숫자는 보이지 않으며, 글쓴이는 왼쪽 아래 키보드 조작 오른쪽에서 누적 방문자 수를 본다", async ({ page, request, isMobile }) => {
+    // 화면이 보내는 방문자 요청(/api/visits)의 방식(POST·GET)을 모아요.
+    const visitRequests: string[] = [];
+    page.on("request", (sent) => {
+      if (new URL(sent.url()).pathname === "/api/visits") visitRequests.push(sent.method());
+    });
+    await page.goto("/");
+    await expect.poll(() => visitRequests).toEqual(["POST"]);
+    // 같은 날 다시 열면 보내지 않아요(이 브라우저가 날짜를 기억해요).
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    expect(visitRequests).toEqual(["POST"]);
+    // 방문자에게는 숫자가 보이지 않고, 숫자 API도 로그인해야 볼 수 있어요.
+    await expect(page.getByText(/^방문자 .+명$/)).toHaveCount(0);
+    expect((await request.get("/api/visits")).status()).toBe(401);
+
+    // 글쓴이로 로그인하면 왼쪽 아래에 "방문자 n명"이 보여요(세기 요청은 더 보내지 않고 읽기만 해요).
+    await page.goto("/login?next=/");
+    await login(page);
+    await expect(page).toHaveURL(/\/$/);
+    const badge = page.getByText(/^방문자 [\d,]+명$/);
+    await expect(badge).toBeVisible();
+    expect(visitRequests.filter((method) => method === "POST")).toHaveLength(1);
+    const box = (await badge.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(Math.round(viewport.height - (box.y + box.height))).toBe(16);
+    if (isMobile) {
+      // 휴대폰에는 키보드 조작 단추가 없어서 왼쪽 끝(16px)에 있어요.
+      expect(Math.round(box.x)).toBe(16);
+    } else {
+      // 넓은 화면: 키보드 조작 단추 바로 오른쪽(8px)에, 바닥을 맞춰 있어요.
+      const keys = (await page.getByRole("button", { name: "키보드 조작" }).boundingBox())!;
+      expect(Math.round(box.x)).toBe(Math.round(keys.x + keys.width + 8));
+      expect(Math.round(box.y + box.height)).toBe(Math.round(keys.y + keys.height));
+      // 키보드 안내를 펼쳐도 방문자 수는 그 자리에 있어요(안내 창은 단추 위에 떠요).
+      await page.getByRole("button", { name: "키보드 조작" }).click();
+      expect(Math.round((await badge.boundingBox())!.x)).toBe(Math.round(box.x));
+      await page.keyboard.press("Escape");
+    }
+    await expectNoA11yViolations(page);
+  });
+});
+
 test.describe("조회수(화면에서 뺌)", () => {
   test("목록·상세에는 조회수가 보이지 않고, 화면이 조회수 API를 부르지 않는다", async ({ page }) => {
     // 화면이 보내는 조회수 요청(/api/views)을 모아요.

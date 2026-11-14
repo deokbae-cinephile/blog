@@ -25,6 +25,7 @@ import { SLUG } from "@/lib/review-schema";
 import { isPublishedSlug } from "@/lib/review-slugs";
 import { isValidSession } from "@/lib/session";
 import { getViewStore } from "@/lib/view-store";
+import { visitorKey } from "@/lib/visitor-key";
 
 /** 요청마다 새로 처리해요(미리 만들어 두지 않아요). */
 export const dynamic = "force-dynamic";
@@ -37,17 +38,6 @@ const badSlug = () => Response.json({ message: "리뷰 주소가 올바르지 �
 
 /** 저장소에 문제가 있을 때의 답 */
 const unavailable = () => Response.json({ message: "조회수를 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요." }, { status: 503 });
-
-/**
- * 사람을 구별하는 값: 접속 주소 + 브라우저 정보를 SHA-256으로 줄인 앞 16글자.
- * Cloudflare에서는 cf-connecting-ip가 늘 와요(방문자가 바꿀 수 없어요). 내 컴퓨터·시험에서는 x-forwarded-for를 써요.
- */
-async function visitorKey(request: NextRequest): Promise<string> {
-  const address = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  const agent = request.headers.get("user-agent") ?? "";
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${address}|${agent}`));
-  return Array.from(new Uint8Array(digest).slice(0, 8), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 /** 이 리뷰의 조회수 읽기(세지 않아요) */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/views/[slug]">) {

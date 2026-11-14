@@ -387,6 +387,25 @@ body::after {
   }
 
   /*
+   * 구석에 떠 있는 "안내 상자"(components/visitor-count.tsx의 [방문자 n명]).
+   * 옆의 떠 있는 단추(btn-float)와 높이·안쪽 여백·바탕을 맞추되, 누를 수 없는 글이라 테두리를 점선으로 해서 단추와 구별해요.
+   * 마우스를 올려도 반전되지 않고, 손가락 모양 커서도 쓰지 않아요.
+   */
+  .badge-float {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.25rem 0.875rem;
+    border: 2px dotted var(--phosphor);
+    background: var(--screen);
+    color: var(--phosphor);
+    box-shadow: 0 0 0.75rem rgb(var(--glow-rgb) / 0.35);
+    /* 숫자가 바뀌어도 글자 폭이 흔들리지 않게 고정폭 숫자를 써요. */
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /*
    * 포스터 액자(components/poster.tsx)와 본문 사진 액자(lib/markdown.ts가 만드는 .photo-frame)
    * 어두운 바탕과 테두리를 둬서, 목록 항목이 반전(초록 바탕)되어도 초록 그림이 묻히지 않게 해요.
    */

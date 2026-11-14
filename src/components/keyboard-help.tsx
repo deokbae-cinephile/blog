@@ -142,10 +142,11 @@ export function KeyboardHelp() {
   if (pathname.startsWith("/write")) return null;
 
   return (
-    // fixed bottom-4 left-4: 화면 왼쪽 아래에 떠 있어요. z-[52]: CRT 화면 효과 막(z-index 50, 51)보다 위라서 또렷해요.
-    // hidden sm:flex: 휴대폰에서는 숨기고 640px 이상에서 보여요. flex-col-reverse: 코드에서는 단추가 먼저지만 화면에서는 안내가 단추 위에 놓여요.
+    // 자리: 왼쪽 아래 고정 줄(site-footer.tsx)의 맨 앞이에요. 오른쪽에 [방문자 n명](로그인한 글쓴이만)이 붙어요.
+    // hidden sm:block: 휴대폰에서는 숨기고 640px 이상에서 보여요.
+    // relative: 펼친 안내 창(absolute)을 이 단추 위에 띄우는 기준이에요. 창이 떠 있어서 단추 줄의 너비가 바뀌지 않아요(옆의 방문자 수가 밀리지 않게).
     // (코드 순서 = 화면 낭독기가 읽는 순서라서, "단추 → 펼쳐진 안내" 순으로 읽혀요.)
-    <div className="fixed bottom-4 left-4 z-[52] hidden flex-col-reverse items-start gap-2 sm:flex print:hidden">
+    <div className="relative hidden sm:block">
       <button
         ref={buttonRef}
         type="button"
@@ -159,7 +160,12 @@ export function KeyboardHelp() {
       </button>
 
       {/* hidden={!open}: 닫혀 있으면 숨겨요. 숨겨도 id는 남아 있어서 aria-controls가 늘 이 영역을 가리켜요. */}
-      <div id={panelId} hidden={!open} className="w-72 border-2 border-crt-fg bg-crt-bg shadow-[0_0_1rem_rgb(var(--glow-rgb)/0.3)]">
+      {/* absolute bottom-full mb-2: 단추 바로 위(8px 위)에 떠요. */}
+      <div
+        id={panelId}
+        hidden={!open}
+        className="absolute bottom-full left-0 mb-2 w-72 border-2 border-crt-fg bg-crt-bg shadow-[0_0_1rem_rgb(var(--glow-rgb)/0.3)]"
+      >
         {/* 창 제목 줄(반전). 옛 프로그램의 창 위쪽 막대처럼 보여요. */}
         <h2 className="inverse px-3">이 화면의 키</h2>
         {/* <dl>(설명 목록): 키(<dt>)와 하는 일(<dd>)을 짝지어 읽어 줘요. 두 칸 그리드로 줄을 맞춰요. */}

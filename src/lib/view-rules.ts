@@ -63,3 +63,8 @@ export class RecentViews {
     }
   }
 }
+
+/** 누적 방문자 수: 하루에 한 사람을 한 번씩 센 방문을 모두 더한 수 */
+export type VisitTotal = {
+  total: number;
+};

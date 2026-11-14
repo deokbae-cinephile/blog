@@ -4,12 +4,14 @@
  * 이 파일이 하는 일
  *   Cloudflare의 Durable Object로 블로그의 조회수를 저장해요.
  *
- *     views 표(SQLite)
- *     ┌───────────────┬───────┐
- *     │ slug          │ count │
- *     ├───────────────┼───────┤
- *     │ winter-stop   │ 12    │   ← 리뷰마다의 조회수
- *     └───────────────┴───────┘
+ *     views 표(SQLite)              visit_days 표                  visitors_today 표
+ *     ┌─────────────┬───────┐       ┌────────────┬───────┐        ┌────────────┬──────────────────┐
+ *     │ slug        │ count │       │ day        │ count │        │ day        │ visitor          │
+ *     ├─────────────┼───────┤       ├────────────┼───────┤        ├────────────┼──────────────────┤
+ *     │ winter-stop │ 12    │       │ 2026-11-14 │ 37    │        │ 2026-11-14 │ 3fa1c0…(16글자)   │
+ *     └─────────────┴───────┘       └────────────┴───────┘        └────────────┴──────────────────┘
+ *      리뷰마다의 조회수               날마다 센 방문 수(더하면 누적)    오늘 이미 센 사람(지난 날 것은 지워요)
+ *     (조회수는 2.0.0 핫픽스부터 화면이 부르지 않아요. 방문자 수는 로그인한 글쓴이에게만 보여요.)
  *
  * Durable Object가 뭔가요?
  *   이름이 같으면 전 세계 어디서 불러도 늘 같은 "하나"로 연결되는 작은 서버예요(lib/view-store.ts가 "blog"라는 이름으로 불러요).
@@ -27,7 +29,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 
-import { RecentViews, type ViewResult, type ViewSnapshot } from "../src/lib/view-rules";
+import { RecentViews, type ViewResult, type ViewSnapshot, type VisitTotal } from "../src/lib/view-rules";
 
 /** 조회수 저장소 */
 export class ViewCounter extends DurableObject {
@@ -40,8 +42,29 @@ export class ViewCounter extends DurableObject {
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
-    // 표가 없으면 만들어요(처음 한 번). slug가 겹치지 않는 열쇠(PRIMARY KEY)예요.
+    // 표가 없으면 만들어요(처음 한 번). PRIMARY KEY는 겹치지 않는 열쇠예요.
     this.sql.exec("CREATE TABLE IF NOT EXISTS views (slug TEXT PRIMARY KEY, count INTEGER NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS visit_days (day TEXT PRIMARY KEY, count INTEGER NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS visitors_today (day TEXT NOT NULL, visitor TEXT NOT NULL, PRIMARY KEY (day, visitor))");
+  }
+
+  /**
+   * 방문을 하나 세요. 같은 사람은 하루에 한 번만 세요. 이번에 셌으면 true
+   * @param visitor 사람을 구별하는 값(lib/visitor-key.ts)
+   * @param day 한국 시간 기준 날짜 "YYYY-MM-DD"
+   */
+  visit(visitor: string, day: string): boolean {
+    // 지난 날의 사람 값은 지워요(오늘 한 번만 세는 데에만 쓰고 오래 두지 않아요).
+    this.sql.exec("DELETE FROM visitors_today WHERE day != ?", day);
+    // 오늘 처음 온 사람이면 줄이 새로 들어가고, 들어간 줄을 돌려받아요(RETURNING). 이미 있으면 들어가지 않아 빈 목록이에요(OR IGNORE).
+    const added = this.sql.exec("INSERT OR IGNORE INTO visitors_today (day, visitor) VALUES (?, ?) RETURNING visitor", day, visitor).toArray().length > 0;
+    if (added) this.sql.exec("INSERT INTO visit_days (day, count) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET count = count + 1", day);
+    return added;
+  }
+
+  /** 누적 방문자 수(날마다 센 방문을 모두 더한 수) */
+  visits(): VisitTotal {
+    return { total: this.sql.exec<{ total: number }>("SELECT COALESCE(SUM(count), 0) AS total FROM visit_days").one().total };
   }
 
   /** 한 번 세요. 같은 사람이 방금 본 리뷰면 세지 않고 지금 숫자만 돌려줘요. */
