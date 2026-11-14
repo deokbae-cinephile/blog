@@ -123,11 +123,14 @@ function filledText(value: unknown): string | null {
 }
 
 /**
- * 출연 값을 "A, B" 한 줄로 다듬어요. 목록이면 글자 칸만 모아 잇고, 글자면 쉼표로 나눠 다듬어요. 이름이 하나도 없으면 null.
+ * 출연 값을 "A, B" 한 줄로 다듬어요. 목록이면 칸을 이어서, 글자면 그대로 쉼표로 나눠 다듬어요.
+ * 이름이 하나도 없거나, 목록에 글자가 아닌 칸(숫자 등)이 섞여 있으면 null(고치는 방법을 알려 줘요. 말없이 버리지 않아요).
  * @example castText(["레오나르도 디카프리오", "마크 러팔로"]); // "레오나르도 디카프리오, 마크 러팔로"
+ * @example castText(["이배우", 1987]); // null
  */
 function castText(value: unknown): string | null {
-  const text = Array.isArray(value) ? value.filter((item) => typeof item === "string").join(", ") : value;
+  // every: 목록의 모든 칸이 글자일 때만 이어요.
+  const text = Array.isArray(value) ? (value.every((item) => typeof item === "string") ? value.join(", ") : null) : value;
   if (typeof text !== "string") return null;
   const names = splitNames(text);
   return names.length > 0 ? joinNames(names) : null;

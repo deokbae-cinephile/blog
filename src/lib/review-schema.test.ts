@@ -57,11 +57,14 @@ describe("checkFrontmatter", () => {
     expect(parse({ ...valid, cast: " 레오나르도 디카프리오,마크 러팔로 ,  레오나르도 디카프리오, " }).cast).toBe("레오나르도 디카프리오, 마크 러팔로");
   });
 
-  it("출연을 적었는데 이름이 하나도 없으면(빈칸·쉼표만·숫자) 고치는 방법과 함께 거절한다", () => {
+  it("출연을 적었는데 이름이 하나도 없거나(빈칸·쉼표만·숫자·빈 목록) 목록에 글자가 아닌 칸이 섞이면 고치는 방법과 함께 거절한다", () => {
     const message = "cast(출연)에는 배우 이름을 적습니다. 여러 명이면 쉼표로 나눕니다. 출연을 적지 않으려면 그 줄을 지웁니다. 예: cast: 레오나르도 디카프리오, 마크 러팔로";
     expect(messages({ ...valid, cast: "  " })).toEqual([message]);
     expect(messages({ ...valid, cast: " , ," })).toEqual([message]);
     expect(messages({ ...valid, cast: 7 })).toEqual([message]);
+    // 목록에 글자가 아닌 칸이 섞이면 말없이 버리지 않고 알려요.
+    expect(messages({ ...valid, cast: ["이배우", 1987] })).toEqual([message]);
+    expect(messages({ ...valid, cast: [] })).toEqual([message]);
   });
 
   it("2.0.0 핫픽스에서 뺀 제작 국가(country)는 알 수 없는 항목으로 알려 준다(그 줄을 지우면 돼요)", () => {
