@@ -87,13 +87,25 @@ export async function resizePhotos(publicDir: string): Promise<ResizeResult> {
 
 /**
  * 움직이는 PNG(APNG)인지. APNG는 그림 자료(IDAT) 앞에 "움직임 정보"(acTL) 칸이 있어요.
- * sharp(libvips)는 APNG의 첫 장만 읽고 여러 장이라고 알려 주지 않아서, 파일 안의 칸 이름을 직접 찾아봐요.
+ * sharp(libvips)는 APNG의 첫 장만 읽고 여러 장이라고 알려 주지 않아서, 파일의 칸을 직접 읽어 봐요.
+ *
+ * PNG는 서명(8바이트) 뒤에 칸(chunk)이 줄지어 있어요: [내용 길이 4][칸 이름 4][내용][검사 값(CRC) 4].
+ * 칸 경계를 따라 차례로 넘기며 "칸 이름"만 견줘요. 글자 위치로 찾으면 글 칸(tEXt) 안의 "IDAT" 같은 글자에 속아요.
  */
 export function isAnimatedPng(bytes: Uint8Array): boolean {
-  const text = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const animation = text.indexOf("acTL");
-  const data = text.indexOf("IDAT");
-  return animation !== -1 && (data === -1 || animation < data);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 8;
+  // 칸 머리(길이 + 이름 = 8바이트)를 읽을 수 있는 동안
+  while (offset + 8 <= bytes.byteLength) {
+    const length = view.getUint32(offset);
+    const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    if (type === "acTL") return true;
+    // acTL은 그림 자료(IDAT)보다 앞에만 와요. 그림 자료나 끝(IEND)에 닿으면 움직이지 않는 PNG예요.
+    if (type === "IDAT" || type === "IEND") return false;
+    // 다음 칸으로: 길이 4 + 이름 4 + 내용 + CRC 4
+    offset += 12 + length;
+  }
+  return false;
 }
 
 /** 폴더 안의 모든 파일 경로(하위 폴더까지). 폴더가 없으면 빈 목록이에요(아직 본문 사진이 없는 블로그). */

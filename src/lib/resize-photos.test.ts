@@ -19,7 +19,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { resizePhotos } from "./resize-photos";
+import { isAnimatedPng, resizePhotos } from "./resize-photos";
 
 /** 테스트마다 새로 만드는 임시 public 폴더 */
 let publicDir: string;
@@ -41,6 +41,22 @@ async function makeImage(relative: string, width: number, height: number, format
   if (orientation) image = image.withMetadata({ orientation });
   await image.toFile(file);
 }
+
+/** PNG 칸 하나: [내용 길이 4][칸 이름 4][내용][검사 값(CRC, 이름 + 내용) 4] */
+function pngChunk(type: string, data: Buffer): Buffer {
+  const head = Buffer.alloc(4);
+  head.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([head, body, crc]);
+}
+
+/** 움직임 정보(acTL) 칸: 장 수 2, 반복 0(끝없이) */
+const ACTL = () => pngChunk("acTL", Buffer.from([0, 0, 0, 2, 0, 0, 0, 0]));
+
+/** PNG의 서명(8) + IHDR 칸(25) 바로 뒤에 칸들을 끼워 넣어요(IDAT보다 앞). */
+const insertAfterHeader = (png: Buffer, ...chunks: Buffer[]) => Buffer.concat([png.subarray(0, 33), ...chunks, png.subarray(33)]);
 
 /** 사본의 가로·세로·형식 */
 async function info(relative: string) {
@@ -89,14 +105,8 @@ describe("resizePhotos", () => {
     await sharp([await frame("#ff0000"), await frame("#0000ff")], { join: { animated: true } })
       .webp()
       .toFile(path.join(publicDir, "images/moving/scene.webp"));
-    // 움직임 정보(acTL) 칸을 넣은 PNG(APNG 표시). 칸 모양: 길이(4) + 이름(4) + 내용(8: 장 수·반복 수) + 검사 값(CRC 4)
-    const png = await frame("#00ff00");
-    const body = Buffer.concat([Buffer.from("acTL"), Buffer.from([0, 0, 0, 2, 0, 0, 0, 0])]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body));
-    const chunk = Buffer.concat([Buffer.from([0, 0, 0, 8]), body, crc]);
-    // PNG 서명(8) + IHDR 칸(25) 뒤에 넣어요.
-    await writeFile(path.join(publicDir, "images/moving/apng.png"), Buffer.concat([png.subarray(0, 33), chunk, png.subarray(33)]));
+    // 움직임 정보(acTL) 칸을 넣은 PNG(APNG 표시)
+    await writeFile(path.join(publicDir, "images/moving/apng.png"), insertAfterHeader(await frame("#00ff00"), ACTL()));
 
     expect(await resizePhotos(publicDir)).toEqual({ photos: 2, variants: 0, animated: 2, failed: [] });
     await expect(access(path.join(publicDir, "_resized"))).rejects.toThrow();
@@ -108,5 +118,23 @@ describe("resizePhotos", () => {
     await writeFile(path.join(publicDir, "images/a/broken.jpg"), "그림이 아닌 글자");
 
     expect(await resizePhotos(publicDir)).toEqual({ photos: 2, variants: 2, animated: 0, failed: ["images/a/broken.jpg"] });
+  });
+});
+
+describe("isAnimatedPng", () => {
+  /** 움직이지 않는 보통 PNG(64 × 32) */
+  const still = () => sharp({ create: { width: 64, height: 32, channels: 3, background: "#00ff00" } }).png().toBuffer();
+
+  it("IDAT 앞에 acTL 칸이 있으면 움직이는 PNG다", async () => {
+    expect(isAnimatedPng(await still())).toBe(false);
+    expect(isAnimatedPng(insertAfterHeader(await still(), ACTL()))).toBe(true);
+  });
+
+  it("글 칸(tEXt) 안의 'IDAT'·'acTL' 글자에 속지 않고 칸 이름만 본다", async () => {
+    const text = pngChunk("tEXt", Buffer.from("Comment\0IDAT acTL 글자가 든 설명"));
+    // 글 칸 안에 IDAT 글자가 있어도, 그 뒤의 진짜 acTL 칸을 찾아요.
+    expect(isAnimatedPng(insertAfterHeader(await still(), text, ACTL()))).toBe(true);
+    // 글 칸 안에 acTL 글자만 있으면 움직이는 PNG가 아니에요.
+    expect(isAnimatedPng(insertAfterHeader(await still(), text))).toBe(false);
   });
 });
