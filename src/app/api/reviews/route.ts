@@ -7,7 +7,7 @@
  *
  * 답(JSON)
  *   - 성공(201): { slug, commitSha }
- *   - 실패: { message, errors? } — errors는 칸마다 오류 문구(예: { title: "제목을 입력하세요." })
+ *   - 실패: { message, errors? } — errors는 칸마다 오류 문구(예: { title: "한글 제목을 입력하세요." })
  *
  * 로그인했는지는 proxy.ts가 먼저, 여기서 한 번 더 확인해요. 실제 저장 일은 lib/review-store.ts가 해요.
  */

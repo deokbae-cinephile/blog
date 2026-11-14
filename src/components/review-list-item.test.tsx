@@ -2,10 +2,11 @@
  * @file review-list-item.tsx 테스트
  *
  * <li>는 목록(<ul>, <ol>) 안에서만 쓸 수 있는 태그라, 테스트에서도 <ul>로 감싸 그려요(HTML 규칙 지키기).
+ * 글쓴이 로그인은 쿠키(blog_admin=1)로 흉내 내요(components/use-is-admin.ts가 이 쿠키를 봐요).
  */
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { reviewMocks } from "@/test/review-mocks";
 
@@ -22,7 +23,7 @@ const [winter, , , legend] = reviewMocks;
 
 /**
  * <ul>로 감싸 리뷰 항목 하나를 그리는 도우미
- * linked: 제목을 상세 화면 링크로 둘지. v3 전까지 방문자는 false(기본), 글쓴이는 true예요(components/review-browser.tsx).
+ * linked: 제목을 상세 화면 링크로 둘지. v3 전까지는 방문자도 글쓴이도 false(기본)예요(components/review-browser.tsx).
  */
 const renderItem = (review = winter!, linked = false) =>
   render(
@@ -32,7 +33,11 @@ const renderItem = (review = winter!, linked = false) =>
   );
 
 describe("ReviewListItem", () => {
-  it("v3 전 방문자(linked=false): 제목은 링크가 아닌 글자이고, 항목은 반전되지 않는다. 리뷰 한 편은 제목 이름의 article이다", () => {
+  afterEach(() => {
+    document.cookie = "blog_admin=; max-age=0; path=/";
+  });
+
+  it("v3 전(linked=false): 제목은 링크가 아닌 글자이고, 항목은 반전되지 않는다. 리뷰 한 편은 제목 이름의 article이다", () => {
     renderItem();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "겨울 정류장" })).toBeInTheDocument();
@@ -43,7 +48,7 @@ describe("ReviewListItem", () => {
     expect(article).toHaveAttribute("tabindex", "-1");
   });
 
-  it("글쓴이(linked=true): 제목이 상세 화면으로 가는 링크이고, 항목 전체가 누르는 영역이라 마우스를 올리면 반전된다", () => {
+  it("상세를 열면(linked=true, v3): 제목이 상세 화면으로 가는 링크이고, 항목 전체가 누르는 영역이라 마우스를 올리면 반전된다", () => {
     renderItem(winter!, true);
     expect(screen.getByRole("link", { name: "겨울 정류장" })).toHaveAttribute("href", "/reviews/winter-stop");
     expect(screen.getByRole("link", { name: "겨울 정류장" })).toHaveClass("stretched-link");
@@ -52,10 +57,13 @@ describe("ReviewListItem", () => {
     expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
-  it("둘째 줄에는 원제·연도·감독:만 보이고, 장르·출연·쓴 날·조회수는 보이지 않는다. 숫자 평점과 맨 아래 한 줄 평을 보인다", () => {
+  it("둘째 줄에는 원제·연도·감독 이름만(이름표 '감독:' 없이) 두 줄까지 보이고, 장르·출연·쓴 날·조회수는 보이지 않는다. 숫자 평점과 맨 아래 한 줄 평을 보인다", () => {
     renderItem();
-    // 감독 뒤에는 쌍점(:)을 붙여요. 장르 태그와 출연은 목록에서 뺐어요(상세 화면에서 보여요).
-    expect(screen.getByText("Winter Stop · 2024 · 감독: 한서윤")).toBeInTheDocument();
+    // 감독은 이름표 없이 이름만 둬요. 장르 태그와 출연은 목록에서 뺐어요(상세 화면에서 보여요).
+    const facts = screen.getByText("Winter Stop · 2024 · 한서윤");
+    expect(screen.queryByText(/감독/)).not.toBeInTheDocument();
+    // 길면 두 줄까지만 보이고 끝을 "…"로 줄여요(line-clamp-2).
+    expect(facts).toHaveClass("line-clamp-2");
     expect(screen.queryByRole("list", { name: "장르" })).not.toBeInTheDocument();
     expect(screen.queryByText(/출연|김배우/)).not.toBeInTheDocument();
     // 조회수는 2.0.0 핫픽스에서 화면에서 뺐어요.
@@ -84,7 +92,7 @@ describe("ReviewListItem", () => {
 
   it("원제가 없으면 연도·감독만 보인다", () => {
     renderItem({ ...legend!, originalTitle: undefined });
-    expect(screen.getByText("2024 · 감독: 브렌트 콜")).toBeInTheDocument();
+    expect(screen.getByText("2024 · 브렌트 콜")).toBeInTheDocument();
   });
 
   it("포스터 썸네일은 제목과 같은 말이라 꾸밈(alt=\"\")으로 그린다", () => {
@@ -99,13 +107,40 @@ describe("ReviewListItem", () => {
     expect(container.querySelector(".poster-frame svg")).toBeInTheDocument();
   });
 
-  it("앞에 '-'나 번호 없이 썸네일부터 시작하고, 한 줄 평은 글 칸 맨 아래에 붙는다", () => {
+  it("앞에 '-'나 번호 없이 썸네일부터 시작하고, 한 줄 평은 넓은 화면에서 글 칸 맨 아래에, 휴대폰에서는 둘째 줄 바로 아래에 붙는다", () => {
     const { container } = renderItem();
     expect(screen.queryByText("-")).not.toBeInTheDocument();
     expect(screen.queryByText("01")).not.toBeInTheDocument();
     // article의 첫 칸(왼쪽 칸)이 썸네일(포스터 상자)부터 시작해요.
     expect(container.querySelector("article")?.firstElementChild?.firstElementChild).toHaveClass("poster-frame");
-    // 한 줄 평은 mt-auto로 글 칸(세로로 쌓는 flex) 맨 아래에 붙어요.
-    expect(screen.getByText(/버스는 오지 않아도/).closest("p")).toHaveClass("mt-auto");
+    const oneLiner = screen.getByText(/버스는 오지 않아도/).closest("p")!;
+    // 넓은 화면(sm:): mt-auto로 글 칸(세로로 쌓는 flex) 맨 아래에 붙고, 둘째 줄과는 8px(sm:pt-2) 이상 띄워요.
+    expect(oneLiner).toHaveClass("sm:mt-auto", "sm:pt-2");
+    // 휴대폰: 위 간격 없이 둘째 줄 바로 아래(mt-1, 4px — 첫째·둘째 줄 사이와 같아요)에 붙어요. 안쪽 위 여백(pt-2)도 없어요.
+    expect(oneLiner).toHaveClass("mt-1");
+    expect(oneLiner).not.toHaveClass("mt-auto", "pt-2");
+  });
+
+  it("v3 전(linked=false)에 글쓴이로 로그인하면 한 줄 평 아래에 [수정]·[삭제]를 보인다(방문자에게는 없다)", () => {
+    const { unmount } = renderItem();
+    expect(screen.queryByRole("link", { name: "수정" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "삭제" })).not.toBeInTheDocument();
+    unmount();
+
+    document.cookie = "blog_admin=1; path=/";
+    renderItem();
+    const article = screen.getByRole("article", { name: "겨울 정류장" });
+    expect(within(article).getByRole("link", { name: "수정" })).toHaveAttribute("href", "/write/winter-stop");
+    expect(within(article).getByRole("button", { name: "삭제" })).toBeInTheDocument();
+    // 한 줄 평 다음(글 칸 맨 끝)에 놓여요.
+    const oneLiner = screen.getByText(/버스는 오지 않아도/).closest("p")!;
+    expect(oneLiner.nextElementSibling).toContainElement(within(article).getByRole("link", { name: "수정" }));
+  });
+
+  it("상세를 열면(linked=true, v3) 목록에는 [수정]·[삭제]를 두지 않는다(상세 화면 맨 윗줄에 있어요)", () => {
+    document.cookie = "blog_admin=1; path=/";
+    renderItem(winter!, true);
+    expect(screen.queryByRole("link", { name: "수정" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "삭제" })).not.toBeInTheDocument();
   });
 });

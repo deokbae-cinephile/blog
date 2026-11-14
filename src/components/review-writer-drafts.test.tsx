@@ -108,7 +108,7 @@ describe("ReviewWriter 임시 저장", () => {
   it("[임시 저장]은 검사 없이 쓰다 만 글을 저장하고, 저장한 시각을 단추 아래에 알리고, 목록에 보인다", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^제목/), "쓰다 만 리뷰");
+    await user.type(screen.getByLabelText(/한글 제목$/), "쓰다 만 리뷰");
     await user.click(screen.getByRole("button", { name: "임시 저장" }));
 
     // 틀린 칸(주소 등)이 있어도 "고칠 곳" 목록 없이 저장해요.
@@ -126,7 +126,7 @@ describe("ReviewWriter 임시 저장", () => {
     expect(within(list).getByRole("button", { name: "불러오기" })).toHaveAccessibleDescription(/쓰다 만 리뷰/);
 
     // 다시 [임시 저장]하면 새 글이 아니라 같은 글을 새 내용으로 바꿔요.
-    await user.type(screen.getByLabelText(/^제목/), " 2");
+    await user.type(screen.getByLabelText(/한글 제목$/), " 2");
     await user.click(screen.getByRole("button", { name: "임시 저장" }));
     await waitFor(() => expect((([...store.drafts.values()][0] as Draft).values.title)).toBe("쓰다 만 리뷰 2"));
     expect(store.drafts.size).toBe(1);
@@ -166,19 +166,19 @@ describe("ReviewWriter 임시 저장", () => {
     });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^제목/), "쓰던 글");
+    await user.type(screen.getByLabelText(/한글 제목$/), "쓰던 글");
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
 
     // 쓰던 내용이 있어서 먼저 물어요. 취소하면 그대로예요.
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
     expect(confirm).toHaveBeenCalledWith("지금 쓰던 내용을 지우고 임시 저장한 글을 불러올까요?");
-    expect(screen.getByLabelText(/^제목/)).toHaveValue("쓰던 글");
+    expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("쓰던 글");
 
     confirm.mockReturnValue(true);
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
-    await waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
-    expect(screen.getByLabelText(/^주소/)).toHaveValue("winter-stop");
-    expect(screen.getByLabelText(/^평점/)).toHaveValue("4.5");
+    await waitFor(() => expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("겨울 정류장"));
+    expect(screen.getByLabelText(/주소$/)).toHaveValue("winter-stop");
+    expect(screen.getByLabelText(/평점$/)).toHaveValue("4.5");
     expect(screen.getByRole("textbox", { name: "본문(Markdown)" })).toHaveValue("![](/images/winter-stop/scene-1.png)");
     expect(screen.getByText(/임시 저장한 글을 불러왔습니다/)).toHaveAttribute("role", "status");
     // 포스터 미리보기는 새로 만든 임시 주소예요.
@@ -218,7 +218,7 @@ describe("ReviewWriter 임시 저장", () => {
     render(<ReviewWriter mode="create" />);
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
-    await waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
+    await waitFor(() => expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("겨울 정류장"));
 
     await user.click(screen.getByRole("button", { name: "리뷰 저장" }));
     await screen.findByRole("heading", { name: "저장했습니다" });
@@ -240,24 +240,25 @@ describe("ReviewWriter 임시 저장", () => {
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
     expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("리뷰가 다른 곳에서 바뀌었습니다"));
-    expect(screen.getByLabelText(/^제목/)).toHaveValue("바뀐 제목");
+    expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("바뀐 제목");
 
     // 알고 불러오면 임시 저장본 내용으로 바뀌어요.
     confirm.mockReturnValue(true);
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
-    await waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
+    await waitFor(() => expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("겨울 정류장"));
   });
 
   it("지금 쓰는 글의 임시 저장본을 지우면, 다시 저장하지 않은 내용이 되어 떠날 때 묻는다", async () => {
     const user = userEvent.setup();
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^제목/), "쓰던 글");
-    expect(asksBeforeLeaving()).toBe(true);
+    await user.type(screen.getByLabelText(/한글 제목$/), "쓰던 글");
+    // 떠날 때 묻기는 화면을 그린 뒤(useEffect)에 켜고 꺼져서, 바뀔 때까지 잠깐 기다리며 확인해요.
+    await waitFor(() => expect(asksBeforeLeaving()).toBe(true));
     await user.click(screen.getByRole("button", { name: "임시 저장" }));
     await screen.findByText(/에 임시 저장했습니다/);
-    // 임시 저장했으니 떠나도 잃는 것이 없어요.
-    expect(asksBeforeLeaving()).toBe(false);
+    // 임시 저장했으니 떠나도 잃는 것이 없어요(안내 글이 먼저 보이고 묻기는 그다음에 꺼질 수 있어요).
+    await waitFor(() => expect(asksBeforeLeaving()).toBe(false));
 
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
     await user.click(within(list).getByRole("button", { name: "삭제" }));
@@ -277,10 +278,10 @@ describe("ReviewWriter 임시 저장", () => {
 
     await user.click(within(list).getByRole("button", { name: "불러오기" }));
     // 읽는 동안 제목을 적어요.
-    await user.type(screen.getByLabelText(/^제목/), "새로 쓴 제목");
+    await user.type(screen.getByLabelText(/한글 제목$/), "새로 쓴 제목");
     reading.resolve(store.drafts.get("d1") as Draft);
     expect(await screen.findByText("임시 저장한 글을 읽는 동안 글이 바뀌어서 불러오지 않았습니다. 다시 눌러 주세요.")).toBeInTheDocument();
-    expect(screen.getByLabelText(/^제목/)).toHaveValue("새로 쓴 제목");
+    expect(screen.getByLabelText(/한글 제목$/)).toHaveValue("새로 쓴 제목");
   });
 
   it("사진을 줄이는 동안에는 저장 단추를 막고, 늦게 끝난 예전 포스터가 나중에 고른 포스터를 덮어쓰지 않는다", async () => {
@@ -294,7 +295,7 @@ describe("ReviewWriter 임시 저장", () => {
     const first = new File(["a"], "first.png", { type: "image/png" });
     const second = new File(["b"], "second.png", { type: "image/png" });
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
+    await user.type(screen.getByLabelText(/주소$/), "winter-stop");
 
     await user.upload(screen.getByLabelText("포스터 고르기"), first);
     // 줄이는 동안: 두 저장 단추가 막혀요.
@@ -318,12 +319,12 @@ describe("ReviewWriter 임시 저장", () => {
     shrink.fn = () => job.promise;
     const scene = new File(["png"], "scene.png", { type: "image/png" });
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
+    await user.type(screen.getByLabelText(/주소$/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), scene);
     // 줄이는 사이 주소를 지워요.
-    await user.clear(screen.getByLabelText(/^주소/));
+    await user.clear(screen.getByLabelText(/주소$/));
     job.resolve({ file: scene, shrunk: false });
-    await waitFor(() => expect(screen.getByLabelText(/^주소/)).toHaveAccessibleDescription(/사진을 넣기 전에 주소를 먼저 적어 주세요/));
+    await waitFor(() => expect(screen.getByLabelText(/주소$/)).toHaveAccessibleDescription(/사진을 넣기 전에 주소를 먼저 적어 주세요/));
     expect(screen.getByRole("textbox", { name: "본문(Markdown)" })).toHaveValue("");
   });
 
@@ -334,7 +335,7 @@ describe("ReviewWriter 임시 저장", () => {
     shrink.fn = () => job.promise;
     render(<ReviewWriter mode="create" />);
     const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
-    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
+    await user.type(screen.getByLabelText(/주소$/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), new File(["png"], "scene.png", { type: "image/png" }));
     expect(within(list).getByRole("button", { name: "불러오기" })).toBeDisabled();
     job.resolve({ file: new File(["png"], "scene.png", { type: "image/png" }), shrunk: false });
@@ -350,7 +351,7 @@ describe("ReviewWriter 임시 저장", () => {
       store.drafts.set(draft.id, draft);
     });
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^제목/), "로딩 시험");
+    await user.type(screen.getByLabelText(/한글 제목$/), "로딩 시험");
     await user.click(screen.getByRole("button", { name: "임시 저장" }));
 
     const loading = await screen.findByText("임시 저장하는 중");
@@ -369,7 +370,7 @@ describe("ReviewWriter 임시 저장", () => {
   it("임시 저장본에는 본문에 남아 있는 장면 사진만 담는다(본문에서 지운 사진 파일은 담지 않는다)", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
-    await user.type(screen.getByLabelText(/^주소/), "winter-stop");
+    await user.type(screen.getByLabelText(/주소$/), "winter-stop");
     await user.upload(screen.getByLabelText("장면 사진 넣기"), [
       new File(["a"], "a.png", { type: "image/png" }),
       new File(["b"], "b.png", { type: "image/png" }),

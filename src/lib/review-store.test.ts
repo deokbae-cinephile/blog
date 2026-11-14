@@ -133,7 +133,7 @@ describe("saveReview(추가)", () => {
   it("칸이 틀리면 커밋하지 않고 칸별 문구와 함께 422로 알린다", async () => {
     await expect(saveReview("create", "winter-stop", payload({ title: "" }))).rejects.toMatchObject({
       status: 422,
-      errors: { title: "제목을 입력하세요. 예: 겨울 정류장" },
+      errors: { title: "한글 제목을 입력하세요. 예: 겨울 정류장" },
     });
     expect(lastChanges).toBeUndefined();
   });

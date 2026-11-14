@@ -5,6 +5,9 @@
  *   - 목록: 검색과 자동완성, 장르, 정렬, 결과 없음, 조건 지우기, 주소에 조건 남기기, 10편씩 무한 스크롤
  *   - 넓은 화면: 왼쪽 검색 칸(스크롤해도 붙어 있음) + 오른쪽 영화 목록
  *   - 상세: 포스터(초록 필터)·기본 포스터, 머리 안내판(장르·제목·정보 줄·큰 평점), 본문 Markdown·사진, 이전·다음 리뷰
+ *     (v3 전까지는 상세를 아무도 열 수 없어서 이 시험들은 건너뛰고, 상세 주소가 모두 목록으로 옮겨지는지 확인해요.
+ *      lib/site.ts의 REVIEW_DETAIL_PUBLIC를 true로 바꾸면 다시 돌아요.)
+ *   - 바닥글: 위쪽 점선과 가운데 저작권 줄
  *   - 404 화면, 맨 위로 단추, 머리글의 GitHub 링크
  *   - 키보드: 본문 바로가기, DOS식 방향키 조작(▲ ▼ Home End Enter ◀ ▶ Esc), 키보드 조작 안내
  *   - 접근성: axe 자동 검사(WCAG 2.2 AA 규칙), 레이아웃: 좁은 화면에서 가로로 넘치지 않는지
@@ -24,8 +27,13 @@
 
 import { expect, type Page, type Route, test } from "@playwright/test";
 
+// 리뷰 상세를 여는지(v3 전까지 false). 상세 화면 시험은 이 값이 true일 때만 돌아요.
+import { REVIEW_DETAIL_PUBLIC } from "../src/lib/site";
 // 접근성 검사(axe)와 가로 넘침 검사는 다른 테스트 파일과 함께 쓰려고 helpers.ts에 두었어요.
 import { expectNoA11yViolations, expectNoHorizontalScroll, loginAsAuthor } from "./helpers";
+
+/** 상세를 닫아 둔 동안 건너뛰는 시험의 이유 */
+const DETAIL_CLOSED = "v3 전까지 리뷰 상세는 아무도(글쓴이도) 열 수 없어요(lib/site.ts의 REVIEW_DETAIL_PUBLIC)";
 
 /** 긴 제목 원고의 제목(gamma-long.md) */
 const LONG_TITLE = "끝없이이어지는아주아주긴제목이화면을넘치지않는지살펴보는감마영화";
@@ -158,10 +166,10 @@ test.describe("처음 화면(목록)", () => {
     expect(await measure()).toEqual({ ...expected, nameLeaderGap: null, leaderGap: null });
   });
 
-  test("글쓴이의 목록 리뷰 링크는 화면에 보이기만 해서는 미리 받지 않고, 마우스를 올리면 그때 미리 받는다", async ({ page, isMobile, baseURL }) => {
+  test("목록 리뷰 링크(상세를 연 뒤)는 화면에 보이기만 해서는 미리 받지 않고, 마우스를 올리면 그때 미리 받는다", async ({ page, isMobile }) => {
+    // v3 전까지 목록 제목은 누구에게나 글자예요(링크가 없어요).
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     test.skip(isMobile, "마우스 올리기는 데스크톱에서 시험해요(휴대폰은 손가락이 닿을 때 받아요)");
-    // v3 전까지 목록 제목은 글쓴이에게만 링크예요(방문자에게는 글자).
-    await loginAsAuthor(page, baseURL!);
     // 리뷰 상세의 화면 데이터(RSC: 주소에 _rsc가 붙어요) 요청을 모아요.
     const prefetched: string[] = [];
     page.on("request", (request) => {
@@ -345,6 +353,59 @@ test.describe("처음 화면(목록)", () => {
     await page.goto("/");
     await expectNoHorizontalScroll(page);
   });
+
+  test("바닥글: 위쪽 점선 아래 가운데에 저작권 줄('© 2026. deokbae All rights reserved.')이 있다", async ({ page }) => {
+    await openHome(page);
+    const copyright = page.getByRole("contentinfo").getByText("© 2026. deokbae All rights reserved.", { exact: true });
+    await expect(copyright).toBeVisible();
+    const look = await copyright.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const wrap = getComputedStyle(element.parentElement!);
+      // 글자 줄의 가운데와, 저작권 줄 칸의 가운데를 견줘요(가운데 정렬이면 같아요).
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const text = range.getBoundingClientRect();
+      return {
+        align: getComputedStyle(element).textAlign,
+        centered: Math.abs(text.left + text.width / 2 - (box.left + box.width / 2)) < 1,
+        border: [wrap.borderTopStyle, wrap.borderTopWidth],
+      };
+    });
+    // 위쪽 점선은 목록·상세의 점선과 같은 2px 점선이에요.
+    expect(look).toEqual({ align: "center", centered: true, border: ["dotted", "2px"] });
+
+    // 맨 아래까지 내려도 화면 아래에 떠 있는 단추([키보드 조작]·[맨 위로] 등)가 저작권 줄을 가리지 않아요(좁은 휴대폰 포함).
+    // 맨 아래로 내리면 남은 리뷰를 저절로 더 불러와 문서가 길어져요. 먼저 모든 리뷰가 나올 때까지 기다려요.
+    await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+    await expect(listStatus(page)).toHaveText("전체 11편");
+    for (const width of [page.viewportSize()!.width, 320]) {
+      await page.setViewportSize({ width, height: 700 });
+      // 진짜 맨 아래(더 내려갈 곳이 없음)까지 내려요.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const root = document.documentElement;
+            root.style.scrollBehavior = "auto";
+            window.scrollTo(0, root.scrollHeight);
+            return Math.ceil(window.scrollY + window.innerHeight) >= root.scrollHeight;
+          }),
+        )
+        .toBe(true);
+      await expect(page.getByRole("button", { name: "맨 위로" })).toBeVisible();
+      const overlaps = await copyright.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        const floating = [...document.querySelectorAll<HTMLElement>(".fixed button, .fixed a, button.btn-float, a.btn-float")].filter(
+          (control) => control.getClientRects().length > 0,
+        );
+        return floating
+          .map((control) => control.getBoundingClientRect())
+          .filter((box) => box.left < text.right && box.right > text.left && box.top < text.bottom && box.bottom > text.top).length;
+      });
+      expect(overlaps, `${width}px`).toBe(0);
+    }
+  });
 });
 
 test.describe("넓은 화면의 목록 배치", () => {
@@ -370,20 +431,33 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect((await aside.boundingBox())!.y).toBeLessThan(80);
   });
 
-  test("목록 한 편: 제목(방문자에게는 링크가 아님) ····· 평점, 둘째 줄은 원제·연도·감독:만(장르·출연 없음)", async ({ page }) => {
+  test("목록 한 편(v3 전): 제목은 링크가 아니고(항목 안에 링크가 없음), 마우스를 올려도 반전되지 않는다", async ({ page }) => {
+    test.skip(REVIEW_DETAIL_PUBLIC, "상세를 열면(v3) 제목이 링크예요");
     await openHome(page);
     const item = page.getByRole("article", { name: "알파 정거장" });
-    // v3 전까지 방문자에게는 제목이 링크가 아니에요(상세를 열지 않아요). 항목 안에 링크가 하나도 없어요.
     await expect(item.getByRole("link")).toHaveCount(0);
-    // 장르 태그와 출연은 목록에서 뺐어요(2.0.0 핫픽스). 감독 뒤에는 쌍점(:)을 붙여요.
-    await expect(item.getByRole("list", { name: "장르" })).toHaveCount(0);
-    await expect(item).not.toContainText("출연");
-    await expect(item.getByText(/^Alpha Station\s·\s2020\s·\s감독:\s김시험$/)).toBeVisible();
     // 누를 곳이 없어 마우스를 올려도 반전되지 않아요.
     const background = () => item.evaluate((element) => getComputedStyle(element).backgroundColor);
     const before = await background();
     await item.hover();
     expect(await background()).toBe(before);
+  });
+
+  test("목록 한 편의 둘째 줄은 원제·연도·감독 이름만(이름표 '감독:'·장르·출연 없음) 보이고, 길면 두 줄까지만 보인다", async ({ page }) => {
+    await openHome(page);
+    const item = page.getByRole("article", { name: "알파 정거장" });
+    // 장르 태그와 출연은 목록에서 뺐어요(2.0.0 핫픽스). 감독은 이름표 없이 이름만 둬요.
+    await expect(item.getByRole("list", { name: "장르" })).toHaveCount(0);
+    await expect(item).not.toContainText("출연");
+    await expect(item).not.toContainText("감독");
+    const facts = item.getByText(/^Alpha Station\s·\s2020\s·\s김시험$/);
+    await expect(facts).toBeVisible();
+    // 아주 길게 바꿔 보면 두 줄 높이(줄 높이 16px × 1.75 = 28px의 두 배)까지만 보이고 나머지는 "…"로 줄여요(line-clamp-2).
+    const height = await facts.evaluate((element) => {
+      element.textContent = "아주 긴 원제가 끝없이 이어지는 경우 · ".repeat(20);
+      return element.getBoundingClientRect().height;
+    });
+    expect(Math.round(height)).toBe(56);
   });
 
   test("포스터 썸네일은 가로 2 : 세로 3으로 맨 앞에 있고(넓은 화면 70px), 평점은 첫째 줄 끝, 한 줄 평은 썸네일 아래 끝에 맞춰진다", async ({ page }) => {
@@ -407,7 +481,7 @@ test.describe("넓은 화면의 목록 배치", () => {
     expect(Math.abs(rating.y + rating.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
     expect(rating.x).toBeGreaterThan(title.x + title.width);
     // 한 줄 평의 아래 끝이 썸네일의 아래 끝과 같은 높이예요(반올림 오차 2px까지).
-    const oneLiner = (await item.locator("p.mt-auto").boundingBox())!;
+    const oneLiner = (await item.locator("p", { hasText: "한 줄 평:" }).boundingBox())!;
     expect(Math.abs(oneLiner.y + oneLiner.height - (box.y + box.height))).toBeLessThanOrEqual(2);
   });
 });
@@ -428,13 +502,23 @@ test.describe("휴대폰의 목록 배치", () => {
     expect(Math.abs(rating.x + rating.width / 2 - (poster.x + poster.width / 2))).toBeLessThan(1);
     await expectNoHorizontalScroll(page);
   });
+
+  test("휴대폰에서는 한 줄 평이 둘째 줄 바로 아래(4px, 첫째·둘째 줄 사이와 같음)에 붙는다", async ({ page }) => {
+    await openHome(page);
+    const item = page.getByRole("article", { name: "알파 정거장" });
+    // 첫째 줄(제목 · 평점 줄), 둘째 줄(원제 · 연도 · 감독), 한 줄 평
+    const first = (await item.getByRole("heading", { level: 3 }).locator("..").boundingBox())!;
+    const facts = (await item.getByText(/^Alpha Station/).boundingBox())!;
+    const oneLiner = (await item.locator("p", { hasText: "한 줄 평:" }).boundingBox())!;
+    expect(Math.round(facts.y - (first.y + first.height))).toBe(4);
+    expect(Math.round(oneLiner.y - (facts.y + facts.height))).toBe(4);
+  });
 });
 
 test.describe("리뷰 상세", () => {
-  // v3 전까지 상세는 글쓴이만 볼 수 있어요(방문자는 목록으로 옮겨요. 아래 "리뷰 상세(v3 전 방문자)"). 시험마다 먼저 로그인해요.
-  test.beforeEach(async ({ page, baseURL }) => {
-    await loginAsAuthor(page, baseURL!);
-  });
+  // v3 전까지 상세는 아무도(글쓴이도) 열 수 없어요(아래 "리뷰 상세(v3 전)"에서 목록으로 옮겨지는지 확인해요).
+  // 상세를 열면(v3) 이 시험들이 방문자 화면으로 다시 돌아요.
+  test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
 
   test("공유 미리 보기 그림(포스터, 없으면 기본 그림)과 검색엔진용 리뷰 정보(JSON-LD)를 담는다", async ({ page, request }) => {
     // 포스터가 있는 리뷰: 공유 그림은 포스터, X(트위터)는 작은 카드
@@ -747,7 +831,9 @@ test.describe("리뷰 상세", () => {
   });
 });
 
-test.describe("리뷰 상세(v3 전 방문자)", () => {
+test.describe("리뷰 상세(v3 전)", () => {
+  test.skip(REVIEW_DETAIL_PUBLIC, "상세를 연 뒤(v3)에는 해당하지 않아요");
+
   test("방문자가 상세 주소로 오면 처음 화면(목록)으로 잠시 옮기고(307), 사이트맵에도 상세 주소가 없다", async ({ page, request }) => {
     // maxRedirects: 0 — 옮겨 가지 않고 서버의 첫 답을 그대로 받아요.
     const response = await request.get("/reviews/alpha-station", { maxRedirects: 0 });
@@ -760,6 +846,23 @@ test.describe("리뷰 상세(v3 전 방문자)", () => {
 
     const sitemap = await (await request.get("/sitemap.xml")).text();
     expect(sitemap).not.toContain("/reviews/");
+  });
+
+  test("글쓴이도 상세 주소로 오면 처음 화면(목록)으로 옮긴다. 목록의 제목은 링크가 아니고, 한 편마다 [수정]·[삭제]가 있다", async ({ page, baseURL }) => {
+    await loginAsAuthor(page, baseURL!);
+    // page.request는 탭과 쿠키를 함께 써서, 로그인한 채로 서버의 첫 답을 받아요.
+    const response = await page.request.get("/reviews/alpha-station", { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    expect(new URL(response.headers()["location"]!, "http://localhost").pathname).toBe("/");
+
+    await page.goto("/reviews/alpha-station");
+    await expect(page).toHaveURL(/\/$/);
+    const item = page.getByRole("article", { name: "알파 정거장" });
+    await expect(item.getByRole("heading", { level: 3 }).getByRole("link")).toHaveCount(0);
+    // 상세 맨 윗줄에 있던 [수정]·[삭제]가 목록 한 편 아래에 있어요(review-list-admin.tsx).
+    await expect(item.getByRole("link", { name: "수정" })).toHaveAttribute("href", "/write/alpha-station");
+    await expect(item.getByRole("button", { name: "삭제" })).toBeVisible();
+    await expectNoA11yViolations(page);
   });
 });
 
@@ -798,10 +901,19 @@ test.describe("포스터를 받지 못할 때", () => {
   // 서비스 워커가 그림 요청을 대신 받으면 아래 page.route로 막을 수 없어서, 이 시험에서는 꺼요.
   test.use({ serviceWorkers: "block" });
 
-  test("포스터 그림을 받지 못하면 스켈레톤을 치우고 기본 포스터를 보인다", async ({ page, baseURL }) => {
-    // v3 전까지 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요.
-    await loginAsAuthor(page, baseURL!);
+  test("목록 썸네일을 받지 못하면 스켈레톤을 치우고 기본 포스터(필름 그림)를 보인다", async ({ page }) => {
     // 포스터 그림 요청을 실패시켜요(파일이 없거나 연결이 끊긴 것처럼).
+    await page.route((url) => url.pathname.startsWith("/_next/image") || url.pathname.startsWith("/posters/"), (route) => route.abort());
+    await openHome(page);
+    // 시험용 원고 중 포스터가 있는 것은 알파 정거장뿐이에요.
+    const thumb = page.getByRole("article", { name: "알파 정거장" }).locator(".poster-frame");
+    await expect(thumb.locator("svg")).toBeVisible();
+    await expect(thumb.locator("img")).toHaveCount(0);
+    await expect(thumb.locator(".skeleton")).toHaveCount(0);
+  });
+
+  test("상세 포스터 그림을 받지 못하면 스켈레톤을 치우고 기본 포스터를 보인다", async ({ page }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await page.route((url) => url.pathname.startsWith("/_next/image") || url.pathname.startsWith("/posters/"), (route) => route.abort());
     await page.goto("/reviews/alpha-station");
     await expect(page.getByRole("img", { name: "일곱 빛깔 세로 띠가 있는 화면 조정 무늬(포스터 없음)" })).toBeVisible();
@@ -861,9 +973,9 @@ test.describe("키보드", () => {
     await expect(page.locator("#main")).toBeFocused();
   });
 
-  test("글쓴이 목록에서 ▼ ▲ Home End로 리뷰를 고르고, Enter로 연다", async ({ page, baseURL }) => {
-    // v3 전까지 목록 제목은 글쓴이에게만 링크라서, 고르고 여는 키도 글쓴이에게만 쓸모 있어요.
-    await loginAsAuthor(page, baseURL!);
+  test("목록(상세를 연 뒤)에서 ▼ ▲ Home End로 리뷰를 고르고, Enter로 연다", async ({ page }) => {
+    // 제목이 링크일 때(상세를 연 뒤)만 리뷰를 고르고 여는 키를 써요.
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await openHome(page);
     const alpha = page.getByRole("link", { name: "알파 정거장" });
 
@@ -883,8 +995,8 @@ test.describe("키보드", () => {
     await expect(page.getByRole("heading", { level: 1, name: "알파 정거장" })).toBeVisible();
   });
 
-  test("글쓴이 목록에서는 ◀ ▶로도 이전·다음 리뷰를 고른다", async ({ page, baseURL }) => {
-    await loginAsAuthor(page, baseURL!);
+  test("목록(상세를 연 뒤)에서는 ◀ ▶로도 이전·다음 리뷰를 고른다", async ({ page }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await openHome(page);
     const alpha = page.getByRole("link", { name: "알파 정거장" });
 
@@ -897,7 +1009,8 @@ test.describe("키보드", () => {
     await expect(alpha).toBeFocused();
   });
 
-  test("v3 전 방문자 목록: ▼를 눌러도 리뷰를 고르지 않고, 키보드 조작 안내에는 검색창 키만 있다(Enter로 상세 열기 없음)", async ({ page }) => {
+  test("v3 전 목록: ▼를 눌러도 리뷰를 고르지 않고(글쓴이의 [수정]으로도 가지 않는다), 키보드 조작 안내에는 검색창 키만 있다", async ({ page, baseURL }) => {
+    test.skip(REVIEW_DETAIL_PUBLIC, "상세를 열면(v3) 리뷰를 고르는 키를 써요");
     await openHome(page);
     // 제목이 링크가 아니라 고를 리뷰가 없어요. ▼는 평소처럼 화면을 스크롤해요(초점은 그대로).
     await page.keyboard.press("ArrowDown");
@@ -906,19 +1019,33 @@ test.describe("키보드", () => {
     const help = page.getByRole("contentinfo");
     await expect(help.getByRole("definition")).toHaveText(["검색창에서 추천 검색어 고르기", "다음 항목으로"]);
     await expect(help.getByRole("term").filter({ hasText: "Enter" })).toHaveCount(0);
+
+    // 글쓴이의 목록에는 한 편마다 [수정] 링크가 있지만, ▼ ▶가 그 링크로 초점을 옮기지 않아요.
+    await loginAsAuthor(page, baseURL!);
+    await openHome(page);
+    await expect(page.getByRole("link", { name: "수정" }).first()).toBeVisible();
+    for (const key of ["ArrowDown", "ArrowRight"]) {
+      await page.keyboard.press(key);
+      await expect(page.locator("body")).toBeFocused();
+    }
   });
 
-  test("키보드로 [더 보기]에 가면 나머지를 불러오고, 새로 나온 첫 리뷰로 초점이 간다", async ({ page }) => {
+  test("키보드로 [더 보기]에 가면 나머지를 불러오고, 새로 나온 첫 리뷰(v3 전에는 리뷰 한 편)로 초점이 간다. 글쓴이도 [수정]이 아니라 리뷰로 간다", async ({ page, baseURL }) => {
+    test.skip(REVIEW_DETAIL_PUBLIC, "상세를 열면(v3) 제목 링크로 초점이 가요(단위 시험에서 확인해요)");
     await page.setViewportSize({ width: 1280, height: 800 });
-    await openHome(page);
-    // 단추에 초점이 가면 화면이 단추까지 스크롤되면서 저절로 불러오기가 일어나요.
-    // 그때 단추가 사라져도 초점을 잃지 않고, 새로 나온 첫 리뷰(람다 질주)로 옮겨 가요.
-    await page.getByRole("button", { name: "1편 더 보기" }).focus();
-    await page.keyboard.press("Enter").catch(() => {});
-    // v3 전 방문자의 목록은 제목이 링크가 아니라서, 리뷰 한 편(article)으로 초점이 가고 점선 테두리로 보여요.
-    const lambda = page.getByRole("article", { name: "람다 질주" });
-    await expect(lambda).toBeFocused();
-    expect(await lambda.evaluate((article) => getComputedStyle(article).outlineStyle)).toBe("dashed");
+    // 방문자, 그다음 글쓴이(목록에 [수정] 링크가 있어요)로 똑같이 확인해요.
+    for (const asAuthor of [false, true]) {
+      if (asAuthor) await loginAsAuthor(page, baseURL!);
+      await openHome(page);
+      // 단추에 초점이 가면 화면이 단추까지 스크롤되면서 저절로 불러오기가 일어나요.
+      // 그때 단추가 사라져도 초점을 잃지 않고, 새로 나온 첫 리뷰(람다 질주)로 옮겨 가요.
+      await page.getByRole("button", { name: "1편 더 보기" }).focus();
+      await page.keyboard.press("Enter").catch(() => {});
+      // 제목이 링크가 아니라서, 리뷰 한 편(article)으로 초점이 가고 점선 테두리로 보여요.
+      const lambda = page.getByRole("article", { name: "람다 질주" });
+      await expect(lambda).toBeFocused();
+      expect(await lambda.evaluate((article) => getComputedStyle(article).outlineStyle)).toBe("dashed");
+    }
   });
 
   test("검색창(추천이 없을 때)과 장르 단추에서는 방향키를 가로채지 않는다", async ({ page }) => {
@@ -936,9 +1063,8 @@ test.describe("키보드", () => {
     await expect(next).toBeFocused();
   });
 
-  test("상세에서 ◀ ▶로 이전·다음 리뷰를 넘기고, Esc로 목록에 돌아온다", async ({ page, baseURL }) => {
-    // v3 전까지 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요.
-    await loginAsAuthor(page, baseURL!);
+  test("상세에서 ◀ ▶로 이전·다음 리뷰를 넘기고, Esc로 목록에 돌아온다", async ({ page }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     // 준비된 처음 화면에서 링크로 들어가요. 이렇게 옮긴 화면은 보이는 순간 키 기능도 붙어 있어요(review-keys.tsx).
     await openHome(page);
     await page.getByRole("link", { name: "베타 로맨스" }).click();
@@ -952,8 +1078,28 @@ test.describe("키보드", () => {
     await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
   });
 
-  test("키보드 조작 안내: 단추로 여닫고, 열어 둔 상태를 기억하며, Esc는 안내부터 닫는다", async ({ page, baseURL }) => {
-    await loginAsAuthor(page, baseURL!);
+  test("키보드 조작 안내(처음 화면): 단추로 여닫고, 열어 둔 상태를 기억하며, Esc로 닫는다", async ({ page }) => {
+    await openHome(page);
+    const toggle = page.getByRole("button", { name: "키보드 조작" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // 단추에는 ▲▼ 아이콘 없이 글자만 있어요.
+    await expect(toggle).toHaveText("키보드 조작");
+
+    await toggle.click();
+    await expect(page.getByRole("heading", { name: "이 화면의 키" })).toBeVisible();
+    await expectNoA11yViolations(page);
+
+    // 새로 고쳐도 열린 채로 있어요(브라우저 저장소에 기억). 화면이 준비되면서 저장된 값으로 열려요.
+    await page.reload();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await page.keyboard.press("Escape");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(listRegion(page)).toBeVisible();
+  });
+
+  test("키보드 조작 안내(상세): 상세의 키를 안내하고, Esc는 안내부터 닫은 뒤 목록으로 간다", async ({ page }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await openHome(page);
     await page.getByRole("link", { name: "알파 정거장" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "알파 정거장" })).toBeVisible();
@@ -980,8 +1126,8 @@ test.describe("키보드", () => {
     await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
   });
 
-  test("좁은 화면에서 숨은 안내는 열림 상태여도 Esc를 가져가지 않는다", async ({ page, baseURL }) => {
-    await loginAsAuthor(page, baseURL!);
+  test("좁은 화면에서 숨은 안내는 열림 상태여도 Esc를 가져가지 않는다", async ({ page }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await openHome(page);
     await page.evaluate(() => localStorage.setItem("blog:keyboard-help", "open"));
     await page.getByRole("link", { name: "알파 정거장" }).click();

@@ -34,19 +34,17 @@ describe("proxy", () => {
     expect(config.matcher).toEqual(["/write/:path*", "/api/reviews/:path*", "/api/images/:path*", "/reviews/:path*"]);
   });
 
-  it("v3 전까지 방문자가 리뷰 상세에 오면 처음 화면(목록)으로 잠시 옮기고(307), 남은 로그인 표시 쿠키를 지운다", async () => {
-    for (const path of ["/reviews/winter-stop", "/reviews/winter-stop?_rsc=abc"]) {
-      const response = await proxy(request(path, "blog_admin=1"));
-      expect(response.status).toBe(307);
-      expect(response.headers.get("location")).toBe("http://localhost/");
-      expect(response.headers.get("set-cookie")).toContain("blog_admin=;");
-    }
-  });
-
-  it("글쓴이(올바른 표)는 리뷰 상세에 그대로 들어간다", async () => {
+  it("v3 전까지 리뷰 상세에 오면 방문자든 글쓴이든 처음 화면(목록)으로 잠시 옮긴다(307)", async () => {
     const token = await createSessionToken("deokbae", SECRET);
-    const response = await proxy(request("/reviews/winter-stop", `blog_session=${token}`));
-    expect(response.headers.get("x-middleware-next")).toBe("1");
+    for (const cookie of ["", "blog_admin=1", `blog_session=${token}; blog_admin=1`]) {
+      for (const path of ["/reviews/winter-stop", "/reviews/winter-stop?_rsc=abc"]) {
+        const response = await proxy(request(path, cookie));
+        expect(response.status).toBe(307);
+        expect(response.headers.get("location")).toBe("http://localhost/");
+        // 로그인과 상관없는 일이라 쿠키는 건드리지 않아요(글쓴이가 로그아웃되지 않게).
+        expect(response.headers.get("set-cookie")).toBeNull();
+      }
+    }
   });
 
   it("로그인하지 않고 글쓰기 화면에 오면 로그인 화면으로 보내고, 원래 주소를 next에 적는다", async () => {

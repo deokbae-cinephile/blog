@@ -31,7 +31,8 @@ export async function expectNoHorizontalScroll(page: Page) {
 
 /**
  * 글쓴이로 로그인해요(로그인 API를 바로 불러 세션 쿠키를 받아요. 로그인 화면을 거치지 않아 빨라요).
- * v3 전까지 리뷰 상세는 글쓴이만 볼 수 있어서(lib/site.ts의 REVIEW_DETAIL_PUBLIC), 상세 화면 시험은 먼저 이 함수를 불러요.
+ * 글쓴이에게만 보이는 것(목록의 [수정]·[삭제], [+] 리뷰 추가 등)을 시험할 때 먼저 이 함수를 불러요.
+ * (v3 전까지 리뷰 상세는 글쓴이도 열 수 없어요. lib/site.ts의 REVIEW_DETAIL_PUBLIC)
  * page.request는 브라우저 탭과 쿠키를 함께 써서, 받은 세션 쿠키가 그대로 탭에도 들어가요.
  *
  * @param page 시험할 브라우저 탭

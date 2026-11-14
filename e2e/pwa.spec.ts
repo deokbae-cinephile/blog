@@ -3,15 +3,20 @@
  *
  * 진짜 브라우저(Chromium)로 확인해요.
  *   1. 설치 정보(매니페스트)와 아이콘이 있고, 앱으로 설치하는 데 필요한 값이 들어 있는지
- *   2. 서비스 워커가 켜진 뒤, 한 번 본 리뷰가 인터넷이 끊겨도 열리는지
+ *   2. 서비스 워커가 켜진 뒤, 한 번 본 화면(처음 화면, 상세를 열면 리뷰도)이 인터넷이 끊겨도 열리는지
  *   3. 처음 보는 화면은 오프라인 안내 화면으로 대신하는지
+ *   (v3 전까지는 리뷰 상세를 아무도 열 수 없어서, 상세 화면 시험은 lib/site.ts의 REVIEW_DETAIL_PUBLIC가 true일 때만 돌아요.)
  *
  * 오프라인 흉내: context.setOffline(true)로 이 브라우저의 인터넷을 끊어요. 끝나면 다시 켜요.
  */
 
 import { expect, test } from "@playwright/test";
 
+import { REVIEW_DETAIL_PUBLIC } from "../src/lib/site";
 import { expectNoA11yViolations, expectNoHorizontalScroll, loginAsAuthor } from "./helpers";
+
+/** 상세를 닫아 둔 동안 건너뛰는 시험의 이유 */
+const DETAIL_CLOSED = "v3 전까지 리뷰 상세는 아무도(글쓴이도) 열 수 없어요(lib/site.ts의 REVIEW_DETAIL_PUBLIC)";
 
 test.describe("설치형 웹 앱(PWA)", () => {
   test("설치 정보(매니페스트)와 아이콘이 있다", async ({ page, request }) => {
@@ -36,9 +41,45 @@ test.describe("설치형 웹 앱(PWA)", () => {
     await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /apple-icon/);
   });
 
-  test("한 번 본 리뷰는 오프라인에서도 열리고, 처음 보는 화면은 오프라인 안내를 보인다", async ({ page, context, baseURL }) => {
-    // v3 전까지 리뷰 상세는 글쓴이만 볼 수 있어서 먼저 로그인해요(방문자는 목록으로 옮겨요).
-    await loginAsAuthor(page, baseURL!);
+  test("한 번 본 처음 화면은 오프라인에서도 열리고, 처음 보는 화면은 오프라인 안내를 보인다", async ({ page, context }) => {
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    // 처음 화면(저장소 열쇠는 맨 처음 주소 그대로 "/"예요)과 CSS가 저장될 때까지 기다려요.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async () => {
+            const pageCached = Boolean(await caches.match(`${location.origin}/`));
+            const cssUrls = performance
+              .getEntriesByType("resource")
+              .map((entry) => entry.name)
+              .filter((name) => name.startsWith(location.origin) && name.endsWith(".css"));
+            const cssCached = await Promise.all(cssUrls.map((url) => caches.match(url)));
+            return pageCached && cssUrls.length > 0 && cssCached.every(Boolean);
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+
+    // 인터넷을 끊고 새로 고침해도 목록이 열리고, CSS도 저장본에서 와요(화면 바탕색 #020802).
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(2, 8, 2)");
+
+    // 처음 보는 화면은 저장본이 없으니 오프라인 안내 화면이 대신 보여요.
+    // (리뷰 상세 주소는 v3 전까지 목록으로 옮겨지는 답이라 저장된 적이 없어요.)
+    await page.goto("/reviews/epsilon-night");
+    await expect(page.getByRole("heading", { level: 1, name: "인터넷에 연결되어 있지 않습니다" })).toBeVisible();
+    // 오프라인 안내 화면도 접근성 규칙을 지키고, 좁은 화면에서 넘치지 않아야 해요.
+    await expectNoA11yViolations(page);
+    await expectNoHorizontalScroll(page);
+
+    await context.setOffline(false);
+  });
+
+  test("한 번 본 리뷰는 오프라인에서도 열리고, 처음 보는 리뷰는 오프라인 안내를 보인다", async ({ page, context }) => {
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await page.goto("/reviews/alpha-station");
 
     // 서비스 워커가 켜질 때까지 기다려요.
@@ -82,9 +123,9 @@ test.describe("설치형 웹 앱(PWA)", () => {
     await context.setOffline(false);
   });
 
-  test("목록에서 링크로 들어간 리뷰도 오프라인에서 다시 열린다", async ({ page, context, baseURL }) => {
-    // v3 전까지 목록 제목은 글쓴이에게만 링크예요.
-    await loginAsAuthor(page, baseURL!);
+  test("목록에서 링크로 들어간 리뷰도 오프라인에서 다시 열린다", async ({ page, context }) => {
+    // v3 전까지 목록 제목은 누구에게나 글자예요(링크가 없어요).
+    test.skip(!REVIEW_DETAIL_PUBLIC, DETAIL_CLOSED);
     await page.goto("/");
     await page.evaluate(() => navigator.serviceWorker.ready);
 
@@ -106,11 +147,11 @@ test.describe("설치형 웹 앱(PWA)", () => {
   test("글쓴이 화면(로그인·글쓰기)과 API, 화면 데이터(RSC) 요청은 저장해 두지 않는다", async ({ page, baseURL }) => {
     await page.goto("/login");
     await page.evaluate(() => navigator.serviceWorker.ready);
-    // 목록에서 링크로 상세에 들어가 화면 데이터(RSC) 요청을 만들어요. v3 전까지 목록 제목은 글쓴이에게만 링크라서 로그인해요.
+    // 글쓴이로 로그인해, 처음 화면의 [+](리뷰 추가) 링크로 글쓰기 화면에 들어가며 화면 데이터(RSC) 요청을 만들어요.
     await loginAsAuthor(page, baseURL!);
     await page.goto("/");
-    await page.getByRole("link", { name: "베타 로맨스" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "베타 로맨스" })).toBeVisible();
+    await page.getByRole("link", { name: "리뷰 추가" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "리뷰 추가" })).toBeVisible();
 
     // 저장소의 모든 열쇠를 모아, 로그인 화면·API·_rsc가 없는지 확인해요.
     const keys = await page.evaluate(async () => {

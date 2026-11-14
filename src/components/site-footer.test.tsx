@@ -17,10 +17,18 @@ vi.mock("next/navigation", async (importOriginal) => ({
 }));
 
 describe("SiteFooter", () => {
-  it("글쓴이·시작한 해·감상 안내 문구도, 글쓴이 로그인 링크도 없다", () => {
+  it("위쪽 점선 아래 가운데에 저작권 줄('© 2026. deokbae All rights reserved.')을 둔다", () => {
+    render(<SiteFooter />);
+    const copyright = within(screen.getByRole("contentinfo")).getByText("© 2026. deokbae All rights reserved.");
+    expect(copyright.tagName).toBe("P");
+    expect(copyright).toHaveClass("text-center");
+    // 저작권 줄을 감싼 칸의 위쪽 테두리가 점선이에요(목록·상세의 점선과 같은 2px 점선, 선 색).
+    expect(copyright.parentElement).toHaveClass("border-t-2", "border-dotted", "border-crt-line");
+  });
+
+  it("감상 안내 문구도, 글쓴이 로그인 링크도 없다", () => {
     render(<SiteFooter />);
     const footer = screen.getByRole("contentinfo");
-    expect(footer).not.toHaveTextContent("©");
     expect(footer).not.toHaveTextContent("주관적인 감상");
     expect(within(footer).queryByRole("link", { name: /로그인/ })).not.toBeInTheDocument();
   });
