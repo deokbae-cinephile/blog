@@ -16,10 +16,22 @@ describe("SiteHeader", () => {
     document.cookie = "blog_admin=; max-age=0; path=/";
   });
 
-  it("블로그 이름(DMB)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
+  it("블로그 이름(DMB: 덕배의 영화 블로그)이 처음 화면으로 가는 링크이고, 예전 짧은 소개 문구는 없다", () => {
     render(<SiteHeader />);
-    expect(screen.getByRole("link", { name: "DMB" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" })).toHaveAttribute("href", "/");
     expect(screen.queryByText("평론가를 꿈꾸는 덕배의 상영 기록")).not.toBeInTheDocument();
+  });
+
+  it("왼쪽 로고와 오른쪽 GitHub 아이콘은 같은 크기(24 × 24px)로 그리고, 둘 다 읽지 않는 꾸밈이다", () => {
+    render(<SiteHeader />);
+    const home = screen.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
+    const github = screen.getByRole("link", { name: "GitHub" });
+    for (const link of [home, github]) {
+      const icon = link.querySelector("svg")!;
+      expect([icon.getAttribute("width"), icon.getAttribute("height")]).toEqual(["24", "24"]);
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    // 아이콘과 글자 사이 간격, 글자 크기·효과가 같은지는 진짜 브라우저 E2E에서 재요(e2e/blog.spec.ts).
   });
 
   it("오른쪽에 소스 코드 저장소로 가는 GitHub 링크(픽셀 아이콘 + 글자)를 둔다", () => {

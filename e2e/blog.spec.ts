@@ -71,6 +71,40 @@ test.describe("처음 화면(목록)", () => {
     await expect(page.locator("#intro-title")).toHaveCount(0);
   });
 
+  test("머리글 왼쪽 이름(DMB: 덕배의 영화 블로그)과 오른쪽 GitHub 링크는 아이콘 크기·간격·글자 모양이 같다", async ({ page }) => {
+    await page.goto("/");
+    const banner = page.getByRole("banner");
+    const home = banner.getByRole("link", { name: "DMB: 덕배의 영화 블로그" });
+    await expect(home).toHaveAttribute("href", "/");
+    // 링크마다 아이콘 크기, 아이콘과 글자 사이 간격, 글자 크기·형광 번짐을 재요.
+    const measure = (link: typeof home) =>
+      link.evaluate((element) => {
+        const icon = element.querySelector("svg")!.getBoundingClientRect();
+        // 링크 안의 첫 글자 마디(빈칸 아닌 것)를 찾아 그 글자가 차지한 상자를 재요.
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let text: Text | null = null;
+        while (walker.nextNode()) {
+          if (walker.currentNode.textContent!.trim()) {
+            text = walker.currentNode as Text;
+            break;
+          }
+        }
+        const range = document.createRange();
+        range.selectNodeContents(text!);
+        const style = getComputedStyle(text!.parentElement!);
+        return {
+          icon: [icon.width, icon.height],
+          gap: Math.round(range.getBoundingClientRect().left - icon.right),
+          fontSize: style.fontSize,
+          textShadow: style.textShadow,
+          height: Math.round(element.getBoundingClientRect().height),
+        };
+      });
+    const [left, right] = await Promise.all([measure(home), measure(banner.getByRole("link", { name: "GitHub", exact: true }))]);
+    expect(left.icon).toEqual([24, 24]);
+    expect(left).toEqual(right);
+  });
+
   test("픽셀 글꼴(Neo둥근모)을 받아서 쓴다", async ({ page }) => {
     await page.goto("/");
     // document.fonts.ready: 글꼴을 다 받을 때까지 기다려요. 그다음 받은 글꼴 목록에서 neodgm을 찾아요.
@@ -136,12 +170,12 @@ test.describe("처음 화면(목록)", () => {
     await expect.poll(() => listTitles(page)).toEqual([LONG_TITLE, "알파 정거장"]);
   });
 
-  test("장르 칩은 정한 10가지가 정한 순서로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
+  test("장르 칩은 정한 10가지가 가나다순으로 보이고, 목록에 없는 장르는 없다", async ({ page }) => {
     await openHome(page);
     const genres = page.getByRole("group", { name: "장르" });
     // 라디오 단추의 접근 이름("드라마 2편"처럼 장르 + 편수)으로 순서를 확인해요. 레이블 연결이 끊기면 이름이 비어 실패해요.
     const radios = genres.getByRole("radio");
-    const names = ["전체", "다큐멘터리", "스릴러", "액션", "코미디", "드라마", "범죄", "스포츠", "공포", "재난", "로맨스"];
+    const names = ["전체", "공포", "다큐멘터리", "드라마", "로맨스", "범죄", "스릴러", "스포츠", "액션", "재난", "코미디"];
     await expect(radios).toHaveCount(names.length);
     for (const [index, name] of names.entries()) {
       await expect(radios.nth(index)).toHaveAccessibleName(new RegExp(`^${name} \\d+편$`));
@@ -380,6 +414,9 @@ test.describe("맨 위로 단추", () => {
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(toTop).toBeVisible();
     await expect(toTop).toHaveText("맨 위로");
+    // 화면 오른쪽 아래 구석(오른쪽·아래 끝에서 16px)에 떠 있어요.
+    const box = (await toTop.boundingBox())!;
+    expect([Math.round(800 - (box.x + box.width)), Math.round(600 - (box.y + box.height))]).toEqual([16, 16]);
     await toTop.click();
 
     // 부드럽게 올라가는 데 시간이 조금 걸려서, 0이 될 때까지 다시 확인해요(expect.poll).
@@ -452,11 +489,11 @@ test.describe("키보드", () => {
     await page.keyboard.press("ArrowDown");
     await expect(searchBox(page)).toBeFocused();
 
-    // 라디오 단추에서 ▼는 다음 장르(다큐멘터리)를 고르는 원래 기능 그대로예요. 초점도 목록으로 끌려가지 않고 그 단추에 있어요.
+    // 라디오 단추에서 ▼는 다음 장르(가나다순 첫 장르인 공포)를 고르는 원래 기능 그대로예요. 초점도 목록으로 끌려가지 않고 그 단추에 있어요.
     await page.getByRole("radio", { name: "전체 11편" }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("radio", { name: "전체 11편" })).not.toBeChecked();
-    const next = page.getByRole("radio", { name: "다큐멘터리 1편" });
+    const next = page.getByRole("radio", { name: "공포 1편" });
     await expect(next).toBeChecked();
     await expect(next).toBeFocused();
   });

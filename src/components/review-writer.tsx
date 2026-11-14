@@ -6,19 +6,20 @@
  *
  *     [Markdown 파일 불러오기]  ← .md 원고를 고르면 칸이 바로 채워져요(불러오면 바로 적용)
  *     넓은 화면(1024px~)은 3칸: [포스터 | 영화 정보 2열 × 5행]
- *     ┌ 포스터 ──────┐ ┌ 영화 정보 ─────────────────────────────┐
- *     │ [미리보기]    │ │ 주소(영문)        │ 제목              │
- *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도          │
- *     │ [포스터 빼기] │ │ 제작 국가         │ 감독              │
- *     │              │ │ 상영 시간         │ 장르(여러 개)      │
- *     │              │ │ 평점(0.5~5)       │ 한줄평            │
- *     └──────────────┘ └──────────────────────────────────────┘
- *     ┌ 본문(Markdown) ──────────────────────────────────────┐
+ *     ┌ 포스터 ───────┐ ┌ 영화 정보 ─────────────────────────────┐
+ *     │ [미리보기]     │ │ 주소(영문)        │ 제목              │
+ *     │ [포스터 고르기]│ │ 원제              │ 개봉 연도          │  ← 단추는 포스터와 같은 너비
+ *     │ [포스터 빼기]  │ │ 제작 국가         │ 감독              │
+ *     │               │ │ 상영 시간         │ 장르(여러 개)      │
+ *     │               │ │ 평점(처음 5.0)    │ 한줄평            │
+ *     └───────────────┘ └──────────────────────────────────────┘
+ *     ┌ 본문 ─────────────────────────────────────────────────┐
  *     │ [장면 사진 넣기] → 커서 자리에 ![](/images/...) 줄이 들어가요 │
- *     │ <textarea>                                           │
+ *     │ 본문(Markdown) <textarea> │ 미리 보기(저장한 뒤의 모습)  │  ← 좁은 화면은 탭으로 바꿔 봐요
  *     └──────────────────────────────────────────────────────┘
  *     [저장] [취소]
  *   좁은 화면에서는 한 칸으로, 포스터 → 영화 정보 → 본문 차례로 쌓여요(코드 순서도 같아서 읽는 순서가 같아요).
+ *   칸 아래 도움말은 주소(영문)에만 둬요. 나머지 칸은 이름만으로 알 수 있고, 틀리면 오류 문구가 고치는 방법을 알려 줘요.
  *
  * 저장하는 순서
  *   1. 칸 검사(lib/review-form.ts) — 틀린 칸이 있으면 "고칠 곳" 목록을 보여 주고 거기로 초점을 옮겨요.
@@ -41,7 +42,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+// flushSync: 화면 바꾸기를 바로 끝내게 하는 React 기능이에요. 숨어 있던 본문 칸을 보인 "다음"에 초점을 옮길 때 써요.
+import { flushSync } from "react-dom";
 
 import { type ApiResult, createReview, updateReview, uploadImage } from "@/lib/admin-api";
 import { GENRES, type Genre } from "@/lib/genres";
@@ -51,6 +54,9 @@ import { SLUG } from "@/lib/review-schema";
 import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/upload-rules";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
+import { MarkdownPreview } from "./markdown-preview";
+import { PixelArt } from "./pixel-art";
+import { type PaneView, WritePreviewPanes } from "./write-preview-panes";
 
 /* ──────────────────────────────────────────────────────────────
  * 1. 화면이 받는 값과 정해 둔 값
@@ -71,6 +77,15 @@ type Props =
 
 /** 평점 고르기 칸의 값: 0.5, 1.0, ... 5.0 (0점은 없어요) */
 const RATINGS = Array.from({ length: 10 }, (_, index) => ((index + 1) / 2).toFixed(1));
+
+/** 평점 칸의 처음 값. "고르세요" 대신 가장 높은 점수를 골라 둬요. */
+const DEFAULT_RATING = "5.0";
+
+/** 글쓰기 화면의 빈 칸 값: 원고의 빈 값에 평점만 처음 값(5.0)을 넣어요. */
+const WRITER_EMPTY_VALUES: ReviewFormValues = { ...EMPTY_VALUES, rating: DEFAULT_RATING };
+
+/** 평점 고르기 칸 오른쪽의 ▼ 그림(7×4칸, 한 칸 2px → 14×8px). 사이트의 픽셀 그림과 같은 모양이에요. */
+const SELECT_ARROW_ROWS = ["#######", ".#####.", "..###..", "...#..."] as const;
 
 /** 칸 이름(화면에 보이는 이름). 고칠 곳 목록에서 "제목: 제목을 입력하세요."처럼 써요. */
 const FIELD_LABELS: Record<keyof ReviewFormValues, string> = {
@@ -114,6 +129,8 @@ export function ReviewWriter(props: Props) {
   const [values, setValues] = useState<ReviewFormValues>(initial.values);
   // 칸별 오류 문구
   const [errors, setErrors] = useState<FieldErrors>({});
+  // 본문: 좁은 화면에서 지금 보이는 쪽(Markdown 입력 또는 미리 보기). 넓은 화면은 둘 다 보여요.
+  const [bodyView, setBodyView] = useState<PaneView>("input");
   // 결과 안내(불러옴, 포스터 고름, 올리는 중) — role="status"
   const [notice, setNotice] = useState(initial.notice);
   // 화면에는 보이지 않고 화면 낭독기만 읽는 안내(장면 사진을 넣었을 때) — role="status"
@@ -217,6 +234,8 @@ export function ReviewWriter(props: Props) {
       slug: mode === "edit" ? current.slug : current.slug || slugFromFileName(file.name),
       // 글 쓴 날: 원고에 없으면 지금 값을 그대로 둬요(수정할 때 날짜가 사라지지 않게).
       publishedAt: parsed.values.publishedAt || current.publishedAt,
+      // 평점: 원고에 없으면 지금 값(처음에는 5.0)을 그대로 둬요. 평점 칸에 "고르세요"가 없거든요.
+      rating: parsed.values.rating || current.rating,
     }));
     // 새로 골라 둔 포스터는 불러온 원고의 포스터로 바뀌니 버려요.
     setPoster(null);
@@ -286,6 +305,8 @@ export function ReviewWriter(props: Props) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (files.length === 0) return;
+    // 좁은 화면에서 미리 보기를 보고 있었어도, 사진 줄은 쓰기 칸에 들어가니 쓰기 칸을 보여 줘요.
+    setBodyView("input");
     if (!slugReady) {
       setErrors((current) => ({ ...current, slug: "사진을 넣기 전에 주소(영문)를 먼저 적어 주세요. 사진은 그 주소의 폴더에 저장됩니다." }));
       document.getElementById(fieldId("slug"))?.focus();
@@ -340,9 +361,21 @@ export function ReviewWriter(props: Props) {
 
   /* ── 저장 ── */
 
+  /**
+   * 고칠 곳 목록의 "본문" 링크를 누르면: 좁은 화면에서 [미리 보기]를 보고 있었어도 쓰기 칸을 보이고 본문 칸으로 초점을 옮겨요.
+   * (그냥 #주소로 가면 숨은 칸으로는 갈 수 없어요.) 다른 칸 링크는 #주소로 가는 기본 동작 그대로예요.
+   */
+  function goToBody(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    flushSync(() => setBodyView("input"));
+    bodyRef.current?.focus();
+  }
+
   /** 틀린 칸을 보여 주고, 고칠 곳 목록으로 초점을 옮겨요. */
   function showErrors(next: FieldErrors) {
     setErrors(next);
+    // 본문이 틀렸으면 좁은 화면에서도 본문 칸이 보이게 쓰기 칸으로 바꿔요(고칠 곳 목록의 링크가 그리로 가요).
+    if (next.body) setBodyView("input");
     // 목록이 그려진 다음에 초점을 옮겨야 해서 다음 그림 차례로 미뤄요.
     requestAnimationFrame(() => summaryRef.current?.focus());
   }
@@ -462,13 +495,8 @@ export function ReviewWriter(props: Props) {
   return (
     // noValidate: 브라우저 기본 오류 말풍선 대신 우리 문구를 보여 줘요.
     <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving}>
-      {/* 불러오기 */}
-      <div className="grid gap-2">
-        <FileButton label="Markdown 파일 불러오기" accept=".md,.markdown,text/markdown,text/plain" onChange={handleImport} disabled={saving} />
-        <p className="text-crt-dim">
-          원고 틀(content/templates/review.md) 모양의 .md 파일을 고르면 칸이 바로 채워집니다. 다른 편집기에서 쓴 원고를 옮길 때 씁니다.
-        </p>
-      </div>
+      {/* 불러오기: 원고 틀(content/templates/review.md) 모양의 .md 파일을 고르면 칸이 바로 채워져요. */}
+      <FileButton label="Markdown 파일 불러오기" accept=".md,.markdown,text/markdown,text/plain" onChange={handleImport} disabled={saving} />
 
       {/* 결과 안내(불러옴·포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
           영역은 처음부터 두고 글자만 바꿔야 읽어 줘요. 비어 있을 때는 empty:sr-only로 화면에서만 숨겨 빈 간격이 생기지 않게 해요. */}
@@ -498,7 +526,11 @@ export function ReviewWriter(props: Props) {
                 {field === "publishedAt" ? (
                   `${FIELD_LABELS[field]}: ${message}`
                 ) : (
-                  <a href={`#${field === "genres" ? `${fieldId("genres")}-0` : fieldId(field)}`} className="term-link">
+                  <a
+                    href={`#${field === "genres" ? `${fieldId("genres")}-0` : fieldId(field)}`}
+                    onClick={field === "body" ? goToBody : undefined}
+                    className="term-link"
+                  >
                     {FIELD_LABELS[field]}: {message}
                   </a>
                 )}
@@ -513,25 +545,36 @@ export function ReviewWriter(props: Props) {
         {/* 포스터: 넓은 화면에서는 왼쪽 한 칸. 주소보다 먼저 골라도 돼요. */}
         <fieldset className="grid content-start gap-4" disabled={saving}>
           <legend className="glow mb-4 text-big">포스터</legend>
-          {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(원본 파일은 그대로 올라가요). 꾸밈이라 alt를 비워요.
+          {/* 미리보기와 단추를 같은 너비의 칸에 넣어, 단추가 포스터 너비만큼 넓어요.
               w-40: 좁은 화면 10rem, lg:w-full: 넓은 화면에서는 왼쪽 칸 너비를 채워요(최대 18rem). */}
-          <span className="poster-frame relative block aspect-[2/3] w-40 shrink-0 lg:w-full lg:max-w-[18rem]">
-            {posterSrc ? (
-              // unoptimized: 브라우저 안의 blob: 주소는 이미지 최적화를 거칠 수 없어서 원본 그대로 보여 줘요.
-              <Image src={posterSrc} alt="" fill unoptimized sizes="(min-width: 1024px) 288px, 160px" className="poster-image object-cover" />
-            ) : (
-              <span className="grid h-full place-items-center text-crt-dim">없음</span>
-            )}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <FileButton id={fieldId("poster")} label="포스터 고르기" accept={POSTER_ACCEPT} onChange={handlePosterChange} disabled={saving} describedBy={errors.poster ? `${fieldId("poster")}-error` : undefined} />
-            {(values.poster || posterFile) && (
-              <button type="button" onClick={handlePosterRemove} className="btn-line">
-                포스터 빼기
-              </button>
-            )}
+          <div className="grid w-40 gap-4 lg:w-full lg:max-w-[18rem]">
+            {/* 미리보기: 화면에서처럼 형광 초록으로 보여요(원본 파일은 그대로 올라가요). 꾸밈이라 alt를 비워요. */}
+            <span className="poster-frame relative block aspect-[2/3] w-full">
+              {posterSrc ? (
+                // unoptimized: 브라우저 안의 blob: 주소는 이미지 최적화를 거칠 수 없어서 원본 그대로 보여 줘요.
+                <Image src={posterSrc} alt="" fill unoptimized sizes="(min-width: 1024px) 288px, 160px" className="poster-image object-cover" />
+              ) : (
+                <span className="grid h-full place-items-center text-crt-dim">없음</span>
+              )}
+            </span>
+            {/* 단추는 포스터와 같은 너비(w-full)로 위아래로 놓아요. 글자는 가운데(justify-center). */}
+            <div className="grid gap-2">
+              <FileButton
+                id={fieldId("poster")}
+                label="포스터 고르기"
+                accept={POSTER_ACCEPT}
+                onChange={handlePosterChange}
+                disabled={saving}
+                describedBy={errors.poster ? `${fieldId("poster")}-error` : undefined}
+                className="w-full justify-center"
+              />
+              {(values.poster || posterFile) && (
+                <button type="button" onClick={handlePosterRemove} className="btn-line w-full justify-center">
+                  포스터 빼기
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-crt-dim">가로 2 : 세로 3 비율(예: 600×900)이 가장 잘 맞습니다. 비율이 다르면 가운데를 기준으로 잘려 보입니다. JPG·PNG·WebP·AVIF, 4MB까지.</p>
           <p id={`${fieldId("poster")}-error`} className="field-error">
             {errors.poster}
           </p>
@@ -548,7 +591,7 @@ export function ReviewWriter(props: Props) {
               id={fieldId("slug")}
               label={FIELD_LABELS.slug}
               required
-              hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: winter-stop → /reviews/winter-stop"
+              hint="리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: shutter-island → /reviews/shutter-island"
               error={errors.slug}
               value={values.slug}
               onChange={changeSlug}
@@ -574,7 +617,6 @@ export function ReviewWriter(props: Props) {
             id={fieldId("year")}
             label={FIELD_LABELS.year}
             required
-            hint="숫자 네 자리. 예: 2024"
             error={errors.year}
             value={values.year}
             onChange={(value) => setField("year", value)}
@@ -585,7 +627,6 @@ export function ReviewWriter(props: Props) {
             id={fieldId("director")}
             label={FIELD_LABELS.director}
             required
-            hint="여러 명이면 쉼표로 나눕니다. 예: 한서윤, 김도윤"
             error={errors.director}
             value={values.director}
             onChange={(value) => setField("director", value)}
@@ -599,7 +640,7 @@ export function ReviewWriter(props: Props) {
             inputMode="numeric"
           />
 
-          {/* 장르: 여러 개 고르는 체크박스 칩. 도움말과 오류 문구는 묶음 설명(aria-describedby)으로 이어요. */}
+          {/* 장르: 여러 개 고르는 체크박스 칩(가나다순). 오류 문구는 묶음 설명(aria-describedby)으로 이어요. */}
           <div className="grid gap-2">
             <ChoiceGroup
               layout="aside"
@@ -608,7 +649,7 @@ export function ReviewWriter(props: Props) {
                   {FIELD_LABELS.genres} <span className="text-crt-dim">(필수)</span>
                 </>
               }
-              describedBy={[`${fieldId("genres")}-hint`, errors.genres ? `${fieldId("genres")}-error` : ""].filter(Boolean).join(" ")}
+              describedBy={errors.genres ? `${fieldId("genres")}-error` : undefined}
             >
               {GENRES.map((genre, index) => (
                 <Choice
@@ -623,34 +664,50 @@ export function ReviewWriter(props: Props) {
                 </Choice>
               ))}
             </ChoiceGroup>
-            <p id={`${fieldId("genres")}-hint`} className="text-crt-dim">
-              여러 개 고를 수 있습니다.
-            </p>
             <p id={`${fieldId("genres")}-error`} className="field-error">
               {errors.genres}
             </p>
           </div>
 
-          {/* 평점: 0.5 ~ 5.0 중에서 고르기(0점은 없어요). 네이티브 <select>라 키보드·화면 낭독기가 그대로 써요. */}
-          <Field id={fieldId("rating")} label={FIELD_LABELS.rating} required hint="5점 만점, 0.5점 단위" error={errors.rating}>
+          {/* 평점: 0.5 ~ 5.0 중에서 고르기(0점은 없어요). 처음에는 5.0이 골라져 있어요.
+              네이티브 <select>라 키보드·화면 낭독기가 그대로 써요. */}
+          <Field id={fieldId("rating")} label={FIELD_LABELS.rating} required error={errors.rating}>
             {(describedBy) => (
-              <select
-                id={fieldId("rating")}
-                required
-                value={values.rating}
-                onChange={(event) => setField("rating", event.target.value)}
-                aria-invalid={errors.rating ? true : undefined}
-                aria-describedby={describedBy}
-                aria-errormessage={errors.rating ? `${fieldId("rating")}-error` : undefined}
-                className="field w-40"
-              >
-                <option value="">고르세요</option>
-                {RATINGS.map((rating) => (
-                  <option key={rating} value={rating}>
-                    {rating}
-                  </option>
-                ))}
-              </select>
+              // relative: ▼ 그림을 칸 오른쪽에 겹쳐 놓는 기준이에요.
+              <span className="relative block w-40">
+                {/* appearance-none: 브라우저 기본 ▼를 지우고 아래 픽셀 ▼를 그려요.
+                    pr-9: 오른쪽에 ▼ 자리(여백 12px + 그림 14px + 사이 10px)를 비워 글자가 겹치지 않게 해요.
+                    peer: 칸이 잠기면(disabled) 옆의 ▼도 같이 흐려지게 해요(peer-disabled). */}
+                <select
+                  id={fieldId("rating")}
+                  required
+                  value={values.rating}
+                  onChange={(event) => setField("rating", event.target.value)}
+                  aria-invalid={errors.rating ? true : undefined}
+                  aria-describedby={describedBy}
+                  aria-errormessage={errors.rating ? `${fieldId("rating")}-error` : undefined}
+                  className="peer field w-full cursor-pointer appearance-none pr-9"
+                >
+                  {/* 목록에 없는 값(불러온 원고의 4.3 같은 값)이면 그 값을 그대로 보여 주고, 저장할 때 오류로 알려요. */}
+                  {!RATINGS.includes(values.rating) && (
+                    <option value={values.rating} disabled>
+                      {values.rating || "고르세요"}
+                    </option>
+                  )}
+                  {RATINGS.map((rating) => (
+                    <option key={rating} value={rating}>
+                      {rating}
+                    </option>
+                  ))}
+                </select>
+                {/* ▼: 오른쪽 끝에서 12px(right-3) 안쪽에 놓아요. 왼쪽 글자도 칸 끝에서 12px(테두리 2px + 여백 10px)
+                    안쪽에서 시작해서, 좌우 간격이 같아요. 꾸밈 그림이라 읽지 않고, 누르면 아래 칸이 눌려요(pointer-events-none). */}
+                <PixelArt
+                  rows={SELECT_ARROW_ROWS}
+                  cell={2}
+                  className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 peer-disabled:opacity-60"
+                />
+              </span>
             )}
           </Field>
 
@@ -658,7 +715,6 @@ export function ReviewWriter(props: Props) {
             id={fieldId("oneLiner")}
             label={FIELD_LABELS.oneLiner}
             required
-            hint="목록과 상세 화면에 보이는 한 문장"
             error={errors.oneLiner}
             value={values.oneLiner}
             onChange={(value) => setField("oneLiner", value)}
@@ -666,30 +722,35 @@ export function ReviewWriter(props: Props) {
         </fieldset>
       </div>
 
-      {/* 본문 */}
+      {/* 본문: [장면 사진 넣기] 아래에 쓰기 칸과 미리 보기를 둬요.
+          넓은 화면은 나란히, 좁은 화면은 [Markdown 입력] [미리 보기] 탭으로 바꿔 봐요(write-preview-panes.tsx). */}
       <fieldset className="grid gap-4" disabled={saving}>
         <legend className="glow mb-4 text-big">본문</legend>
         <FileButton label="장면 사진 넣기" accept={SCENE_ACCEPT} multiple onChange={handleScenesChange} disabled={saving} />
-        <Field
-          id={fieldId("body")}
-          label="본문(Markdown)"
-          error={errors.body}
-        >
-          {(describedBy) => (
-            <textarea
-              ref={bodyRef}
-              id={fieldId("body")}
-              rows={18}
-              value={values.body}
-              onChange={(event) => setField("body", event.target.value)}
-              aria-invalid={errors.body ? true : undefined}
-              aria-describedby={describedBy}
-              aria-errormessage={errors.body ? `${fieldId("body")}-error` : undefined}
-              spellCheck={false}
-              className="field w-full resize-y leading-7"
-            />
-          )}
-        </Field>
+        <WritePreviewPanes
+          view={bodyView}
+          onViewChange={setBodyView}
+          input={
+            <Field id={fieldId("body")} label="본문(Markdown)" error={errors.body}>
+              {(describedBy) => (
+                <textarea
+                  ref={bodyRef}
+                  id={fieldId("body")}
+                  rows={18}
+                  value={values.body}
+                  onChange={(event) => setField("body", event.target.value)}
+                  aria-invalid={errors.body ? true : undefined}
+                  aria-describedby={describedBy}
+                  aria-errormessage={errors.body ? `${fieldId("body")}-error` : undefined}
+                  spellCheck={false}
+                  className="field w-full resize-y leading-7"
+                />
+              )}
+            </Field>
+          }
+          // 아직 올리지 않은 장면 사진(scenes)은 미리 보기가 브라우저 안의 임시 주소로 바꿔 보여 줘요.
+          preview={<MarkdownPreview markdown={values.body} images={scenes} />}
+        />
       </fieldset>
 
       {/* 저장·취소 */}
@@ -707,11 +768,11 @@ export function ReviewWriter(props: Props) {
 
 /** 처음 상태(칸 값과 안내)를 만들어요. 수정이면 원고를 읽어 채워요. */
 function initialState(props: Props): { values: ReviewFormValues; notice: string; failure: string } {
-  if (props.mode === "create") return { values: EMPTY_VALUES, notice: "", failure: "" };
+  if (props.mode === "create") return { values: WRITER_EMPTY_VALUES, notice: "", failure: "" };
   const parsed = parseReviewFile(props.source);
   if (!parsed.ok) {
     // 저장소의 원고를 읽지 못했어요(직접 고친 원고가 망가진 경우). 본문 칸에 원고 전체를 넣어 손으로 고칠 수 있게 해요.
-    return { values: { ...EMPTY_VALUES, slug: props.slug, body: props.source }, notice: "", failure: `원고를 읽지 못했습니다: ${parsed.message}` };
+    return { values: { ...WRITER_EMPTY_VALUES, slug: props.slug, body: props.source }, notice: "", failure: `원고를 읽지 못했습니다: ${parsed.message}` };
   }
   return { values: { ...parsed.values, slug: props.slug }, notice: "", failure: "" };
 }
@@ -812,6 +873,8 @@ type FileButtonProps = {
   id?: string;
   /** 오류 문구 id */
   describedBy?: string;
+  /** 단추 너비 등 모양(기본: 글자만큼 w-fit). 예: 포스터와 같은 너비로 "w-full justify-center" */
+  className?: string;
 };
 
 /**
@@ -821,9 +884,9 @@ type FileButtonProps = {
  * 단추 글자가 곧 파일 칸의 이름이라, 화면 낭독기는 "포스터 고르기, 파일 선택"처럼 읽어요.
  * 초점이 오면 단추 둘레에 점선 테두리가 그려져요(globals.css의 .file-button).
  */
-function FileButton({ label, accept, multiple = false, onChange, disabled = false, id, describedBy }: FileButtonProps) {
+function FileButton({ label, accept, multiple = false, onChange, disabled = false, id, describedBy, className = "w-fit" }: FileButtonProps) {
   return (
-    <label className="btn-line file-button w-fit">
+    <label className={`btn-line file-button ${className}`}>
       {label}
       <input id={id} type="file" accept={accept} multiple={multiple} onChange={onChange} disabled={disabled} aria-describedby={describedBy} className="sr-only" />
     </label>

@@ -17,12 +17,12 @@ vi.mock("next/navigation", async (importOriginal) => ({
 }));
 
 describe("SiteFooter", () => {
-  it("글쓴이·시작한 해·감상 안내 문구 없이, 글쓴이 로그인 링크만 둔다", () => {
+  it("글쓴이·시작한 해·감상 안내 문구도, 글쓴이 로그인 링크도 없다", () => {
     render(<SiteFooter />);
     const footer = screen.getByRole("contentinfo");
     expect(footer).not.toHaveTextContent("©");
     expect(footer).not.toHaveTextContent("주관적인 감상");
-    expect(within(footer).getByRole("link", { name: "글쓴이 로그인" })).toHaveAttribute("href", "/login");
+    expect(within(footer).queryByRole("link", { name: /로그인/ })).not.toBeInTheDocument();
   });
 
   it("떠 있는 키보드 조작 단추를 바닥글 안에 둔다(아이콘 없이 글자만)", () => {

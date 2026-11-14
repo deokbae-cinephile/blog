@@ -1,11 +1,11 @@
 /**
- * @file 글쓴이 로그인·로그아웃 (session-controls.tsx)
+ * @file 글쓴이 로그아웃 (session-controls.tsx)
  *
  * 이 파일이 하는 일
- *   바닥글에 글쓴이용 링크를 하나 보여 줘요.
- *     - 로그인 전: [글쓴이 로그인] 링크 → 로그인 화면(/login)
+ *   글쓴이로 로그인했을 때만 바닥글에 [로그아웃] 단추를 보여 줘요(위쪽에 점선을 그어 본문과 나눠요).
+ *     - 로그인 전: 아무것도 보이지 않아요. 방문자에게 로그인 링크를 보이지 않으려고요.
+ *       글쓴이는 로그인 화면 주소(/login)로 직접 가거나, 글쓰기 화면(/write)에 가면 로그인 화면으로 보내져요(proxy.ts).
  *     - 로그인 뒤: [로그아웃] 단추 → 로그인 쿠키를 지우고 처음 화면으로
- *   방문자에게는 눈에 덜 띄게 바닥글에 두었어요(블로그는 글쓴이 한 사람만 로그인해요).
  *
  * 로그아웃을 두 번 빠르게 눌러도 요청은 한 번만 가요(useRef 잠금).
  *
@@ -15,7 +15,6 @@
 
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -24,7 +23,7 @@ import { adminHintStore } from "@/lib/admin-hint";
 
 import { useIsAdmin } from "./use-is-admin";
 
-/** 바닥글의 로그인·로그아웃 */
+/** 바닥글의 로그아웃(로그인했을 때만) */
 export function SessionControls() {
   const isAdmin = useIsAdmin();
   const router = useRouter();
@@ -50,18 +49,16 @@ export function SessionControls() {
     lockRef.current = false;
   }
 
+  // 로그인 전에는 아무것도 그리지 않아요(로그인 링크도 없어요).
+  if (!isAdmin) return null;
+
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      {isAdmin ? (
-        <button type="button" onClick={handleLogout} className="term-link cursor-pointer">
-          로그아웃
-        </button>
-      ) : (
-        <Link href="/login" className="term-link">
-          글쓴이 로그인
-        </Link>
-      )}
-      {/* role="alert": 로그아웃에 실패하면 바로 읽어 줘요. 영역은 늘 두고 글자만 바꿔요. */}
+    // border-t-2 border-dotted: 위쪽에 2px 점선을 그어 본문과 나눠요.
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t-2 border-dotted border-crt-line pt-4">
+      <button type="button" onClick={handleLogout} className="term-link cursor-pointer">
+        로그아웃
+      </button>
+      {/* role="alert": 로그아웃에 실패하면 바로 읽어 줘요. 영역은 단추와 함께 늘 두고 글자만 바꿔요. */}
       <p role="alert">{error}</p>
     </div>
   );

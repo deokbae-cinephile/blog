@@ -29,6 +29,8 @@
  * 누가 쓰나요?
  *   lib/load-reviews.ts가 원고를 읽을 때 본문을 이 함수로 바꿉니다. 빌드할 때 한 번만 돌아가요.
  *   (그래서 이 변환 도구들은 방문자의 브라우저로 가지 않아요. 화면이 가벼운 이유 중 하나예요.)
+ *   글쓰기 화면의 미리 보기(components/markdown-preview.tsx)도 같은 함수를 써서, 저장한 뒤의 화면과 똑같이 보여 줘요.
+ *   이때는 글쓴이 브라우저에서 돌고, 필요할 때만 따로 받아 와요(import()).
  */
 
 import type { Element, ElementContent, Root as HastRoot } from "hast";
@@ -202,8 +204,12 @@ export function isSafeHref(href: string): boolean {
  * - 이미지는 loading="lazy"로 화면에 가까워질 때 받아 첫 화면을 빠르게 해요.
  * - 표는 좁은 화면에서 넘치지 않게 가로 스크롤 영역으로 감싸요. 키보드 사용자도 스크롤할 수 있게
  *   tabindex="0"(초점 받기)과 이름(aria-label)을 붙입니다.
+ * - 미리 보기용 설정이 있으면: 사진 주소를 바꾸고(imageSources), 링크를 새 탭에서 열게 해요(openLinksInNewTab).
+ *
+ * @param options.imageSources 사진 주소 바꾸기 표(원고의 주소 → 실제로 보여 줄 주소)
+ * @param options.openLinksInNewTab 링크를 새 탭에서 열지(같은 쪽 안의 #주소는 그대로)
  */
-function rehypeSiteContent() {
+function rehypeSiteContent({ imageSources, openLinksInNewTab }: Pick<RenderOptions, "imageSources" | "openLinksInNewTab">) {
   return (tree: HastRoot) => {
     // 일을 두 번에 나눠 방문해요.
     //  1번째: 모든 요소(표 안의 링크·이미지까지)의 주소와 속성을 손봐요.
@@ -223,10 +229,19 @@ function rehypeSiteContent() {
         node.properties.rel = ["noopener", "noreferrer"];
       }
 
+      // 미리 보기: 링크를 눌러도 쓰던 글을 떠나지 않게 새 탭에서 열어요. 같은 쪽 안의 주소(#각주 등)는 그대로 둬요.
+      if (openLinksInNewTab && node.tagName === "a" && typeof node.properties.href === "string" && !node.properties.href.startsWith("#")) {
+        node.properties.target = "_blank";
+        node.properties.rel = ["noopener", "noreferrer"];
+      }
+
       // 이미지는 늦게 받고(lazy), 그리는 일을 따로 처리하게(async) 합니다.
       if (node.tagName === "img") {
         node.properties.loading = "lazy";
         node.properties.decoding = "async";
+        // 미리 보기: 아직 올리지 않은 사진은 브라우저 안의 임시 주소(blob:)로 바꿔 보여 줘요.
+        const source = imageSources?.get(String(node.properties.src));
+        if (source) node.properties.src = source;
       }
     });
 
@@ -255,15 +270,28 @@ function rehypeSiteContent() {
   };
 }
 
+/** renderMarkdown의 설정 */
+type RenderOptions = {
+  /** 사진 크기 표(주소 → 크기). 주면 사진에 width·height를 달아요. 기본은 빈 표 */
+  imageSizes?: ImageSizes;
+  /**
+   * 사진 주소 바꾸기 표(원고의 주소 → 실제로 보여 줄 주소).
+   * 글쓰기 화면의 미리 보기가 써요. 아직 올리지 않은 사진은 브라우저 안의 임시 주소(blob:)로만 볼 수 있거든요.
+   */
+  imageSources?: ReadonlyMap<string, string>;
+  /** 링크를 새 탭에서 열지. 미리 보기에서 링크를 눌러도 쓰던 글을 떠나지 않게 해요. */
+  openLinksInNewTab?: boolean;
+};
+
 /**
  * 변환 공장(processor)을 만듭니다.
  * `.use(도구, 설정)` 순서가 곧 작업 순서예요(파일 맨 위 설명 참고).
  *
  * 원고마다 사진 크기 표가 달라서, 원고를 바꿀 때마다 공장을 새로 만들어요(만드는 데 드는 시간은 아주 짧아요).
  *
- * @param imageSizes 이 원고의 사진 크기 표
+ * @param options 사진 크기 표와 미리 보기용 설정
  */
-function createProcessor(imageSizes: ImageSizes) {
+function createProcessor({ imageSizes = new Map(), imageSources, openLinksInNewTab = false }: RenderOptions) {
   return unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -274,7 +302,7 @@ function createProcessor(imageSizes: ImageSizes) {
       footnoteBackLabel: (referenceIndex) => `${referenceIndex + 1}번 각주를 단 곳으로 돌아가기`,
     })
     .use(rehypePhotos, { imageSizes })
-    .use(rehypeSiteContent)
+    .use(rehypeSiteContent, { imageSources, openLinksInNewTab })
     .use(rehypeStringify);
 }
 
@@ -287,14 +315,14 @@ function createProcessor(imageSizes: ImageSizes) {
  * `async`/`await`: 변환은 시간이 걸릴 수 있는 일이라 "기다렸다가 결과를 받는" 비동기 함수로 만들었어요.
  *
  * @param markdown 원고 본문 글자
- * @param options.imageSizes 사진 크기 표(주소 → 크기). 주면 사진에 width·height를 달아요. 기본은 빈 표
+ * @param options 사진 크기 표(imageSizes)와 미리 보기용 설정(imageSources, openLinksInNewTab). 모두 없어도 돼요.
  * @returns HTML 글자
  * @example
  * await renderMarkdown("**굵게**"); // "<p><strong>굵게</strong></p>"
  */
-export async function renderMarkdown(markdown: string, { imageSizes = new Map() }: { imageSizes?: ImageSizes } = {}): Promise<string> {
+export async function renderMarkdown(markdown: string, options: RenderOptions = {}): Promise<string> {
   // process()의 결과는 "가상 파일(VFile)"이라 String(...)으로 글자만 꺼냅니다.
-  return String(await createProcessor(imageSizes).process(markdown));
+  return String(await createProcessor(options).process(markdown));
 }
 
 /**

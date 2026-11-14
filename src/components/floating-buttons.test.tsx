@@ -1,10 +1,10 @@
 /**
  * @file floating-buttons.tsx 테스트
  *
- * 화면 오른쪽 아래에 떠 있는 단추들이
+ * 화면 아래쪽에 떠 있는 단추들이
  *   - 글쓴이로 로그인했을 때만 "+"(리뷰 추가)를 보이고, 글쓰기 화면에서는 숨기는지
- *   - "+"가 정사각형이고 "맨 위로"와 너비가 같은지
- * 확인해요.
+ *   - "+"의 이름·주소와 꾸밈 그림, "맨 위로"가 "+"와 따로 있는지
+ * 확인해요. 실제 크기(44 × 44px)와 자리(가운데 아래, 오른쪽 아래)는 진짜 브라우저 E2E에서 재요(e2e/admin.spec.ts, e2e/blog.spec.ts).
  *
  * Next.js의 훅(usePathname)을 쓰는 컴포넌트는 어떻게 테스트할까요?
  *   테스트 환경에는 진짜 Next.js 라우터가 없어서 usePathname이 동작하지 않아요.
@@ -41,15 +41,15 @@ describe("FloatingButtons", () => {
     expect(screen.queryByRole("link", { name: "리뷰 추가" })).not.toBeInTheDocument();
   });
 
-  it("로그인하면 글쓰기 화면으로 가는 정사각형 + 단추가 보이고, 이름은 '리뷰 추가'다", () => {
+  it("로그인하면 글쓰기 화면으로 가는 + 단추가 보이고, 이름은 '리뷰 추가'다", () => {
     document.cookie = "blog_admin=1; path=/";
     render(<FloatingButtons />);
     const link = screen.getByRole("link", { name: "리뷰 추가" });
     expect(link).toHaveAttribute("href", "/write");
-    // 보이는 "+"는 픽셀 그림(꾸밈)이라 읽지 않아요.
-    expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    // 너비 6rem(w-24) × 높이 6rem(h-24) 정사각형
-    expect(link).toHaveClass("w-24", "h-24");
+    // 보이는 "+"는 픽셀 그림(꾸밈)이라 읽지 않아요. 8칸 × 3px = 24px
+    const icon = link.querySelector("svg")!;
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect([icon.getAttribute("width"), icon.getAttribute("height")]).toEqual(["24", "24"]);
   });
 
   it("글쓰기 화면(/write, /write/<주소>)에서는 + 단추를 숨긴다", () => {
@@ -62,9 +62,12 @@ describe("FloatingButtons", () => {
     }
   });
 
-  it("맨 위로 단추도 너비가 6rem(w-24)이라 + 단추와 같다", () => {
+  it("맨 위로 단추는 + 단추와 따로 있다(+ 링크 안에 들어 있지 않다)", () => {
+    document.cookie = "blog_admin=1; path=/";
     // 맨 위로는 내려 읽었을 때만 보여서(hidden) 이름으로는 찾을 수 없어, 글자로 찾아요.
     render(<FloatingButtons />);
-    expect(screen.getByText("맨 위로")).toHaveClass("w-24");
+    const toTop = screen.getByText("맨 위로");
+    expect(toTop.tagName).toBe("BUTTON");
+    expect(screen.getByRole("link", { name: "리뷰 추가" })).not.toContainElement(toTop);
   });
 });
