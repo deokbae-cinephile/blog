@@ -35,10 +35,11 @@ describe("ReviewListItem", () => {
     expect(screen.getByRole("article", { name: "겨울 정류장" })).toBeInTheDocument();
   });
 
-  it("원제·연도·감독·조회수와 장르, 숫자 평점, 맨 아래 한줄평을 보이고, 쓴 날은 보이지 않는다", () => {
+  it("원제·연도·감독과 장르, 숫자 평점, 맨 아래 한줄평을 보이고, 쓴 날·조회수는 보이지 않는다", () => {
     renderItem();
-    // 조회수를 아직 받지 못했으면 "조회 –"예요.
-    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤 · 조회 –")).toBeInTheDocument();
+    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤")).toBeInTheDocument();
+    // 조회수는 2.0.0 핫픽스에서 화면에서 뺐어요.
+    expect(screen.queryByText(/조회/)).not.toBeInTheDocument();
     // 평점은 별 그림 없이 숫자만 보이고, 화면 낭독기에는 무엇의 숫자인지 알려 줘요.
     expect(screen.getByText("4.5")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByText("평점 5점 만점에 4.5점")).toBeInTheDocument();
@@ -48,24 +49,9 @@ describe("ReviewListItem", () => {
     expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
   });
 
-  it("원제가 없으면 연도·감독·조회수만 보인다", () => {
+  it("원제가 없으면 연도·감독만 보인다", () => {
     renderItem({ ...legend!, originalTitle: undefined });
-    expect(screen.getByText("2024 · 감독 브렌트 콜 · 조회 –")).toBeInTheDocument();
-  });
-
-  it("조회수를 받으면 천 단위 쉼표와 함께 보인다(0회도 숫자로)", () => {
-    const { rerender } = render(
-      <ul>
-        <ReviewListItem review={winter!} views={1234} />
-      </ul>,
-    );
-    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤 · 조회 1,234")).toBeInTheDocument();
-    rerender(
-      <ul>
-        <ReviewListItem review={winter!} views={0} />
-      </ul>,
-    );
-    expect(screen.getByText("Winter Stop · 2024 · 감독 한서윤 · 조회 0")).toBeInTheDocument();
+    expect(screen.getByText("2024 · 감독 브렌트 콜")).toBeInTheDocument();
   });
 
   it("포스터 썸네일은 제목과 같은 말이라 꾸밈(alt=\"\")으로 그린다", () => {

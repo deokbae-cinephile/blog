@@ -44,7 +44,6 @@ import { GenreTags } from "./genre-tags";
 import { Poster } from "./poster";
 import { Rating } from "./rating";
 import { ReviewKeys } from "./review-keys";
-import { ReviewViews } from "./review-views";
 
 /** ReviewArticle이 받는 값 */
 type Props = {
@@ -62,7 +61,7 @@ export function ReviewArticle({ review, newer, older }: Props) {
   const { slug, title, originalTitle, year, country, director, runtime, genres, rating, oneLiner, poster, posterAlt, html } =
     review;
 
-  // 제목 아래 한 줄 정보: "Winter Stop · 2024 · 한국 · 112분 · 감독 한서윤" (끝에 " · 조회 12"가 붙어요, ReviewViews)
+  // 제목 아래 한 줄 정보: "Winter Stop · 2024 · 한국 · 112분 · 감독 한서윤"
   // 없는 값(undefined)은 빼고 " · "로 이어요. 가운뎃점은 앞 항목에 붙어 줄 첫머리에 오지 않아요(lib/format.ts의 joinFacts).
   const facts = joinFacts([originalTitle, year, country, runtime ? `${runtime}분` : undefined, labeled("감독", director)]);
 
@@ -88,11 +87,8 @@ export function ReviewArticle({ review, newer, older }: Props) {
           <h1 id="review-title" className="mt-2 text-big">
             {title}
           </h1>
-          {/* 한 줄 정보 끝에 조회수(" · 조회 12"). 조회수는 화면을 연 뒤 세고 받아 와요(review-views.tsx). */}
-          <p className="mt-2">
-            {facts}
-            <ReviewViews slug={slug} />
-          </p>
+          {/* 한 줄 정보(원제 · 연도 · 국가 · 상영 시간 · 감독) */}
+          <p className="mt-2">{facts}</p>
         </div>
         {/* 평점: 크게, 오른쪽에 따로. 화면 낭독기는 "평점 5점 만점에 4.5점"으로 읽어요(components/rating.tsx).
             shrink-0: 좁은 화면에서도 숫자가 찌그러지지 않게 해요. */}

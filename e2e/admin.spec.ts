@@ -16,7 +16,7 @@
 
 import path from "node:path";
 
-import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { E2E_ADMIN } from "./admin-account";
 import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
@@ -187,7 +187,10 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel("장면 사진 넣기").setInputFiles(PICTURE);
     await expect(body).toHaveValue("쓰던 문단\n\n![](/images/e2e-draft/scene-1.png)\n\n");
     await page.getByRole("button", { name: "임시 저장" }).click();
-    await expect(page.getByText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/)).toBeVisible();
+    // 저장하는 동안 단추 아래의 안내 영역(role="status")에 로딩 UI가 보이고(적어도 0.4초), 끝나면 같은 영역이 결과 글자로 바뀌어요.
+    const saveStatus = page.getByRole("status").filter({ hasText: /임시 저장하는 중|에 임시 저장했습니다/ });
+    await expect(saveStatus).toHaveText(/임시 저장하는 중/);
+    await expect(saveStatus).toHaveText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/);
     await expect(page.getByRole("group", { name: /고칠 곳/ })).toHaveCount(0);
 
     // 새로 고쳐도(임시 저장한 뒤라 떠날지 묻지 않아요) 목록에 남아 있어요. 불러오면 칸과 사진이 그대로예요.
@@ -208,8 +211,15 @@ test.describe("글쓴이 기능", () => {
     await page.getByRole("checkbox", { name: "드라마" }).check();
     await page.getByLabel(/^한줄평/).fill("임시 저장에서 이어 쓴 한줄평");
     await body.fill("쓰던 문단\n\n![화면 조정 무늬](/images/e2e-draft/scene-1.png)\n");
-    await page.getByRole("button", { name: "리뷰 저장" }).click();
-    await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused();
+    // 저장소(가짜 GitHub)의 답을 늦춰, 저장하는 동안 단추 아래에 로딩 UI가 보이는지 확인해요.
+    await request.post(`${GITHUB}/__delay?ms=700`);
+    try {
+      await page.getByRole("button", { name: "리뷰 저장" }).click();
+      await expect(page.getByRole("status").filter({ hasText: /사진을 올리는 중\(\d\/2\)|리뷰를 저장하는 중/ })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused({ timeout: 15_000 });
+    } finally {
+      await request.post(`${GITHUB}/__delay?ms=0`);
+    }
     const commits = (await (await request.get(`${GITHUB}/__commits`)).json()) as Commit[];
     const commit = commits.find((item) => item.message === "리뷰 추가: 임시 저장 시험")!;
     expect(commit.added.sort()).toEqual(["content/reviews/e2e-draft.md", "public/images/e2e-draft/scene-1.png", "public/posters/e2e-draft.png"]);
@@ -373,53 +383,66 @@ test.describe("글쓴이 기능", () => {
   });
 });
 
-test.describe("조회수", () => {
-  test.skip(({ isMobile }) => isMobile, "서버의 조회수를 함께 쓰는 시험이라 데스크톱에서 한 번만 돌려요");
-  test.describe.configure({ mode: "serial" });
-
-  /** API로 리뷰 하나의 조회수를 읽어요(세지 않아요). */
-  const viewsOf = async (request: APIRequestContext, slug: string) => ((await (await request.get(`/api/views/${slug}`)).json()) as { count: number }).count;
-
-  test("로그인하지 않은 방문자가 상세를 열면 한 번 세고, 같은 탭에서 새로 고치면 다시 세지 않는다", async ({ page, request }) => {
-    const before = await viewsOf(request, "theta-court");
-    await page.goto("/reviews/theta-court");
-    // 머리 안내판의 정보 줄 끝에 " · 조회 N"
-    const header = page.locator("article > header");
-    await expect(header).toContainText(`· 조회 ${before + 1}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
-
+test.describe("방문자 수(글쓴이만 봄)", () => {
+  test("방문자는 그날 한 번만 세기 요청을 보내고 숫자는 보이지 않으며, 글쓴이는 왼쪽 아래 키보드 조작 오른쪽에서 누적 방문자 수를 본다", async ({ page, request, isMobile }) => {
+    // 화면이 보내는 방문자 요청(/api/visits)의 방식(POST·GET)을 모아요.
+    const visitRequests: string[] = [];
+    page.on("request", (sent) => {
+      if (new URL(sent.url()).pathname === "/api/visits") visitRequests.push(sent.method());
+    });
+    await page.goto("/");
+    await expect.poll(() => visitRequests).toEqual(["POST"]);
+    // 첫 세기 요청의 답을 받아 날짜를 기억할 때까지 기다린 뒤 새로 고쳐요(답보다 새로 고침이 먼저면 다시 보내요).
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("dmb:visit-day"))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // 같은 날 다시 열면 보내지 않아요(이 브라우저가 날짜를 기억해요).
     await page.reload();
-    await expect(header).toContainText(`· 조회 ${before + 1}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
-  });
+    await page.waitForLoadState("networkidle");
+    expect(visitRequests).toEqual(["POST"]);
+    // 방문자에게는 숫자가 보이지 않고, 숫자 API도 로그인해야 볼 수 있어요.
+    await expect(page.getByText(/^방문자 .+명$/)).toHaveCount(0);
+    expect((await request.get("/api/visits")).status()).toBe(401);
 
-  test("글쓴이로 로그인해 상세를 열면 세지 않는다", async ({ page, request }) => {
-    const before = await viewsOf(request, "theta-court");
-    await page.goto("/login?next=/reviews/theta-court");
+    // 글쓴이로 로그인하면 왼쪽 아래에 "방문자 n명"이 보여요(세기 요청은 더 보내지 않고 읽기만 해요).
+    await page.goto("/login?next=/");
     await login(page);
-    await expect(page.locator("article > header")).toContainText(`· 조회 ${before}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before);
-  });
-
-  test("목록에 조회수가 보이고, 정렬에 조회순은 없다(총 조회수도 돌려주지 않는다)", async ({ page, request, baseURL }) => {
-    // 서로 다른 방문자(접속 주소가 다름)가 iota-ranch를 6번 본 것처럼 세요. 다른 사이트 요청이 아니게 Origin을 붙여요.
-    for (let index = 1; index <= 6; index += 1) {
-      await request.post("/api/views/iota-ranch", { headers: { origin: baseURL!, "x-forwarded-for": `198.51.100.${index}` } });
+    await expect(page).toHaveURL(/\/$/);
+    const badge = page.getByText(/^방문자 [\d,]+명$/);
+    await expect(badge).toBeVisible();
+    expect(visitRequests.filter((method) => method === "POST")).toHaveLength(1);
+    const box = (await badge.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(Math.round(viewport.height - (box.y + box.height))).toBe(16);
+    if (isMobile) {
+      // 휴대폰에는 키보드 조작 단추가 없어서 왼쪽 끝(16px)에 있어요.
+      expect(Math.round(box.x)).toBe(16);
+    } else {
+      // 넓은 화면: 키보드 조작 단추 바로 오른쪽(8px)에, 바닥을 맞춰 있어요.
+      const keys = (await page.getByRole("button", { name: "키보드 조작" }).boundingBox())!;
+      expect(Math.round(box.x)).toBe(Math.round(keys.x + keys.width + 8));
+      expect(Math.round(box.y + box.height)).toBe(Math.round(keys.y + keys.height));
+      // 키보드 안내를 펼쳐도 방문자 수는 그 자리에 있어요(안내 창은 단추 위에 떠요).
+      await page.getByRole("button", { name: "키보드 조작" }).click();
+      expect(Math.round((await badge.boundingBox())!.x)).toBe(Math.round(box.x));
+      await page.keyboard.press("Escape");
     }
-    const iota = await viewsOf(request, "iota-ranch");
-    expect(iota).toBeGreaterThanOrEqual(6);
-    // 모든 조회수 묶음에는 리뷰마다의 숫자만 있어요(총 조회수 없음).
-    expect(Object.keys(await (await request.get("/api/views")).json())).toEqual(["counts"]);
-
-    // 예전 조회순 주소(?sort=views)로 와도 최신순으로 보여요. 정렬 단추는 최신순·평점순 두 개예요.
-    await page.goto(`/?sort=views&q=${encodeURIComponent("이오타 목장")}`);
-    await expect(page.getByRole("radio", { name: "조회순" })).toHaveCount(0);
-    await expect(page.getByRole("radio", { name: "최신순" })).toBeChecked();
-    // 찾은 이오타 목장의 둘째 줄에 조회수가 보여요.
-    const first = page.getByRole("region", { name: "영화 목록" }).getByRole("listitem").first();
-    await expect(first.getByRole("heading", { level: 3 })).toHaveText("이오타 목장");
-    await expect(first).toContainText(`조회 ${iota}`);
     await expectNoA11yViolations(page);
+  });
+});
+
+test.describe("조회수(화면에서 뺌)", () => {
+  test("목록·상세에는 조회수가 보이지 않고, 화면이 조회수 API를 부르지 않는다", async ({ page }) => {
+    // 화면이 보내는 조회수 요청(/api/views)을 모아요.
+    const viewRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/views")) viewRequests.push(`${request.method()} ${request.url()}`);
+    });
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
+    await page.goto("/reviews/theta-court");
+    await expect(page.locator("article > header")).toContainText("감독 시험감독3");
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("main")).not.toContainText("조회");
+    expect(viewRequests).toEqual([]);
   });
 });
 

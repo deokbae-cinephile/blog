@@ -114,4 +114,44 @@ test.describe("설치형 웹 앱(PWA)", () => {
     });
     expect(keys.some((url) => /\/login|\/write|\/api\/|_rsc=/.test(url))).toBe(false);
   });
+
+  test("저장소가 넘치면 오래된 것부터 지워 상한(페이지 40개·파일 120개)을 지키고, 처음 화면과 오프라인 안내 화면은 남긴다", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    // 설치할 때 저장하는 오프라인 안내 화면이 들어갈 때까지 기다려요.
+    await expect.poll(() => page.evaluate(async () => Boolean(await caches.match(`${location.origin}/offline`))), { timeout: 15_000 }).toBe(true);
+
+    // 일부러 넘치게 넣어요: 가짜 페이지 60개, 가짜 사진 150개(public/sw.js의 저장소 이름 그대로).
+    await page.evaluate(async () => {
+      const pages = await caches.open("blog-pages-v1");
+      const runtime = await caches.open("blog-runtime-v1");
+      for (let index = 0; index < 60; index += 1) await pages.put(`${location.origin}/reviews/fake-${index}`, new Response("page"));
+      for (let index = 0; index < 150; index += 1) await runtime.put(`${location.origin}/images/fake/${index}.webp`, new Response("image"));
+    });
+    // 저장 부탁을 보내면(빈 목록이어도) 서비스 워커가 끝에 상한에 맞춰 정리해요.
+    await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active!.postMessage({ type: "CACHE_URLS", pages: [], assets: [] });
+    });
+    // 페이지는 상한 40개 + 늘 남기는 2개(처음 화면, 오프라인 안내), 파일은 120개
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async () => [
+            (await (await caches.open("blog-pages-v1")).keys()).length,
+            (await (await caches.open("blog-runtime-v1")).keys()).length,
+          ]),
+        { timeout: 15_000 },
+      )
+      .toEqual([42, 120]);
+    // 오래된 것(먼저 넣은 것)부터 지웠고, 처음 화면과 오프라인 안내 화면은 남았어요.
+    expect(
+      await page.evaluate(async () => [
+        Boolean(await caches.match(`${location.origin}/`)),
+        Boolean(await caches.match(`${location.origin}/offline`)),
+        Boolean(await caches.match(`${location.origin}/reviews/fake-0`)),
+        Boolean(await caches.match(`${location.origin}/reviews/fake-59`)),
+      ]),
+    ).toEqual([true, true, false, true]);
+  });
 });

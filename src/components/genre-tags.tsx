@@ -6,7 +6,7 @@
  *
  * 맡은 기능
  *   - 목록 화면: 장르를 글자로만 보여 줘요(항목 전체가 이미 링크라 안에 링크를 또 넣지 않아요).
- *   - 상세 화면(linked): 장르마다 "그 장르로 거른 목록"(/?genre=드라마)으로 가는 링크를 달아요.
+ *   - 상세 화면(linked): 장르마다 "그 장르로 거른 목록"(/?genre=drama, 주소에는 영어 이름)으로 가는 링크를 달아요.
  *
  * 접근성 포인트
  *   대괄호 [ ]는 꾸밈이라 aria-hidden으로 숨겨요. 화면 낭독기는 "드라마"만 읽습니다.
@@ -17,7 +17,7 @@
  */
 
 
-import type { Genre } from "@/lib/genres";
+import { type Genre, genreSlug } from "@/lib/genres";
 
 // IntentLink: 화면에 보이기만 해서는 미리 받지 않고, 마우스를 올리거나 초점이 갈 때만 미리 받는 링크예요(intent-link.tsx).
 import { IntentLink } from "./intent-link";
@@ -60,7 +60,7 @@ export function GenreTags({ genres, linked = false, label, className = "" }: Pro
             {/* 조건 ? A : B — linked가 참이면 링크(A), 아니면 글자(B)를 그려요. */}
             {linked ? (
               // encodeURIComponent: 한글을 주소에 쓸 수 있는 모양(%EB%93%9C...)으로 바꿔요.
-              <IntentLink href={`/?genre=${encodeURIComponent(genre)}`} className="term-link">
+              <IntentLink href={`/?genre=${genreSlug(genre)}`} className="term-link">
                 {face}
               </IntentLink>
             ) : (

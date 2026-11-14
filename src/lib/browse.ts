@@ -19,7 +19,7 @@
  *   components/review-browser.tsx (처음 화면의 검색·목록 영역), components/search-box.tsx (자동완성)
  */
 
-import { GENRES, type Genre, isGenre } from "./genres";
+import { GENRES, type Genre, genreFromParam, genreSlug } from "./genres";
 import { compareLatest, compareRating, type ReviewSummary } from "./review";
 
 /** 정렬 방법: "latest"(최신순) 또는 "rating"(평점순) 둘 중 하나만 쓸 수 있어요. */
@@ -56,13 +56,13 @@ type ParamReader = { get(name: string): string | null };
  * // { q: "겨울", genre: null, sort: "rating" }
  */
 export function parseParams(search: ParamReader): BrowseParams {
-  const genre = search.get("genre");
   return {
     // `?.`는 "앞이 비어 있으면 뒤를 건너뛴다"는 뜻이에요. q가 없으면 trim()을 부르지 않고 undefined가 되고,
     // 그러면 `?? ""`가 빈 글자를 넣어 줍니다.
     q: search.get("q")?.trim() ?? "",
-    // 장르 목록에 있는 이름일 때만 받아들여요. 없는 장르면 null(전체)로 둡니다.
-    genre: genre && isGenre(genre) ? genre : null,
+    // 장르는 주소에 영어 이름(?genre=drama)으로 적어요. 목록에 있는 장르일 때만 받아들이고, 없으면 null(전체)이에요.
+    // 예전 주소처럼 한글 장르(?genre=드라마)가 와도 받아요(lib/genres.ts의 genreFromParam).
+    genre: genreFromParam(search.get("genre")),
     // "rating"일 때만 평점순, 그 밖에는 모두 최신순이에요.
     sort: search.get("sort") === "rating" ? "rating" : "latest",
   };
@@ -79,7 +79,8 @@ export function toSearch({ q, genre, sort }: BrowseParams): string {
   // URLSearchParams는 한글·공백 같은 글자를 주소에 쓸 수 있는 모양(%EA%B2%A8...)으로 알아서 바꿔 줘요.
   const params = new URLSearchParams();
   if (q) params.set("q", q);
-  if (genre) params.set("genre", genre);
+  // 장르는 영어 이름으로 적어요. 한글을 적으면 주소창에서 %EB%93%9C…처럼 길게 바뀌어 보여서요.
+  if (genre) params.set("genre", genreSlug(genre));
   if (sort !== "latest") params.set("sort", sort);
   const search = params.toString();
   // 조건이 하나라도 있으면 앞에 "?"를 붙이고, 없으면 빈 글자를 돌려줘요.

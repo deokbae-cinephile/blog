@@ -245,6 +245,10 @@ describe("ReviewWriter(리뷰 추가)", () => {
     await user.dblClick(save);
     // 저장하는 동안에는 단추 글자가 바뀌고 누를 수 없어요.
     await vi.waitFor(() => expect(screen.getByRole("button", { name: "저장하는 중…" })).toBeDisabled());
+    // 단추 바로 아래에 로딩 UI가 보여요. 늘 있는 안내 영역(role="status") 안에서 글자만 바뀌어 화면 낭독기가 읽어 줘요.
+    const loading = screen.getByText("리뷰를 저장하는 중");
+    expect(loading.closest("[role='status']")).toBeInTheDocument();
+    expect(loading.parentElement!.querySelector(".loading-bar")).toHaveAttribute("aria-hidden", "true");
     open();
 
     const saved = await screen.findByRole("heading", { name: "저장했습니다" });

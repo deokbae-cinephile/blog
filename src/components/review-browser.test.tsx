@@ -44,19 +44,16 @@ function Harness({
   initial = DEFAULT_PARAMS,
   onChange,
   reviews = reviewMocks,
-  views = null,
 }: {
   initial?: BrowseParams;
   onChange?: (p: BrowseParams) => void;
   reviews?: ReviewSummary[];
-  views?: Record<string, number> | null;
 }) {
   const [params, setParams] = useState(initial);
   return (
     <ReviewBrowserView
       reviews={reviews}
       params={params}
-      views={views}
       onParamsChange={(next) => {
         onChange?.(next);
         setParams(next);
@@ -73,9 +70,9 @@ const searchBox = () => screen.getByRole("combobox", { name: "검색" });
 const status = () => screen.getByText(/편/, { selector: "[role='status']" });
 
 describe("ReviewBrowserView (화면)", () => {
-  it("정렬은 최신순·평점순 두 가지이고(조회순은 없다), 항목마다 조회수를 보인다", () => {
-    const [, , reel, legend] = reviewMocks;
-    render(<Harness views={{ [reel!.slug]: 12, [legend!.slug]: 3 }} />);
+  it("정렬은 최신순·평점순 두 가지이고(조회순은 없다), 조회수는 보이지 않으며 조회수 API도 부르지 않는다", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Harness />);
     const sorts = screen.getByRole("group", { name: "정렬" });
     expect(within(sorts).getAllByRole("radio").map((radio) => radio.closest("label")?.textContent?.replace("▶", "").trim())).toEqual([
       "최신순",
@@ -83,9 +80,10 @@ describe("ReviewBrowserView (화면)", () => {
     ]);
     // 순서는 최신순 그대로예요(조회수로 늘어놓지 않아요).
     expect(listTitles()).toEqual(["겨울 정류장", "화성 세탁소", "필름이 끊기기 전에", "8비트 영웅전"]);
-    // 조회수가 없는 리뷰는 0, 있는 리뷰는 그 숫자예요.
-    expect(screen.getByText(/조회\s12$/)).toBeInTheDocument();
-    expect(screen.getAllByText(/조회\s0$/)).toHaveLength(2);
+    // 조회수는 2.0.0 핫픽스에서 화면에서 뺐어요. 목록이 조회수 API를 부르지도 않아요.
+    expect(screen.queryByText(/조회/)).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
 
@@ -448,8 +446,8 @@ describe("ReviewBrowser (주소 연결)", () => {
   // 테스트마다 spyOn을 원래대로 되돌려요.
   afterEach(() => vi.restoreAllMocks());
 
-  it("주소의 조건으로 목록을 거른다", () => {
-    navigation.search = `genre=${encodeURIComponent("코미디")}`;
+  it("주소의 조건으로 목록을 거른다(장르는 영어 이름, 예전 한글 주소도 받는다)", () => {
+    navigation.search = "genre=comedy";
     render(<ReviewBrowser reviews={reviewMocks} />);
     expect(listTitles()).toEqual(["화성 세탁소"]);
     expect(screen.getByRole("radio", { name: "코미디 1편" })).toBeChecked();

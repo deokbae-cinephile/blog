@@ -31,6 +31,7 @@ describe("GenreTags", () => {
   it("linked면 장르로 거른 목록으로 가는 링크를 단다", () => {
     render(<GenreTags genres={["드라마"]} linked />);
     // 링크 이름은 대괄호를 뺀 "드라마"예요. 한글은 주소에 맞게 바뀌어(%EB%93%9C...) 들어가요.
-    expect(screen.getByRole("link", { name: "드라마" })).toHaveAttribute("href", "/?genre=%EB%93%9C%EB%9D%BC%EB%A7%88");
+    // 주소에는 장르를 영어 이름으로 적어요(드라마 → drama).
+    expect(screen.getByRole("link", { name: "드라마" })).toHaveAttribute("href", "/?genre=drama");
   });
 });

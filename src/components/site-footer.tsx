@@ -21,6 +21,7 @@ import { FloatingButtons } from "./floating-buttons";
 import { InstallPrompt } from "./install-prompt";
 import { KeyboardHelp } from "./keyboard-help";
 import { SessionControls } from "./session-controls";
+import { VisitorCount } from "./visitor-count";
 
 /** 모든 화면 맨 아래의 바닥글 */
 export function SiteFooter() {
@@ -32,9 +33,14 @@ export function SiteFooter() {
       <InstallPrompt />
       {/* 로그인했을 때만: 점선 아래 [로그아웃] */}
       <SessionControls />
-      {/* 화면 아래쪽에 떠 있는 단추들(position: fixed). 바닥글 안에 있어도 화면 위치는 아래쪽에 고정돼요.
-          왼쪽 아래: 키보드 조작 안내, 오른쪽 아래: 맨 위로와 그 오른쪽의 리뷰 추가(+) */}
-      <KeyboardHelp />
+      {/* 화면 아래쪽에 떠 있는 것들(position: fixed). 바닥글 안에 있어도 화면 위치는 아래쪽에 고정돼요.
+          왼쪽 아래 줄: [키보드 조작] [방문자 n명(로그인한 글쓴이만)], 오른쪽 아래: [맨 위로] [+]
+          items-end: 키보드 안내를 펼치면 안내 창은 단추 위로 떠서, 옆의 방문자 수는 움직이지 않아요.
+          z-[52]: CRT 화면 효과 막(z-index 50, 51)보다 위라서 또렷해요. */}
+      <div className="fixed bottom-4 left-4 z-[52] flex items-end gap-2 print:hidden">
+        <KeyboardHelp />
+        <VisitorCount />
+      </div>
       <FloatingButtons />
     </footer>
   );

@@ -33,6 +33,20 @@ function canUseServiceWorker() {
 }
 
 /** 서비스 워커를 등록하고, 화면을 옮길 때마다 저장을 부탁하는 보이지 않는 컴포넌트 */
+/**
+ * 서비스 워커에 이미 보낸 파일 주소들. 화면을 옮길 때마다 아직 보내지 않은 파일만 보내려고 기억해요.
+ * (개수로 자르면 안 돼요: 성능 기록은 "받기 시작한 순서"로 쌓여서, 먼저 시작해 늦게 끝난 파일이 앞쪽에 끼어들 수 있거든요.)
+ * 페이지를 처음부터 다시 열면(새로 고침) 비어서 다시 시작해요.
+ */
+const sentResources = new Set<string>();
+
+/** 아직 보내지 않은 주소만 골라 "보냄"으로 표시하고 돌려줘요. */
+function unsent(names: string[]): string[] {
+  const fresh = names.filter((name) => !sentResources.has(name));
+  for (const name of fresh) sentResources.add(name);
+  return fresh;
+}
+
 export function ServiceWorker() {
   const pathname = usePathname();
 
@@ -66,9 +80,10 @@ export function ServiceWorker() {
         const send = (assets: string[], pages: string[] = []) =>
           registration.active?.postMessage({ type: "CACHE_URLS", pages, assets });
 
-        // 지금까지 이 화면들을 그리는 데 쓴 파일(CSS, JS, 글꼴, 포스터) 목록을 성능 기록(performance)에서 모아요.
-        // 서비스 워커가 이미 저장한 파일은 건너뛰니 같은 파일을 여러 번 받지는 않아요.
-        const used = performance.getEntriesByType("resource").map((entry) => entry.name);
+        // 이 화면들을 그리는 데 쓴 파일(CSS, JS, 글꼴, 포스터) 목록을 성능 기록(performance)에서 모아요.
+        // 지난번에 보낸 뒤 새로 받은 파일만 보내요. 성능 기록에는 지금까지 받은 파일이 모두 쌓여 있어서, 통째로 다시 보내면
+        // 서비스 워커가 상한에 맞춰 지운 예전 사진을 화면을 옮길 때마다 다시 받게 돼요(public/sw.js의 저장소 상한).
+        const used = unsent(performance.getEntriesByType("resource").map((entry) => entry.name));
         // 본문 사진은 화면에 가까워질 때 받아서(loading="lazy"), 아직 스크롤하지 않은 아래쪽 사진은 성능 기록에 없어요.
         // 그래서 화면에 있는 모든 그림(document.images)의 주소도 함께 보내요. 오프라인에서도 사진까지 끝까지 읽을 수 있어요.
         // currentSrc: 브라우저가 실제로 고른 주소. 아직 받지 않은 그림은 비어 있어서 src를 대신 써요.
@@ -78,7 +93,11 @@ export function ServiceWorker() {
         // 성능 기록에는 "다 받은" 파일만 올라와요. 아직 받는 중이던 파일(큰 포스터, 글꼴)은 위 목록에 없으니,
         // PerformanceObserver로 지켜보다가 다 받아지는 대로 이어서 알려요.
         if ("PerformanceObserver" in window) {
-          observer = new PerformanceObserver((list) => send(list.getEntries().map((entry) => entry.name)));
+          // 여기서 보낸 파일도 "보냄"으로 표시해, 다음 화면에서 다시 보내지 않아요.
+          observer = new PerformanceObserver((list) => {
+            const fresh = unsent(list.getEntries().map((entry) => entry.name));
+            if (fresh.length > 0) send(fresh);
+          });
           observer.observe({ type: "resource" });
         }
       })

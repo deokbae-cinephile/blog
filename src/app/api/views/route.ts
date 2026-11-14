@@ -2,10 +2,11 @@
  * @file 조회수 모두 읽기 API (app/api/views/route.ts → 주소 "/api/views")
  *
  * 이 파일이 하는 일
- *   GET /api/views : 모든 리뷰의 조회수를 돌려줘요. 처음 화면(목록)이 항목마다 조회수를 보일 때 써요.
+ *   GET /api/views : 모든 리뷰의 조회수를 돌려줘요.
  *     답(JSON): { counts: { "winter-stop": 12, ... } }
  *
- * 목록은 미리 만든 화면이라 조회수가 들어 있지 않아요. 브라우저가 화면을 연 뒤 이 API로 따로 받아 와요.
+ * 2.0.0 핫픽스에서 목록·상세에 조회수를 보이지 않게 해서, 지금은 화면이 이 API를 부르지 않아요.
+ * 저장소(Durable Object)의 데이터를 지우지 않으려고 API는 남겨 뒀어요(docs/development.md 3장).
  * 저장소는 lib/view-store.ts가 골라요(Cloudflare: Durable Object, 내 컴퓨터: 메모리).
  */
 

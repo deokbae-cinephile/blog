@@ -40,6 +40,13 @@ const STATIC_CACHE = `${PREFIX}static-${VERSION}`;
 const RUNTIME_CACHE = `${PREFIX}runtime-${VERSION}`;
 /** 빌드 파일 저장소에 남겨 둘 최대 개수. 배포할 때마다 새 파일이 생기니 오래된 것부터 지워요. */
 const STATIC_LIMIT = 200;
+/**
+ * 페이지 저장소에 남겨 둘 최대 개수(최근에 본 리뷰 화면). 처음 화면과 오프라인 안내 화면은 세지 않고 늘 남겨요.
+ * 상한이 없으면 리뷰를 읽을수록 기기 저장 공간을 끝없이 차지해요.
+ */
+const PAGE_LIMIT = 40;
+/** 그 밖의 파일(포스터·본문 사진·아이콘) 저장소에 남겨 둘 최대 개수. 사진이 가장 무거워서 상한을 둬요. */
+const RUNTIME_LIMIT = 120;
 
 /**
  * 이 서비스 워커가 맡는 주소 범위("/"). sw.js가 놓인 폴더가 곧 범위예요.
@@ -119,11 +126,21 @@ function cacheNameFor(url) {
   return RUNTIME_CACHE;
 }
 
-/** 저장소에 너무 많이 쌓이면 오래된 것(먼저 넣은 것)부터 지워요. */
-async function trim(cacheName, max) {
+/**
+ * 저장소에 너무 많이 쌓이면 오래된 것(먼저 넣은 것)부터 지워요.
+ * @param {string} cacheName 정리할 저장소 이름
+ * @param {number} max 남길 최대 개수
+ * @param {string[]} keep 늘 남길 주소(개수에 세지 않아요). 예: 처음 화면, 오프라인 안내 화면
+ */
+async function trim(cacheName, max, keep = []) {
   const cache = await caches.open(cacheName);
-  const keys = await cache.keys();
+  const keys = (await cache.keys()).filter((request) => !keep.includes(new URL(request.url).pathname));
   for (const key of keys.slice(0, Math.max(0, keys.length - max))) await cache.delete(key);
+}
+
+/** 페이지·파일 저장소를 상한에 맞춰 정리해요. 정리에 실패해도 조용히 넘어가요(저장은 "덤"이니까요). */
+async function trimCaches() {
+  await Promise.all([trim(PAGE_CACHE, PAGE_LIMIT, [SCOPE, new URL(OFFLINE_URL, self.location.origin).pathname]), trim(RUNTIME_CACHE, RUNTIME_LIMIT)]).catch(() => {});
 }
 
 /**
@@ -166,8 +183,11 @@ async function networkFirst(request, cacheName, fallback) {
     // 줄 것이 없으면 "네트워크 오류"로 답해요(페이지가 알아서 처리해요).
     return Response.error();
   }
-  // 받기에 성공했어요. ok(200번대)면 저장소에도 넣어요. 저장에 실패해도 받은 응답은 그대로 줘요.
-  if (response.ok) await putSafely(cacheName, key, response.clone());
+  // 받기에 성공했어요. ok(200번대)면 저장소에도 넣고, 넘치면 오래된 것부터 지워요. 저장에 실패해도 받은 응답은 그대로 줘요.
+  if (response.ok) {
+    await putSafely(cacheName, key, response.clone());
+    await trimCaches();
+  }
   // 404 같은 응답도 그대로 돌려줘요(저장만 하지 않아요).
   return response;
 }
@@ -209,6 +229,8 @@ self.addEventListener("activate", (event) => {
       .keys()
       // 이 블로그의 저장소(PREFIX로 시작) 중 지금 판이 아닌 것만 지워요. 다른 사이트 것은 건드리지 않아요.
       .then((keys) => Promise.all(keys.filter((key) => key.startsWith(PREFIX) && !current.includes(key)).map((key) => caches.delete(key))))
+      // 예전에 상한 없이 쌓인 페이지·사진도 이번에 상한에 맞춰 정리해요(2.0.0 핫픽스 전에는 상한이 없었어요).
+      .then(() => trimCaches())
       // clients.claim(): 새로 고침하지 않아도 지금 열린 페이지들을 바로 맡아요.
       .then(() => self.clients.claim()),
   );
@@ -264,5 +286,6 @@ self.addEventListener("message", (event) => {
       // 파일은 이미 저장했으면 건너뛰어요. 화면을 옮길 때마다 같은 파일을 다시 받지 않게요.
       .map((url) => store(cacheNameFor(url), url.href, { skipIfCached: true })),
   ];
-  event.waitUntil(Promise.all(jobs));
+  // 다 저장한 뒤 상한에 맞춰 정리해요(본문 사진을 한꺼번에 받아도 저장소가 끝없이 커지지 않게).
+  event.waitUntil(Promise.all(jobs).then(() => trimCaches()));
 });

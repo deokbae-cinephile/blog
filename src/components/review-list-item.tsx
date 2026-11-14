@@ -5,12 +5,11 @@
  *   처음 화면 목록에서 리뷰 한 편을 한 덩어리로 보여 줍니다.
  *
  *     ┌────┐ 겨울 정류장 ································ 4.5   ← 첫째 줄: 제목 · 평점
- *     │포스│ Winter Stop · 2024 · 감독 한서윤 · 조회 12 [드라마] ← 둘째 줄: 원제 · 연도 · 감독 · 조회수 · 장르
+ *     │포스│ Winter Stop · 2024 · 감독 한서윤 [드라마] ← 둘째 줄: 원제 · 연도 · 감독 · 장르
  *     │ 터 │
  *     │2:3 │ “버스는 오지 않아도, 기다림은 끝내 도착한다.”     ← 한줄평: 썸네일 아래 끝에 맞춰요
  *     └────┘
  *   글 쓴 날은 화면에 보이지 않아요. 목록의 "최신순" 정렬에만 써요.
- *   조회수는 목록이 열린 뒤 따로 받아 와요(components/use-view-counts.ts). 받기 전에는 "조회 –"예요.
  *
  * 맡은 기능
  *   - 포스터 썸네일(2:3)을 맨 앞에 보여 줘요. 없으면 기본 포스터예요. 형광 초록으로 바뀌어 보여요(components/poster.tsx).
@@ -31,7 +30,6 @@
 import { joinFacts, labeled } from "@/lib/format";
 import type { ReviewSummary } from "@/lib/review";
 
-import { formatViews } from "@/lib/views-api";
 
 import { GenreTags } from "./genre-tags";
 import { IntentLink } from "./intent-link";
@@ -42,12 +40,10 @@ import { Rating } from "./rating";
 type Props = {
   /** 보여 줄 리뷰 */
   review: ReviewSummary;
-  /** 조회수. 아직 받지 못했으면 null("조회 –") */
-  views?: number | null;
 };
 
 /** 목록의 리뷰 한 편 */
-export function ReviewListItem({ review, views = null }: Props) {
+export function ReviewListItem({ review }: Props) {
   // 구조 분해 할당: review.title 대신 title처럼 짧게 쓰려고 필요한 항목을 꺼내 둬요.
   const { slug, title, originalTitle, year, director, genres, rating, oneLiner, poster } = review;
   // 제목 요소의 id. 아래 <article>의 이름(aria-labelledby)으로 연결해요. slug는 겹치지 않으니 id로 쓰기 좋아요.
@@ -90,11 +86,11 @@ export function ReviewListItem({ review, views = null }: Props) {
             <Rating value={rating} className="ml-auto" />
           </div>
 
-          {/* 둘째 줄: 원제 · 연도 · 감독 · 조회수, 그리고 장르. 없는 값(원제가 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
-              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 조회 12"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요.
+          {/* 둘째 줄: 원제 · 연도 · 감독, 그리고 장르. 없는 값(원제가 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
+              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 감독 …"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요.
               장르는 목록(<ul>)이라 <p> 안에 넣을 수 없어서, 둘을 <div>로 감싸 한 줄에 이어 놓아요. */}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 text-crt-dim">
-            <p>{joinFacts([originalTitle, year, labeled("감독", director), labeled("조회", formatViews(views))])}</p>
+            <p>{joinFacts([originalTitle, year, labeled("감독", director)])}</p>
             <GenreTags genres={genres} label="장르" />
           </div>
 
