@@ -16,7 +16,7 @@
 
 import path from "node:path";
 
-import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { E2E_ADMIN } from "./admin-account";
 import { expectNoA11yViolations, expectNoHorizontalScroll } from "./helpers";
@@ -187,10 +187,10 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel("장면 사진 넣기").setInputFiles(PICTURE);
     await expect(body).toHaveValue("쓰던 문단\n\n![](/images/e2e-draft/scene-1.png)\n\n");
     await page.getByRole("button", { name: "임시 저장" }).click();
-    // 저장하는 동안 단추 아래에 로딩 UI가 보이고(적어도 0.4초), 끝나면 결과 글자로 바뀌어요.
-    await expect(page.getByText("임시 저장하는 중")).toBeVisible();
-    await expect(page.getByText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/)).toBeVisible();
-    await expect(page.getByText("임시 저장하는 중")).toHaveCount(0);
+    // 저장하는 동안 단추 아래의 안내 영역(role="status")에 로딩 UI가 보이고(적어도 0.4초), 끝나면 같은 영역이 결과 글자로 바뀌어요.
+    const saveStatus = page.getByRole("status").filter({ hasText: /임시 저장하는 중|에 임시 저장했습니다/ });
+    await expect(saveStatus).toHaveText(/임시 저장하는 중/);
+    await expect(saveStatus).toHaveText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/);
     await expect(page.getByRole("group", { name: /고칠 곳/ })).toHaveCount(0);
 
     // 새로 고쳐도(임시 저장한 뒤라 떠날지 묻지 않아요) 목록에 남아 있어요. 불러오면 칸과 사진이 그대로예요.
@@ -215,7 +215,7 @@ test.describe("글쓴이 기능", () => {
     await request.post(`${GITHUB}/__delay?ms=700`);
     try {
       await page.getByRole("button", { name: "리뷰 저장" }).click();
-      await expect(page.getByText(/^사진을 올리는 중\(\d\/2\)$|^리뷰를 저장하는 중$/)).toBeVisible();
+      await expect(page.getByRole("status").filter({ hasText: /사진을 올리는 중\(\d\/2\)|리뷰를 저장하는 중/ })).toBeVisible();
       await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused({ timeout: 15_000 });
     } finally {
       await request.post(`${GITHUB}/__delay?ms=0`);
@@ -383,53 +383,20 @@ test.describe("글쓴이 기능", () => {
   });
 });
 
-test.describe("조회수", () => {
-  test.skip(({ isMobile }) => isMobile, "서버의 조회수를 함께 쓰는 시험이라 데스크톱에서 한 번만 돌려요");
-  test.describe.configure({ mode: "serial" });
-
-  /** API로 리뷰 하나의 조회수를 읽어요(세지 않아요). */
-  const viewsOf = async (request: APIRequestContext, slug: string) => ((await (await request.get(`/api/views/${slug}`)).json()) as { count: number }).count;
-
-  test("로그인하지 않은 방문자가 상세를 열면 한 번 세고, 같은 탭에서 새로 고치면 다시 세지 않는다", async ({ page, request }) => {
-    const before = await viewsOf(request, "theta-court");
+test.describe("조회수(화면에서 뺌)", () => {
+  test("목록·상세에는 조회수가 보이지 않고, 화면이 조회수 API를 부르지 않는다", async ({ page }) => {
+    // 화면이 보내는 조회수 요청(/api/views)을 모아요.
+    const viewRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/views")) viewRequests.push(`${request.method()} ${request.url()}`);
+    });
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
     await page.goto("/reviews/theta-court");
-    // 머리 안내판의 정보 줄 끝에 " · 조회 N"
-    const header = page.locator("article > header");
-    await expect(header).toContainText(`· 조회 ${before + 1}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
-
-    await page.reload();
-    await expect(header).toContainText(`· 조회 ${before + 1}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before + 1);
-  });
-
-  test("글쓴이로 로그인해 상세를 열면 세지 않는다", async ({ page, request }) => {
-    const before = await viewsOf(request, "theta-court");
-    await page.goto("/login?next=/reviews/theta-court");
-    await login(page);
-    await expect(page.locator("article > header")).toContainText(`· 조회 ${before}`);
-    expect(await viewsOf(request, "theta-court")).toBe(before);
-  });
-
-  test("목록에 조회수가 보이고, 정렬에 조회순은 없다(총 조회수도 돌려주지 않는다)", async ({ page, request, baseURL }) => {
-    // 서로 다른 방문자(접속 주소가 다름)가 iota-ranch를 6번 본 것처럼 세요. 다른 사이트 요청이 아니게 Origin을 붙여요.
-    for (let index = 1; index <= 6; index += 1) {
-      await request.post("/api/views/iota-ranch", { headers: { origin: baseURL!, "x-forwarded-for": `198.51.100.${index}` } });
-    }
-    const iota = await viewsOf(request, "iota-ranch");
-    expect(iota).toBeGreaterThanOrEqual(6);
-    // 모든 조회수 묶음에는 리뷰마다의 숫자만 있어요(총 조회수 없음).
-    expect(Object.keys(await (await request.get("/api/views")).json())).toEqual(["counts"]);
-
-    // 예전 조회순 주소(?sort=views)로 와도 최신순으로 보여요. 정렬 단추는 최신순·평점순 두 개예요.
-    await page.goto(`/?sort=views&q=${encodeURIComponent("이오타 목장")}`);
-    await expect(page.getByRole("radio", { name: "조회순" })).toHaveCount(0);
-    await expect(page.getByRole("radio", { name: "최신순" })).toBeChecked();
-    // 찾은 이오타 목장의 둘째 줄에 조회수가 보여요.
-    const first = page.getByRole("region", { name: "영화 목록" }).getByRole("listitem").first();
-    await expect(first.getByRole("heading", { level: 3 })).toHaveText("이오타 목장");
-    await expect(first).toContainText(`조회 ${iota}`);
-    await expectNoA11yViolations(page);
+    await expect(page.locator("article > header")).toContainText("감독 시험감독3");
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("main")).not.toContainText("조회");
+    expect(viewRequests).toEqual([]);
   });
 });
 

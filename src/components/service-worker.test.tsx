@@ -130,4 +130,26 @@ describe("ServiceWorker", () => {
     await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
     expect(register).toHaveBeenCalledTimes(1);
   });
+
+  it("화면을 옮기면 지난번 뒤에 새로 받은 파일만 보낸다(저장소 상한으로 지운 예전 파일을 다시 받지 않게)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { postMessage } = installFakeServiceWorker();
+    // 가짜 성능 기록: 처음 화면에서 받은 파일 2개
+    const entries = [{ name: "https://deokbae.blog/a.css" }, { name: "https://deokbae.blog/b.js" }];
+    const spy = vi.spyOn(performance, "getEntriesByType").mockImplementation(() => entries as unknown as PerformanceEntryList);
+
+    const { rerender } = render(<ServiceWorker />);
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1));
+    expect(postMessage.mock.calls[0]![0].assets).toEqual(expect.arrayContaining(["https://deokbae.blog/a.css", "https://deokbae.blog/b.js"]));
+
+    // 다음 화면에서 사진 하나를 새로 받았어요. 앞의 2개는 다시 보내지 않아요.
+    entries.push({ name: "https://deokbae.blog/posters/c.jpg" });
+    pathname.current = "/reviews/c";
+    rerender(<ServiceWorker />);
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    const assets = postMessage.mock.calls[1]![0].assets as string[];
+    expect(assets).toContain("https://deokbae.blog/posters/c.jpg");
+    expect(assets).not.toContain("https://deokbae.blog/a.css");
+    spy.mockRestore();
+  });
 });

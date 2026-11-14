@@ -1,7 +1,7 @@
 /**
  * @file 리뷰 하나의 조회수 API (app/api/views/[slug]/route.ts → 주소 "/api/views/<주소>")
  *
- * 이 파일이 하는 일
+ * 이 파일이 하는 일(2.0.0 핫픽스부터 화면이 부르지 않아요. app/api/views/route.ts 참고)
  *   - GET  /api/views/winter-stop : 이 리뷰의 조회수를 세지 않고 읽어요.
  *   - POST /api/views/winter-stop : 이 리뷰를 한 번 봤다고 세고, 센 뒤의 숫자를 돌려줘요.
  *     답(JSON): { count: 13, counted: true }  (counted: 이번에 셌는지)

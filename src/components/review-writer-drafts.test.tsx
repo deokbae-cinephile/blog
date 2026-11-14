@@ -355,7 +355,11 @@ describe("ReviewWriter 임시 저장", () => {
 
     const loading = await screen.findByText("임시 저장하는 중");
     expect(loading.closest("[role='status']")).toBeInTheDocument();
+    // 진행 안내는 폼 밖에 있어요(저장하는 동안 aria-busy인 폼 안의 바뀜은 화면 낭독기가 미룰 수 있어서요).
+    expect(loading.closest("form")).toBeNull();
+    // 임시 저장하는 동안에는 [리뷰 저장]도 막혀요(한 번에 하나만 저장해요).
     expect(screen.getByRole("button", { name: "임시 저장" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "리뷰 저장" })).toBeDisabled();
     writing.resolve();
     // 적어도 0.4초는 보인 뒤 결과 글자로 바뀌어요.
     expect(await screen.findByText(/에 임시 저장했습니다/, undefined, { timeout: 2000 })).toBeInTheDocument();

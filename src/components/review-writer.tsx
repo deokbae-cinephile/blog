@@ -510,8 +510,8 @@ export function ReviewWriter(props: Props) {
   /** [저장]을 누르면 실행돼요. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // 저장 중이거나 사진을 줄이는 중이면 누르지 못해요(단추도 막혀 있어요).
-    if (lockRef.current || photoJobsRef.current > 0) return;
+    // 저장 중이거나, 사진을 줄이는 중이거나, 임시 저장하는 중이면 누르지 못해요(단추도 막혀 있어요).
+    if (lockRef.current || photoJobsRef.current > 0 || draftLockRef.current) return;
 
     // 1) 칸 검사(화면에서 먼저)
     const check = validateReviewForm(values, { checkSlug: mode === "create" });
@@ -758,8 +758,12 @@ export function ReviewWriter(props: Props) {
   const posterSrc = poster?.url ?? (values.poster ? `/posters/${values.poster}` : null);
 
   return (
-    // noValidate: 브라우저 기본 오류 말풍선 대신 우리 문구를 보여 줘요.
-    <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving || photoBusy}>
+    // 폼과 저장 진행 안내를 한 묶음으로 둬요. 진행 안내는 폼 밖에 있어야 해요:
+    // 저장하는 동안 폼은 aria-busy라서, 화면 낭독기가 그 안의 바뀜을 끝날 때까지 미뤄 읽을 수 있거든요(WAI-ARIA 1.2).
+    // gap-3: 진행 안내가 맨 아래 단추 줄 바로 밑(12px)에 붙어 보여요.
+    <div className="grid gap-3">
+    {/* noValidate: 브라우저 기본 오류 말풍선 대신 우리 문구를 보여 줘요. aria-busy: 저장하는 동안 폼이 바뀌는 중이라고 알려요. */}
+    <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving}>
       {/* 결과 안내(포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
           영역은 처음부터 두고 글자만 바꿔야 읽어 줘요. 비어 있을 때는 empty:sr-only로 화면에서만 숨겨 빈 간격이 생기지 않게 해요. */}
       <p role="status" className="empty:sr-only">
@@ -1069,9 +1073,9 @@ export function ReviewWriter(props: Props) {
       </fieldset>
 
       {/* 저장·임시 저장·취소. 임시 저장 결과는 단추 바로 아래에 알려요(role="status": 끼어들지 않고 읽어 줘요). */}
-      <div className="grid gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={saving || photoBusy} className="btn-inverse">
+      <div className="flex flex-wrap items-center gap-3">
+          {/* 사진을 줄이는 중이거나 임시 저장하는 중이면 막아요(한 번에 하나만 저장해요). */}
+          <button type="submit" disabled={saving || photoBusy || draftBusy} className="btn-inverse">
             {saving ? "저장하는 중…" : mode === "edit" ? "수정한 내용 저장" : "리뷰 저장"}
           </button>
           <button
@@ -1086,14 +1090,14 @@ export function ReviewWriter(props: Props) {
           <Link href={mode === "edit" ? `/reviews/${values.slug}` : "/"} className="btn-line">
             취소
           </Link>
-        </div>
-        {/* 저장 로딩·임시 저장 결과. 이 안내 영역은 늘 두고 안의 내용만 바꿔요(화면 낭독기가 바뀔 때마다 읽어 줘요).
-            저장하는 동안은 로딩 UI(커서 + 막대, live={false}: 안내 영역은 바깥이 맡아요), 끝나면 결과 글자예요. */}
-        <div role="status" className="empty:sr-only">
-          {busyLabel ? <LoadingStatus label={busyLabel} live={false} /> : draftNotice ? <p className="text-crt-dim">{draftNotice}</p> : null}
-        </div>
       </div>
     </form>
+    {/* 저장 로딩·임시 저장 결과(단추 줄 바로 아래, 폼 밖). 이 안내 영역은 늘 두고 안의 내용만 바꿔요(화면 낭독기가 바뀔 때마다 읽어 줘요).
+        저장하는 동안은 로딩 UI(커서 + 막대, live={false}: 안내 영역은 바깥이 맡아요), 끝나면 결과 글자예요. */}
+    <div role="status" className="empty:sr-only">
+      {busyLabel ? <LoadingStatus label={busyLabel} live={false} /> : draftNotice ? <p className="text-crt-dim">{draftNotice}</p> : null}
+    </div>
+    </div>
   );
 }
 

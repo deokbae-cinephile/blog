@@ -28,7 +28,7 @@ src/
 │  ├─ api/session/        로그인(POST)·로그아웃(DELETE)
 │  ├─ api/images/         사진 한 장 올리기(POST) → GitHub blob
 │  ├─ api/reviews/        리뷰 추가(POST), [slug]/ 수정(PUT)·삭제(DELETE)
-│  ├─ api/views/          조회수 모두 읽기(GET), [slug]/ 하나 읽기(GET)·세기(POST)
+│  ├─ api/views/          조회수 모두 읽기(GET), [slug]/ 하나 읽기(GET)·세기(POST) — 지금은 화면이 부르지 않아요(3장)
 │  ├─ offline/, not-found.tsx, manifest.ts, sitemap.ts, robots.ts
 │  ├─ write/loading.tsx   글쓰기 화면을 준비하는 동안의 로딩 UI + 스켈레톤
 │  └─ layout.tsx, globals.css, fonts/   공통 틀(포스터 SVG 필터 포함)·스타일·글꼴
@@ -40,7 +40,6 @@ src/
 │  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
 │  ├─ floating-buttons.tsx  오른쪽 아래 [맨 위로]와 그 오른쪽의 [+](리뷰 추가, 로그인했을 때만)
 │  ├─ loading-status.tsx, skeleton.tsx, boot-overlay.tsx  로딩 UI, 글쓰기 스켈레톤, 첫 화면 로딩 레이어
-│  ├─ review-views.tsx, use-view-counts.ts  상세의 조회수(세기), 목록의 조회수 받기
 │  ├─ intent-link.tsx     마우스를 올리거나 초점이 갈 때만 다음 화면을 미리 받는 링크(목록의 리뷰, 상세의 장르)
 │  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
@@ -51,7 +50,7 @@ src/
 │  ├─ structured-data.ts, upload-rules.ts              검색엔진용 정보(JSON-LD), 사진 올리기 규칙(파일 앞부분으로 형식 알아내기)
 │  ├─ review-store.ts, github.ts                       추가·수정·삭제 → GitHub 커밋
 │  ├─ session.ts, password-hash.ts, admin-auth.ts      로그인 표(서명), 비밀번호 해시, 로그인 확인
-│  ├─ view-rules.ts, view-store.ts, views-api.ts      조회수 규칙, 저장소 고르기(Durable Object·메모리), API 부르기
+│  ├─ view-rules.ts, view-store.ts                    조회수 규칙, 저장소 고르기(Durable Object·메모리)
 │  ├─ review-slugs.ts                                  올라가 있는 리뷰 주소인지(조회수는 이 리뷰만 세요)
 │  └─ browse.ts, site.ts, version.ts, genres.ts, indent.ts …  검색·정렬, 블로그 정보·버전, 장르, 본문 Tab 들여쓰기
 worker/                   Cloudflare Worker 시작 파일(index.ts)과 조회수 저장소 Durable Object(view-counter.ts)
@@ -99,21 +98,23 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - 수정·삭제는 그 리뷰의 포스터(`<주소>.확장자`)와 사진 폴더(`public/images/<주소>/`) 가운데 더 쓰지 않는 파일도 함께 지워 저장소를 가볍게 둡니다. 다만 다른 리뷰 원고가 가져다 쓰는 파일은 남겨요(다른 원고를 GraphQL 요청 하나로 한꺼번에 읽어 확인해요).
 - 본문 사진은 빌드와 같은 도구로 서버에서도 검사해서, `![설명][이름]` 같은 참조형 사진도 저장 전에 걸러요.
 
-**조회수(누구나 보고, 로그인하지 않은 사람만 세요)**
+**조회수(2.0.0 핫픽스에서 화면에서 뺐어요)**
+
+목록·상세에 조회수를 보이지 않고, 화면이 조회수 API를 부르지도 않아요(지금은 세지 않아요).
+서버의 API(`app/api/views/**`)와 저장소(Durable Object "ViewCounter")는 그대로 남아 있어요. 저장소를 없애면 그 안의 데이터도 함께 지워져서, 완전히 없앨지는 따로 정해요.
+API를 다시 부르면 아래 규칙대로 세요.
 
 ```
-상세 화면 ─POST /api/views/<주소>─> lib/view-store.ts ─> Durable Object "ViewCounter"(SQLite: 리뷰마다의 조회수)
-목록 화면 ─GET  /api/views────────> 리뷰마다의 조회수(목록 표시)
+POST /api/views/<주소> ─> lib/view-store.ts ─> Durable Object "ViewCounter"(SQLite: 리뷰마다의 조회수)
+GET  /api/views        ─> 리뷰마다의 조회수
 ```
 
 - 세지 않는 때:
   - 글쓴이로 로그인함(서버가 세션 쿠키로 확인)
-  - 같은 탭에서 이미 봄(sessionStorage). 세기 요청이 받아들여지면 서버가 걸렀어도 이 탭에 기억해요.
   - 같은 사람(접속 주소 + 브라우저를 SHA-256으로 줄인 값)이 같은 리뷰를 10분 안에 다시 봄
   - 다른 사이트에서 보낸 요청(Origin, 403)
   - 빌드할 때 올라가 있지 않은 주소(404). `next.config.ts`가 원고 폴더의 주소 목록을 `env`(`DMB_REVIEW_SLUGS`)로 코드에 박아 두고, `lib/review-slugs.ts`가 확인해요. 아무 주소로나 요청을 보내 저장소를 채우지 못해서, 저장소의 줄 수는 리뷰 수를 넘지 않아요.
 - 총 조회수와 조회순 정렬은 2.0.0에서 없앴어요(저장하지도 돌려주지도 않아요).
-- 목록·상세는 미리 만든 화면이라 조회수가 들어 있지 않아요. 화면이 열린 뒤 API로 받아 오고, 받기 전에는 "조회 –"예요.
 - Durable Object는 같은 워커 안에 있어 따로 만들 것이 없어요(`wrangler.jsonc`의 `durable_objects`·`migrations`, 무료 요금제는 SQLite 방식). OpenNext가 만든 처리기(`.open-next/worker.js`)를 `worker/index.ts`가 가져다 쓰고 Durable Object를 함께 내보내요.
 - 내 컴퓨터(`pnpm dev`)와 E2E(`next start`)는 Cloudflare가 아니라서 같은 규칙의 메모리 저장소를 써요. Durable Object까지 확인하려면 `pnpm cf:preview`로 띄워요.
 
@@ -193,16 +194,16 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
   - GitHub 링크는 아이콘만 보이고, 글자 "GitHub"는 화면 낭독기만 읽어요(링크 이름).
   - 버전은 보조 글자색으로 보이고 `package.json`에서 읽어요(`lib/version.ts`).
   - 탭 제목과 설치 앱 이름은 짧게 "DMB"예요.
-- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·조회수·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
+- **목록 한 편:** [썸네일 2:3 | 제목·평점 / 원제·연도·감독·장르 / 한줄평]. 한줄평은 썸네일 아래 끝에 맞춰요.
 - **장르:** 가나다순(공포·다큐멘터리·드라마·로맨스·범죄·스릴러·스포츠·액션·재난·코미디). 목록의 장르 단추와 글쓰기 칸이 같은 순서예요.
-- **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독·조회수, 오른쪽에 큰 평점.
+- **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독, 오른쪽에 큰 평점.
 - **떠 있는 단추:** 오른쪽 아래 구석에 로그인했을 때 44 × 44px [+](리뷰 추가)가 있고, 내려 읽으면 [맨 위로]가 그 왼쪽에 붙어요. 글쓰기 화면에서는 [+]와 왼쪽 아래 "키보드 조작" 단추를 숨겨요.
 - **첫 화면 로딩 레이어:** 처음 열 때 화면 전체를 덮고 가운데에 로딩 UI를 보여요. 페이지와 웹 폰트(neodgm)를 받으면 걷히고(최소 0.4초, 늦어도 4초), 같은 탭에서는 다시 덮지 않아요. 자바스크립트가 꺼져 있으면 보이지 않고, 스크립트가 돌지 않아도 6초 뒤 CSS가 걷어요.
 - **검색창:** 글쓰기 화면의 입력 칸과 같은 모양(`.field`)이에요.
-- **조회수:** 목록은 둘째 줄의 "· 조회 12", 상세는 머리 안내판의 정보 줄 끝 "· 조회 12". 정렬은 최신순·평점순 두 가지예요.
+- **정렬:** 최신순·평점순 두 가지예요. 조회수는 화면에 보이지 않아요(2.0.0 핫픽스).
 - **링크 미리 받기:** 목록의 리뷰 링크와 상세의 장르 링크는 화면에 보이기만 해서는 다음 화면을 미리 받지 않고, 마우스를 올리거나 초점이 가거나 손가락이 닿을 때 받아요(`intent-link.tsx`). 목록 10편이면 요청 15개(약 31KB)가 줄어요.
 - **공유 미리 보기·검색엔진:** 링크를 붙이면 포스터(없으면 `public/og.png`)가 카드에 보여요. 리뷰 상세에는 검색엔진용 리뷰 정보(JSON-LD: 영화·평점·글쓴이), 처음 화면에는 사이트 이름 정보(WebSite)를 넣어요(`lib/structured-data.ts`). 그림은 미리 만든 파일이라 워커가 그리지 않아요(`next/og`는 워커를 크게 키워서 쓰지 않아요).
-- **정보 줄의 가운뎃점:** 항목 사이 " · "의 앞 빈칸과 "감독 한서윤"·"조회 12"의 빈칸은 줄바꿈되지 않는 빈칸(NBSP, `lib/format.ts`의 `joinFacts`·`labeled`)이에요. 휴대폰에서 줄이 넘쳐도 가운뎃점으로 시작하는 줄이 생기지 않고, 이름표와 값이 떨어지지 않아요.
+- **정보 줄의 가운뎃점:** 항목 사이 " · "의 앞 빈칸과 "감독 한서윤"의 빈칸은 줄바꿈되지 않는 빈칸(NBSP, `lib/format.ts`의 `joinFacts`·`labeled`)이에요. 휴대폰에서 줄이 넘쳐도 가운뎃점으로 시작하는 줄이 생기지 않고, 이름표와 값이 떨어지지 않아요.
 - **로딩·스켈레톤:**
   - 로딩 UI는 옛 DOS 프로그램처럼 "불러오는 중▮"(1초에 한 번 깜빡이는 커서)과 칸이 하나씩 차오르는 16칸 막대예요(`role="status"`).
   - 글쓰기 화면을 준비하는 동안(`app/write/loading.tsx`) 글쓰기 모양의 스켈레톤을 그리고, 제목 자리에 로딩 UI를 놓아 내용이 들어와도 화면이 밀리지 않아요. 저장소에서 원고를 읽는 수정 화면에서 자주 보여요.
