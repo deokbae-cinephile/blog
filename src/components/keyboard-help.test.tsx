@@ -108,9 +108,11 @@ describe("KeyboardHelp", () => {
 
     // role "term": <dt>(키), role "definition": <dd>(하는 일)
     const terms = screen.getAllByRole("term").map((term) => term.textContent);
-    expect(terms).toEqual(["▲위쪽 화살표▼아래쪽 화살표", "HomeEnd", "Enter", "▲위쪽 화살표▼아래쪽 화살표", "Tab"]);
+    expect(terms).toEqual(["▲위쪽 화살표▼아래쪽 화살표", "◀왼쪽 화살표▶오른쪽 화살표", "HomeEnd", "Enter", "▲위쪽 화살표▼아래쪽 화살표", "Tab"]);
     expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).toEqual([
       "리뷰 고르기",
+      // ◀ ▶도 리뷰 사이를 오가요(상세 화면과 같은 키).
+      "이전·다음 리뷰",
       "처음·끝 리뷰",
       "고른 리뷰 열기",
       "검색창에서 추천 검색어 고르기",

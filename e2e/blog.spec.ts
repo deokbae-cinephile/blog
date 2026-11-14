@@ -473,6 +473,26 @@ test.describe("키보드", () => {
     await expect(page.getByRole("heading", { level: 1, name: "알파 정거장" })).toBeVisible();
   });
 
+  test("목록에서 ◀ ▶로도 이전·다음 리뷰를 고르고, 키보드 조작 안내에도 ◀ ▶가 있다", async ({ page, isMobile }) => {
+    await openHome(page);
+    const alpha = page.getByRole("link", { name: "알파 정거장" });
+
+    // 목록 밖에서 ▶: 화면에 보이는 첫 리뷰로 들어가요(▼와 같아요).
+    await page.keyboard.press("ArrowRight");
+    await expect(alpha).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("link", { name: "베타 로맨스" })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(alpha).toBeFocused();
+
+    // 키보드 조작 안내(넓은 화면에만 보여요)에 ◀ ▶ "이전·다음 리뷰"가 있어요.
+    if (!isMobile) {
+      await page.getByRole("button", { name: "키보드 조작" }).click();
+      await expect(page.getByRole("definition").filter({ hasText: "이전·다음 리뷰" })).toBeVisible();
+      await expect(page.getByRole("term").filter({ hasText: "◀" })).toBeVisible();
+    }
+  });
+
   test("키보드로 [더 보기]에 가면 나머지를 불러오고, 새로 나온 첫 리뷰로 초점이 간다", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openHome(page);

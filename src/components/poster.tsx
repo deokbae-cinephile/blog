@@ -16,6 +16,9 @@
  * 비율은 늘 가로 2 : 세로 3이에요
  *   상자를 2:3으로 고정하고(aspect-[2/3]) 그림을 꽉 채워요(object-cover). 비율이 다른 그림은 가운데를 기준으로 잘려요.
  *
+ * 그림이 오기 전에는
+ *   액자 안에 스켈레톤(움직이지 않는 옅은 초록)을 깔아 두고, 그림이 오면 치워요(components/poster-image.tsx).
+ *
  * 크기 두 가지
  *   - thumb: 목록의 썸네일(꾸밈). 바로 옆에 제목이 있어 화면 낭독기가 같은 말을 두 번 읽지 않게 alt를 비워요.
  *   - large: 상세 화면의 큰 포스터(내용). "영화 ‘겨울 정류장’ 포스터" 같은 대체 텍스트를 읽어 줘요.
@@ -25,10 +28,10 @@
  *   components/review-list-item.tsx(썸네일), components/review-article.tsx(큰 포스터)
  */
 
-// next/image: Next.js의 이미지 컴포넌트. 화면 크기에 맞게 줄인 파일을 받고(최적화), 화면에 가까워질 때 받아요(lazy).
-import Image from "next/image";
-
 import { PixelArt } from "./pixel-art";
+// PosterImage: next/image(화면 크기에 맞게 줄인 파일을 받고, 화면에 가까워질 때 받아요)에,
+// 그림이 오기 전까지 보이는 스켈레톤을 더한 조각이에요.
+import { PosterImage } from "./poster-image";
 
 /** 기본 포스터 가운데에 그리는 필름 조각 픽셀 그림(양옆에 구멍이 뚫린 필름 한 칸) */
 const EMPTY_FILM = [
@@ -69,7 +72,7 @@ export function Poster({ src, alt, size, preload = false, className = "" }: Prop
     // poster-frame: 어두운 바탕 + 테두리 + 주사선 무늬(globals.css)
     <span className={`poster-frame relative block aspect-[2/3] shrink-0 ${width} ${className}`}>
       {src ? (
-        <Image
+        <PosterImage
           src={src}
           alt={alt}
           // fill: 부모 상자(relative) 크기에 맞춰 꽉 채워요. 너비·높이를 따로 몰라도 돼요.

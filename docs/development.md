@@ -28,6 +28,7 @@ src/
 │  ├─ api/images/         사진 한 장 올리기(POST) → GitHub blob
 │  ├─ api/reviews/        리뷰 추가(POST), [slug]/ 수정(PUT)·삭제(DELETE)
 │  ├─ offline/, not-found.tsx, manifest.ts, sitemap.ts, robots.ts
+│  ├─ write/loading.tsx   글쓰기 화면을 준비하는 동안의 로딩 UI + 스켈레톤
 │  └─ layout.tsx, globals.css, fonts/   공통 틀(포스터 SVG 필터 포함)·스타일·글꼴
 ├─ components/            화면 조각. 각 파일 옆에 *.test.tsx
 │  ├─ review-browser.tsx  검색·장르·정렬과 목록(10편씩 무한 스크롤)
@@ -36,7 +37,8 @@ src/
 │  ├─ write-preview-panes.tsx, markdown-preview.tsx  본문 쓰기 칸 | 미리 보기(좁은 화면은 탭)
 │  ├─ login-form.tsx, session-controls.tsx, admin-review-actions.tsx, delete-review.tsx
 │  ├─ floating-buttons.tsx  가운데 아래 [+](리뷰 추가, 로그인했을 때만)와 오른쪽 아래 [맨 위로]
-│  └─ poster.tsx, rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
+│  ├─ loading-status.tsx, skeleton.tsx  로딩 UI("불러오는 중▮" + 16칸 막대)와 글쓰기 스켈레톤
+│  └─ poster.tsx(+ poster-image.tsx), rating.tsx, review-list-item.tsx, review-article.tsx, site-header.tsx …
 ├─ lib/                   화면이 아닌 코드(데이터·규칙). 각 파일 옆에 *.test.ts
 │  ├─ load-reviews.ts, markdown.ts, review-schema.ts   빌드할 때 원고 읽기·검사·HTML 바꾸기
 │  ├─ review-form.ts, review-file.ts                   글쓰기 칸 검사, 원고 ↔ 칸 값 바꾸기
@@ -151,6 +153,13 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 - **장르:** 가나다순(공포·다큐멘터리·드라마·로맨스·범죄·스릴러·스포츠·액션·재난·코미디). 목록의 장르 단추와 글쓰기 칸이 같은 순서예요.
 - **상세 머리 안내판:** 장르(제목 위) → 제목 → 원제·연도·국가·상영 시간·감독, 오른쪽에 큰 평점.
 - **떠 있는 단추:** 로그인했을 때 화면 가운데 아래에 44 × 44px [+](리뷰 추가), 오른쪽 아래에 [맨 위로](내려 읽었을 때). 글쓰기 화면에서는 [+]를 숨겨요.
+- **로딩·스켈레톤:**
+  - 로딩 UI는 옛 DOS 프로그램처럼 "불러오는 중▮"(1초에 한 번 깜빡이는 커서)과 칸이 하나씩 차오르는 16칸 막대예요(`role="status"`).
+  - 글쓰기 화면을 준비하는 동안(`app/write/loading.tsx`) 글쓰기 모양의 스켈레톤을 그리고, 제목 자리에 로딩 UI를 놓아 내용이 들어와도 화면이 밀리지 않아요. 저장소에서 원고를 읽는 수정 화면에서 자주 보여요.
+  - 목록·상세에는 `loading.tsx`를 두지 않아요. 미리 만든 화면이라 기다릴 일이 거의 없는데, 두면 Next.js가 HTML 맨 앞에 로딩 화면을 넣고 내용을 잠시 뒤 바꿔 넣어서 열 때마다 스켈레톤이 번쩍이거든요.
+  - 포스터는 그림이 오기 전까지 액자 안에 스켈레톤을 깔고, 오면 치워요. 미리 보기는 변환 도구를 처음 받는 동안 로딩 UI와 글줄 스켈레톤을 보여요.
+  - 스켈레톤은 눈이 편하도록 움직이지 않는 옅은 초록 칸이에요(테두리·지나가는 빛 없음). 꾸밈이라 `aria-hidden`이에요.
+  - 움직이는 것은 로딩 UI의 커서·막대뿐이고, 동작 줄이기(`prefers-reduced-motion`)를 켜면 그것도 멈춰요.
 - **글쓰기 화면:**
   - 칸 아래 도움말은 주소(영문)에만 둬요(예: shutter-island → /reviews/shutter-island). 나머지는 틀렸을 때 오류 문구가 고치는 방법을 알려요.
   - [포스터 고르기]·[포스터 빼기]는 포스터와 같은 너비예요. 평점은 처음에 5.0이 골라져 있고, ▼는 왼쪽 글자 여백(12px)과 같은 간격으로 놓여요.
@@ -158,7 +167,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 ## 7. 키보드와 접근성
 
-- 목록: ▲▼ 리뷰 고르기, Home·End 처음·끝, Enter 열기. 검색창: ▲▼ 추천 고르기, Enter 찾기, Esc 추천 닫기(APG 콤보박스).
+- 목록: ▲▼(또는 ◀▶) 이전·다음 리뷰 고르기, Home·End 처음·끝, Enter 열기. 검색창: ▲▼ 추천 고르기, Enter 찾기, Esc 추천 닫기(APG 콤보박스).
 - 상세: ◀▶ 이전·다음 리뷰, Esc 목록으로. 한 글자 단축키는 쓰지 않아요(KWCAG 6.1.4).
 - 무한 스크롤은 [n편 더 보기] 단추와 함께 써요. 단추로 불러오면(또는 단추에 초점이 있을 때 저절로 불러오면) 새로 나온 첫 리뷰로 초점이 가요.
 - 폼: 칸마다 보이는 이름과 "(필수)", 틀린 칸에 `aria-invalid` + 오류 문구(`aria-describedby`·`aria-errormessage`), 저장할 때 "고칠 곳" 목록으로 초점 이동.
@@ -170,7 +179,9 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 | 명령 | 내용 |
 |---|---|
 | `pnpm test` | 단위 테스트. 원고 형식(content.test.ts), 로그인 표·비밀번호, proxy, API, 저장 로직, 화면 조각 |
-| `pnpm e2e` | 시험용 원고로 빌드해 진짜 브라우저로 확인. 가짜 GitHub 서버(`e2e/mock-github.mjs`)를 함께 띄워 로그인 → 추가 → 커밋 → 수정 → 삭제까지 시험해요 |
+| `pnpm e2e` | 시험용 원고로 빌드해 진짜 브라우저로 확인. 가짜 GitHub 서버(`e2e/mock-github.mjs`)를 함께 띄워 로그인 → 추가 → 커밋 → 수정 → 삭제까지 시험해요. 가짜 서버의 `POST /__delay?ms=`로 답을 늦춰 로딩 화면도 시험해요 |
+
+다른 프로그램이 E2E 포트(3100·3101)를 쓰고 있으면 Playwright가 그 서버를 블로그로 잘못 쓸 수 있어요. 그럴 때는 `E2E_PORT=3760 MOCK_GITHUB_PORT=3761 pnpm e2e`처럼 비어 있는 포트로 돌려요.
 
 내 컴퓨터에서 글쓰기 화면을 써 보고 싶으면, 가짜 GitHub 서버를 띄우고(`node e2e/mock-github.mjs`) `.env.local`에 `GITHUB_API_URL=http://127.0.0.1:3101`과 `GITHUB_CONTENT_TOKEN=e2e-token`을 넣으면 진짜 저장소를 건드리지 않고 저장해 볼 수 있어요. `pnpm dev`와 `pnpm cf:preview` 모두 같은 방법으로 돼요.
 

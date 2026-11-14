@@ -61,6 +61,16 @@ describe("MarkdownPreview", () => {
     expect(container.querySelector("[onerror]")).toBeNull();
   });
 
+  it("변환 도구를 처음 받는 동안에는 로딩 UI와 글줄 스켈레톤을 보이고, 다 되면 미리 보기로 바뀐다", async () => {
+    const { container } = render(<MarkdownPreview markdown="## 좋았던 점" images={new Map()} />);
+    // 처음 그린 순간: 아직 변환 전이라 "미리 보기를 준비하는 중"을 알리고, 스켈레톤은 숨긴 꾸밈이에요.
+    expect(screen.getByRole("status")).toHaveTextContent("미리 보기를 준비하는 중");
+    expect(container.querySelector(".skeleton")!.closest("[aria-hidden='true']")).not.toBeNull();
+    // 변환이 끝나면 로딩 UI는 사라지고 글이 보여요.
+    expect(await screen.findByRole("heading", { level: 2, name: "좋았던 점" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("본문이 비어 있으면 무엇을 보여 줄지 안내한다", () => {
     render(<MarkdownPreview markdown="   " images={new Map()} />);
     expect(screen.getByText("본문을 쓰면 여기에 저장한 뒤의 모습으로 보여요.")).toBeInTheDocument();
