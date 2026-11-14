@@ -16,8 +16,8 @@
  *   여기서는 칸에 입력하는 사람용으로 "제목을 입력하세요"처럼 칸 이름으로 말해요.
  */
 
-import type { ReviewFormValues } from "./review-file";
-import { imageRefProblems, type ReviewFrontmatter, reviewFrontmatterSchema, SLUG } from "./review-schema";
+import type { ReviewFormValues } from "./review-values";
+import { checkFrontmatter, imageRefProblems, type ReviewFrontmatter, SLUG } from "./review-schema";
 
 /** 칸 이름 → 그 칸의 오류 문구. 오류가 없는 칸은 들어 있지 않아요. */
 export type FieldErrors = Partial<Record<keyof ReviewFormValues, string>>;
@@ -36,7 +36,7 @@ export const FIELD_MESSAGES: Record<keyof ReviewFormValues, string> = {
   oneLiner: "한줄평을 입력하세요. 예: 버스는 오지 않아도, 기다림은 끝내 도착한다.",
   poster: "포스터 파일 이름이 올바르지 않습니다. 포스터를 다시 골라 주세요.",
   posterAlt: "포스터 설명은 글자로 입력하세요. 없으면 비워 둡니다.",
-  publishedAt: "글 쓴 날이 날짜 모양(YYYY-MM-DD)이 아닙니다. 불러온 원고의 publishedAt을 고친 뒤 다시 불러오세요.",
+  publishedAt: "글 쓴 날이 날짜 모양(YYYY-MM-DD)이 아닙니다. 저장소의 원고 파일에서 publishedAt을 고친 뒤 다시 열어 주세요.",
   body: "본문을 확인해 주세요.",
 };
 
@@ -122,14 +122,14 @@ export function validateReviewForm(
   // 1) 주소: 파일 이름이 되는 값이라 원고 파일 이름 규칙(SLUG)을 따라요.
   if (checkSlug && !SLUG.test(values.slug)) errors.slug = FIELD_MESSAGES.slug;
 
-  // 2) 정보 칸: 빌드할 때와 같은 규칙(reviewFrontmatterSchema)으로 검사하고, 틀린 칸에는 칸 이름으로 된 문구를 달아요.
-  const parsed = reviewFrontmatterSchema.safeParse(toFrontmatterInput(values, values.publishedAt.trim() || today));
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      // issue.path[0]: 어느 항목이 틀렸는지(예: "year"). 칸 이름과 같아요.
-      const key = issue.path[0];
+  // 2) 정보 칸: 빌드할 때와 같은 규칙(checkFrontmatter)으로 검사하고, 틀린 칸에는 칸 이름으로 된 문구를 달아요.
+  const parsed = checkFrontmatter(toFrontmatterInput(values, values.publishedAt.trim() || today));
+  if (!parsed.ok) {
+    for (const issue of parsed.issues) {
+      // issue.path: 어느 항목이 틀렸는지(예: "year"). 칸 이름과 같아요.
+      const key = issue.path as keyof ReviewFormValues;
       // `??=`: 그 칸에 문구가 아직 없을 때만 넣어요(한 칸에 문제가 여러 개여도 문구는 하나).
-      if (typeof key === "string" && key in FIELD_MESSAGES) errors[key as keyof ReviewFormValues] ??= FIELD_MESSAGES[key as keyof ReviewFormValues];
+      if (key in FIELD_MESSAGES) errors[key] ??= FIELD_MESSAGES[key];
     }
   }
 
@@ -137,6 +137,6 @@ export function validateReviewForm(
   const imageMessages = findBodyImages(values.body).flatMap(({ src, alt }) => imageRefProblems(src, alt).messages);
   if (imageMessages.length > 0) errors.body = imageMessages.join(" ");
 
-  if (Object.keys(errors).length > 0 || !parsed.success) return { ok: false, errors };
-  return { ok: true, frontmatter: parsed.data };
+  if (Object.keys(errors).length > 0 || !parsed.ok) return { ok: false, errors };
+  return { ok: true, frontmatter: parsed.value };
 }

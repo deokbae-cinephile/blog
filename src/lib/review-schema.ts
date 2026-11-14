@@ -11,11 +11,10 @@
  *   - 원고 파일 이름(= 주소)의 모양 규칙(SLUG)
  *   - 문제가 있으면 "무엇이 틀렸고 어떻게 고치는지" 알려 주는 한국어 문구 준비
  *
- * zod가 뭔가요?
- *   데이터가 정해진 모양인지 검사해 주는 라이브러리예요. 규칙을 한 번 적어 두면
- *   `schema.safeParse(데이터)`로 검사하고, 통과하면 깔끔하게 정리된 데이터를 돌려줍니다.
- *   TypeScript 타입은 "코드를 쓸 때" 검사하고, zod는 "프로그램이 돌 때 들어온 데이터"를 검사해요.
- *   원고 파일은 사람이 손으로 쓰니 실행할 때 검사하는 zod가 필요합니다.
+ * 검사는 어떻게 하나요?
+ *   원고는 사람이 손으로 쓸 수도 있어서, 프로그램이 돌 때 들어온 값을 하나하나 확인해요(checkFrontmatter).
+ *   TypeScript 타입은 "코드를 쓸 때"만 검사해서, 실행할 때 들어오는 원고 값은 이렇게 직접 확인해야 해요.
+ *   예전에는 검사 라이브러리(zod)를 썼지만, 블로그를 가볍게 하려고 같은 규칙을 직접 짰어요(문구와 순서도 같아요).
  *
  * 누가 쓰나요?
  *   - lib/load-reviews.ts가 빌드할 때 원고를 읽으며 이 규칙으로 검사합니다.
@@ -24,9 +23,7 @@
  *     규칙이 한 곳에 있어서, 화면에서 통과한 글은 빌드에서도 통과해요.
  */
 
-import { z } from "zod";
-
-import { GENRES } from "./genres";
+import { GENRES, type Genre } from "./genres";
 
 /**
  * 원고 맨 위에 쓸 수 있는 항목 이름들.
@@ -93,114 +90,177 @@ export const POSTER_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:jpe?g|png|webp|avif)$/
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * "비어 있지 않은 글자" 규칙을 만드는 작은 도우미 함수예요. 같은 규칙을 여러 항목에 쓰려고 만들었어요.
- *
- * - z.string(): 글자여야 해요. 글자가 아니면 { error } 문구를 보여 줍니다.
- * - .trim(): 앞뒤 공백을 지운 뒤 검사해요. "   "(공백만)은 빈 글자가 됩니다.
- * - .min(1): 한 글자 이상이어야 해요.
+ * 검사를 통과한 원고 정보예요. 선택 항목(?가 붙은 것)은 원고에 적었을 때만 들어 있어요.
+ * (감독을 [A, B] 목록으로 적었어도 여기서는 "A, B" 글자 하나예요.)
  */
-export const text = (message: string) => z.string({ error: message }).trim().min(1, { error: message });
+export type ReviewFrontmatter = {
+  title: string;
+  originalTitle?: string;
+  year: number;
+  country?: string;
+  director: string;
+  runtime?: number;
+  genres: Genre[];
+  rating: number;
+  oneLiner: string;
+  publishedAt: string;
+  poster?: string;
+  posterAlt?: string;
+};
+
+/** 검사에서 찾은 문제 하나: 어느 항목인지(path, 예: "year")와 고치는 방법(message) */
+export type FrontmatterIssue = { path: string; message: string };
+
+/** 검사 결과: 통과하면 정리된 정보(value), 아니면 문제 목록(issues, 항목 순서대로) */
+export type FrontmatterResult = { ok: true; value: ReviewFrontmatter } | { ok: false; issues: FrontmatterIssue[] };
+
+/** 앞뒤 공백을 지우고 한 글자 이상인 글자면 그 글자, 아니면 null. "   "(공백만)은 빈 글자로 봐요. */
+function filledText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+/** min 이상(max가 있으면 max 이하)의 정수면 true. 따옴표로 감싼 "2024"는 글자라서 false예요. */
+function isIntIn(value: unknown, min: number, max = Number.MAX_SAFE_INTEGER): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max;
+}
 
 /**
- * 평점 규칙: 0.5부터 5까지 0.5 단위 숫자예요(0점은 없어요).
- *
- * - z.number(): 숫자여야 해요. 따옴표로 감싼 "4.5"는 글자라서 실패합니다.
- * - .multipleOf(0.5): 0.5의 배수여야 해요. 4.3 같은 값을 막습니다.
+ * 평점이 0.5부터 5까지 0.5 단위 숫자인지(0점은 없어요). 4.3처럼 0.5 단위가 아닌 값과 글자 "4.5"는 false예요.
+ * 2를 곱해 정수가 되면 0.5 단위예요(4.5 × 2 = 9).
  */
-export const ratingSchema = (message: string) =>
-  z.number({ error: message }).min(0.5, { error: message }).max(5, { error: message }).multipleOf(0.5, { error: message });
+export function isRating(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0.5 && value <= 5 && Number.isInteger(value * 2);
+}
 
 /**
- * 원고에 날짜를 쓰는 방식은 사람마다 조금씩 달라요.
- * YAML이 날짜를 Date 객체로 읽어 오는 경우가 있어서, 검사 전에 "YYYY-MM-DD" 글자로 맞춰 줍니다.
- *
- * - `value instanceof Date`: value가 Date 객체인지 확인해요.
- * - toISOString()은 "2026-10-05T00:00:00.000Z" 같은 글자를 돌려주므로 앞 10글자만 잘라 씁니다.
+ * "YYYY-MM-DD" 모양의 실제 날짜 글자면 그 글자, 아니면 null(2026-02-30처럼 없는 날도 null).
+ * YAML이 날짜를 Date 객체로 읽어 오는 경우가 있어서, Date면 "YYYY-MM-DD"로 맞춰 줘요(toISOString의 앞 10글자).
  */
-const toIsoDate = (value: unknown) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
+function isoDate(value: unknown): string | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  // 년·월·일로 날짜를 만들어 다시 읽었을 때 같은 날이면 실제로 있는 날짜예요(2월 30일은 3월 2일로 바뀌어 달라져요).
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? value : null;
+}
+
+/** 글자·숫자가 아닌 객체(배열 아님)인지. 원고 정보 영역은 "항목: 값"이 모인 객체여야 해요. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
- * 날짜 규칙. z.preprocess(먼저 할 일, 규칙)는 "검사 전에 값을 먼저 손보고 나서 규칙을 적용"해요.
- * z.iso.date()는 "YYYY-MM-DD 모양의 실제 날짜 글자"인지 확인합니다.
- */
-const isoDate = (message: string) => z.preprocess(toIsoDate, z.iso.date({ error: message }));
-
-/**
- * 리뷰 원고 맨 위 정보 영역의 검사 규칙입니다.
+ * 리뷰 원고 맨 위 정보 영역을 검사해요.
  *
- * z.strictObject({ ... })는 "이 항목들만 있는 객체"라는 뜻이에요.
- * 목록에 없는 항목(오타 등)이 있으면 실패합니다. 그냥 z.object였다면 오타를 조용히 무시했을 거예요.
+ * - 꼭 있어야 하는 항목이 빠졌거나 모양이 틀리면, 항목 순서대로 문제를 모두 모아 돌려줘요(한꺼번에 고칠 수 있게).
+ * - 목록에 없는 항목(오타 등)이 있으면 맨 끝에 "알 수 없는 항목"으로 알려 줘요(조용히 무시하지 않아요).
+ * - 손으로 쓰기 쉽게 몇 가지는 받아 줘요: 장르 하나를 괄호 없이 적기, 감독 여러 명을 목록으로 적기,
+ *   포스터를 "/posters/파일"처럼 경로까지 적기(앞의 /posters/는 떼어요), YAML이 Date로 읽은 날짜.
  *
- * .optional()이 붙은 항목은 없어도 됩니다.
+ * @param input 원고 정보 영역을 YAML로 읽은 값
+ * @returns 통과하면 { ok: true, value }, 아니면 { ok: false, issues }
+ * @example
+ * checkFrontmatter({ title: "겨울 정류장" }); // { ok: false, issues: [{ path: "year", message: "year(개봉 연도)는 ..." }, ...] }
  */
-export const reviewFrontmatterSchema = z.strictObject(
-  {
-    title: text(MESSAGE.title),
-    originalTitle: text(MESSAGE.originalTitle).optional(),
+export function checkFrontmatter(input: unknown): FrontmatterResult {
+  // 객체가 아니면(비어 있는 정보 영역 등) 아무 항목도 없는 것으로 보고 빠진 항목을 알려 줘요.
+  const data = isRecord(input) ? input : {};
+  const issues: FrontmatterIssue[] = [];
+  const fail = (path: string, message: string) => issues.push({ path, message });
+  // 선택 항목: 원고에 적었을 때(undefined가 아닐 때)만 검사해요. YAML에서 값을 비워 둔 줄(null)은 틀린 값이에요.
+  const has = (key: string) => data[key] !== undefined;
 
-    // z.int(): 정수여야 해요. .min/.max로 범위를 정합니다(1888년은 최초의 영화가 찍힌 해예요).
-    year: z.int({ error: MESSAGE.year }).min(1888, { error: MESSAGE.year }).max(2100, { error: MESSAGE.year }),
+  const title = filledText(data.title);
+  if (title === null) fail("title", MESSAGE.title);
 
-    country: text(MESSAGE.country).optional(),
+  const originalTitle = has("originalTitle") ? filledText(data.originalTitle) : undefined;
+  if (originalTitle === null) fail("originalTitle", MESSAGE.originalTitle);
 
-    // 감독이 여러 명이라 목록([A, B])으로 적었다면, 검사 전에 "A, B" 한 줄로 이어 줍니다.
-    // Array.isArray(value)는 value가 배열인지 확인하고, join(", ")은 배열을 쉼표로 이어 글자로 만들어요.
-    director: z.preprocess((value) => (Array.isArray(value) ? value.join(", ") : value), text(MESSAGE.director)),
+  // 1888년은 최초의 영화가 찍힌 해예요.
+  const year = isIntIn(data.year, 1888, 2100) ? data.year : null;
+  if (year === null) fail("year", MESSAGE.year);
 
-    runtime: z.int({ error: MESSAGE.runtime }).min(1, { error: MESSAGE.runtime }).optional(),
+  const country = has("country") ? filledText(data.country) : undefined;
+  if (country === null) fail("country", MESSAGE.country);
 
-    // 장르가 하나뿐이라 괄호 없이 `genres: 드라마`로 적어도 받아 줍니다. 검사 전에 ["드라마"]로 감싸요.
-    genres: z.preprocess(
-      (value) => (typeof value === "string" ? [value] : value),
-      z
-        // 배열(z.array)의 칸마다 장르 목록(z.enum(GENRES)) 안의 이름인지 검사해요.
-        .array(
-          z.enum(GENRES, {
-            // error에 함수를 주면, 틀린 값(issue.input)을 문구에 넣어 보여 줄 수 있어요.
-            error: (issue) =>
-              `genres(장르)의 "${String(issue.input)}"은(는) 쓸 수 있는 장르가 아닙니다. 쓸 수 있는 장르: ${GENRES.join(", ")}`,
-          }),
-          { error: MESSAGE.genres },
-        )
-        // 적어도 하나는 있어야 해요.
-        .min(1, { error: MESSAGE.genres })
-        // .refine(조건)은 직접 만든 조건으로 검사해요.
-        // new Set(list)는 중복을 없앤 묶음이라, 크기가 원래 배열과 다르면 같은 장르가 두 번 들어 있다는 뜻입니다.
-        .refine((list) => new Set(list).size === list.length, { error: MESSAGE.genresDuplicate }),
-    ),
+  // 감독이 여러 명이라 목록([A, B])으로 적었다면 "A, B" 한 줄로 이어 검사해요.
+  const director = filledText(Array.isArray(data.director) ? data.director.join(", ") : data.director);
+  if (director === null) fail("director", MESSAGE.director);
 
-    // 평점 규칙은 위의 ratingSchema(0.5~5, 0.5 단위)를 써요.
-    rating: ratingSchema(MESSAGE.rating),
+  const runtime = has("runtime") ? (isIntIn(data.runtime, 1) ? data.runtime : null) : undefined;
+  if (runtime === null) fail("runtime", MESSAGE.runtime);
 
-    oneLiner: text(MESSAGE.oneLiner),
-    publishedAt: isoDate(MESSAGE.publishedAt),
+  // 장르: 하나뿐이라 괄호 없이 `genres: 드라마`로 적어도 받아 줘요. 칸마다 장르 목록(lib/genres.ts) 안의 이름인지 보고,
+  // 모두 맞으면 하나 이상인지, 같은 장르를 두 번 적지 않았는지 봐요.
+  const genreList = typeof data.genres === "string" ? [data.genres] : data.genres;
+  let genres: Genre[] | null = null;
+  if (!Array.isArray(genreList)) {
+    fail("genres", MESSAGE.genres);
+  } else {
+    const wrong = genreList.filter((name) => !(GENRES as readonly unknown[]).includes(name));
+    for (const name of wrong) {
+      fail("genres", `genres(장르)의 "${String(name)}"은(는) 쓸 수 있는 장르가 아닙니다. 쓸 수 있는 장르: ${GENRES.join(", ")}`);
+    }
+    if (wrong.length === 0) {
+      if (genreList.length === 0) fail("genres", MESSAGE.genres);
+      // new Set(list)는 중복을 없앤 묶음이라, 크기가 원래 목록과 다르면 같은 장르가 두 번 들어 있다는 뜻이에요.
+      else if (new Set(genreList).size !== genreList.length) fail("genres", MESSAGE.genresDuplicate);
+      else genres = genreList as Genre[];
+    }
+  }
 
-    // .regex(정규식): 글자가 정규식 모양과 맞아야 해요. 파일이 정말 있는지는 원고를 읽을 때 따로 확인해요(lib/load-reviews.ts).
-    // 포스터를 "/posters/winter-stop.jpg"처럼 경로까지 적어도 받아 줘요. 앞의 /posters/를 떼어 파일 이름만 남긴 뒤 검사해요.
-    poster: z
-      .preprocess(
-        (value) => (typeof value === "string" ? value.replace(/^\/posters\//, "") : value),
-        z.string({ error: MESSAGE.poster }).regex(POSTER_FILE, { error: MESSAGE.poster }),
-      )
-      .optional(),
-    posterAlt: text(MESSAGE.posterAlt).optional(),
-  },
-  {
-    // 객체 전체에 대한 오류 문구예요. 목록에 없는 항목(unrecognized_keys)이 있을 때만 우리 문구를 쓰고,
-    // 그 밖의 경우에는 undefined를 돌려 위에서 항목마다 정한 문구를 그대로 쓰게 합니다.
-    error: (issue) =>
-      issue.code === "unrecognized_keys"
-        ? `알 수 없는 항목입니다: ${issue.keys.join(", ")}. 이름에 오타가 없는지 확인하세요. 쓸 수 있는 항목: ${FRONTMATTER_KEYS.join(", ")}`
-        : undefined,
-  },
-);
+  const rating = isRating(data.rating) ? data.rating : null;
+  if (rating === null) fail("rating", MESSAGE.rating);
 
-/**
- * 검사를 통과한 뒤의 데이터 타입이에요.
- * z.output<typeof 규칙>은 "이 규칙을 통과한 결과의 타입"을 zod가 알아서 만들어 줍니다.
- * (예: 감독을 [A, B] 목록으로 적었어도 결과에서는 "A, B" 글자 하나예요.)
- */
-export type ReviewFrontmatter = z.output<typeof reviewFrontmatterSchema>;
+  const oneLiner = filledText(data.oneLiner);
+  if (oneLiner === null) fail("oneLiner", MESSAGE.oneLiner);
+
+  const publishedAt = isoDate(data.publishedAt);
+  if (publishedAt === null) fail("publishedAt", MESSAGE.publishedAt);
+
+  // 포스터: 파일 이름 모양(POSTER_FILE)만 봐요. 파일이 정말 있는지는 원고를 읽을 때 따로 확인해요(lib/load-reviews.ts).
+  // "/posters/winter-stop.jpg"처럼 경로까지 적어도 받아 줘요. 앞의 /posters/를 떼어 파일 이름만 남긴 뒤 검사해요.
+  let poster: string | null | undefined;
+  if (has("poster")) {
+    const file = typeof data.poster === "string" ? data.poster.replace(/^\/posters\//, "") : null;
+    poster = file !== null && POSTER_FILE.test(file) ? file : null;
+    if (poster === null) fail("poster", MESSAGE.poster);
+  }
+
+  const posterAlt = has("posterAlt") ? filledText(data.posterAlt) : undefined;
+  if (posterAlt === null) fail("posterAlt", MESSAGE.posterAlt);
+
+  // 목록에 없는 항목(오타, 예전 원고의 watchedAt 등)은 한 줄로 모아 맨 끝에 알려요.
+  const unknownKeys = Object.keys(data).filter((key) => !(FRONTMATTER_KEYS as readonly string[]).includes(key));
+  if (unknownKeys.length > 0) {
+    fail(
+      "",
+      `알 수 없는 항목입니다: ${unknownKeys.join(", ")}. 이름에 오타가 없는지 확인하세요. 쓸 수 있는 항목: ${FRONTMATTER_KEYS.join(", ")}`,
+    );
+  }
+
+  if (issues.length > 0) return { ok: false, issues };
+  // 여기까지 오면 필수 항목은 모두 채워졌어요(! 표시: null이 아님을 TypeScript에 알려 줘요).
+  // 선택 항목은 적었을 때만 넣어요(...(조건 ? { 항목 } : {}) 모양).
+  return {
+    ok: true,
+    value: {
+      title: title!,
+      ...(originalTitle ? { originalTitle } : {}),
+      year: year!,
+      ...(country ? { country } : {}),
+      director: director!,
+      ...(runtime ? { runtime } : {}),
+      genres: genres!,
+      rating: rating!,
+      oneLiner: oneLiner!,
+      publishedAt: publishedAt!,
+      ...(poster ? { poster } : {}),
+      ...(posterAlt ? { posterAlt } : {}),
+    },
+  };
+}
 
 /**
  * 본문 사진으로 받는 그림 형식(image-size가 알려 주는 이름). 모든 브라우저가 보여 줄 수 있는 형식만 골랐어요.

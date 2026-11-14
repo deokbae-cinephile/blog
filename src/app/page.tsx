@@ -22,6 +22,7 @@ import type { Metadata } from "next";
 import { ReviewBrowser } from "@/components/review-browser";
 import { getReviewSummaries } from "@/lib/load-reviews";
 import { site } from "@/lib/site";
+import { toJsonLd, websiteJsonLd } from "@/lib/structured-data";
 
 /**
  * 이 페이지의 메타데이터
@@ -46,6 +47,8 @@ export default async function HomePage() {
       {/* 페이지의 가장 큰 제목(h1). 눈에 보이는 제목은 머리글의 블로그 이름이 대신해서, 화면에서는 숨기고(sr-only)
           화면 낭독기 사용자가 제목으로 페이지를 알아볼 수 있게 해요. 한 페이지에 h1은 하나만 둡니다. */}
       <h1 className="sr-only">{site.name}</h1>
+      {/* 검색엔진용 사이트 정보(JSON-LD). 화면에는 보이지 않아요(lib/structured-data.ts). */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(websiteJsonLd()) }} />
       <ReviewBrowser reviews={reviews} />
     </>
   );

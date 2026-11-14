@@ -16,22 +16,22 @@ import type { NextRequest } from "next/server";
 
 import { guardAdminRequest } from "@/lib/admin-auth";
 import { errorResponse, readJson } from "@/lib/api-response";
-import { deleteReview, saveReview, savePayloadSchema } from "@/lib/review-store";
+import { deleteReview, readSavePayload, saveReview } from "@/lib/review-store";
 
 /** 리뷰 수정 */
 export async function PUT(request: NextRequest, ctx: RouteContext<"/api/reviews/[slug]">) {
   const denied = await guardAdminRequest(request);
   if (denied) return denied;
 
-  const payload = savePayloadSchema.safeParse(await readJson(request));
-  if (!payload.success) {
+  const payload = readSavePayload(await readJson(request));
+  if (!payload) {
     return Response.json({ message: "보낸 내용의 모양이 올바르지 않습니다. 화면을 새로 고친 뒤 다시 저장해 주세요." }, { status: 400 });
   }
 
   try {
     // 수정할 때는 주소를 바꾸지 않아요. 칸 값의 slug 대신 화면 주소의 slug를 써요.
     const { slug } = await ctx.params;
-    return Response.json(await saveReview("update", slug, payload.data));
+    return Response.json(await saveReview("update", slug, payload));
   } catch (error) {
     return errorResponse(error);
   }

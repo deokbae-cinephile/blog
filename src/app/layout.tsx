@@ -37,7 +37,7 @@ import { BOOT_NOSCRIPT_STYLE, BOOT_SCRIPT, BootOverlay } from "@/components/boot
 import { ServiceWorker } from "@/components/service-worker";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { site, siteUrl } from "@/lib/site";
+import { DEFAULT_SHARE_IMAGE, site, siteUrl } from "@/lib/site";
 
 // 전역 스타일. 여기서 한 번 불러오면 모든 페이지에 적용돼요.
 import "./globals.css";
@@ -78,14 +78,18 @@ export const metadata: Metadata = {
   // 검색 결과에 보이는 설명
   description: site.description,
   applicationName: site.name,
-  // Open Graph: 카카오톡·메신저 등에 링크를 붙였을 때 보이는 제목·설명이에요(그림 카드는 가볍게 하려고 만들지 않아요).
+  // Open Graph: 카카오톡·메신저 등에 링크를 붙였을 때 보이는 제목·설명·그림이에요.
+  // 그림은 미리 만들어 둔 파일(public/og.png)이라 서버가 그릴 일이 없어요(워커가 무거워지지 않아요).
   openGraph: {
     type: "website",
     siteName: site.name,
     locale: "ko_KR",
     title: site.name,
     description: site.description,
+    images: [DEFAULT_SHARE_IMAGE],
   },
+  // X(트위터) 카드: 큰 그림 카드로 보여요.
+  twitter: { card: "summary_large_image", title: site.name, description: site.description, images: [DEFAULT_SHARE_IMAGE] },
   // 아이폰 사파리가 숫자(예: 연도)를 전화번호로 착각해 링크로 바꾸지 않게 해요.
   formatDetection: { telephone: false },
   // 아이폰·아이패드 홈 화면에 추가했을 때: 앱 창으로 열고(capable), 아이콘 아래 이름과 상단 막대 색을 정해요.

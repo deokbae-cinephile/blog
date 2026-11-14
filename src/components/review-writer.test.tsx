@@ -3,7 +3,6 @@
  *
  * 리뷰 라이터(추가·수정 폼)를 사용자처럼 써 보며 확인해요.
  *   - 틀린 칸이 있으면 "고칠 곳" 목록으로 알리고 초점을 옮기는지
- *   - Markdown 파일을 불러오면 칸이 바로 채워지는지
  *   - 장면 사진을 넣으면 본문에 Markdown 사진 줄이 들어가는지
  *   - 저장: 사진을 먼저 올리고, 그 번호와 함께 리뷰를 저장하는지(두 번 눌러도 한 번만)
  *   - 수정: 처음 원고 sha와 함께 PUT으로 저장하는지
@@ -15,7 +14,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ReviewWriter } from "./review-writer";
+import { parseReviewFile } from "@/lib/review-file";
+
+import { type EditSource, ReviewWriter } from "./review-writer";
 
 /**
  * 가짜 서버: 주소마다 답을 정하고, 받은 요청을 기록해요.
@@ -79,32 +80,6 @@ describe("ReviewWriter(리뷰 추가)", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("Markdown 파일을 불러오면 칸이 바로 채워지고, 주소는 파일 이름으로, 쓰지 않는 항목은 알려 준다", async () => {
-    const user = userEvent.setup();
-    render(<ReviewWriter mode="create" />);
-    const file = new File(
-      ["---\ntitle: 겨울 정류장\nyear: 2024\ndirector: 한서윤\ngenres: [드라마]\nrating: 4.5\noneLiner: 한줄\nwatchedAt: 2026-11-06\n---\n\n## 좋았던 점\n"],
-      "winter-stop.md",
-      { type: "text/markdown" },
-    );
-    await user.upload(screen.getByLabelText("Markdown 파일 불러오기"), file);
-
-    await vi.waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
-    expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveValue("winter-stop");
-    expect(screen.getByLabelText(/^평점/)).toHaveValue("4.5");
-    expect(screen.getByRole("checkbox", { name: "드라마" })).toBeChecked();
-    expect(bodyBox()).toHaveValue("## 좋았던 점");
-    expect(screen.getByText(/winter-stop.md을\(를\) 불러와 칸을 채웠습니다/)).toHaveTextContent("watchedAt");
-  });
-
-  it("원고 모양이 아닌 파일을 불러오면 고치는 방법을 알린다", async () => {
-    const user = userEvent.setup();
-    render(<ReviewWriter mode="create" />);
-    await user.upload(screen.getByLabelText("Markdown 파일 불러오기"), new File(["그냥 글"], "note.md", { type: "text/markdown" }));
-    expect(await screen.findByRole("alert", { name: "" })).toBeDefined();
-    expect(screen.getByText(/note.md: 원고 맨 위에 --- 로 감싼 정보 영역이 없습니다/)).toBeInTheDocument();
-  });
-
   it("주소를 적기 전에는 장면 사진을 넣을 수 없고, 적은 뒤에는 본문 커서 자리에 사진 줄이 들어간다", async () => {
     const user = userEvent.setup();
     render(<ReviewWriter mode="create" />);
@@ -164,7 +139,7 @@ describe("ReviewWriter(리뷰 추가)", () => {
   it("칸 아래 도움말은 주소(영문)에만 있고(예: shutter-island), 다른 칸에는 없다", () => {
     const { container } = render(<ReviewWriter mode="create" />);
     expect(screen.getByLabelText(/^주소\(영문\)/)).toHaveAccessibleDescription(
-      "리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. 예: shutter-island → /reviews/shutter-island",
+      "리뷰 주소와 파일 이름이 됩니다. 영어 소문자, 숫자, 하이픈(-)만 씁니다. (예: shutter-island → /reviews/shutter-island)",
     );
     for (const label of [/^제목/, /^원제/, /^개봉 연도/, /^제작 국가/, /^감독/, /^상영 시간/, /^평점/, /^한줄평/]) {
       expect(screen.getByLabelText(label)).not.toHaveAccessibleDescription();
@@ -186,15 +161,6 @@ describe("ReviewWriter(리뷰 추가)", () => {
     );
     // ▼는 칸 옆에 겹쳐 그린 꾸밈 그림이라 화면 낭독기가 읽지 않아요. (좌우 간격이 같은지는 진짜 브라우저 E2E에서 재요)
     expect(rating.parentElement!.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("평점이 없는 원고를 불러오면 지금 평점(처음 5.0)을 그대로 둔다", async () => {
-    const user = userEvent.setup();
-    render(<ReviewWriter mode="create" />);
-    const file = new File(["---\ntitle: 겨울 정류장\n---\n\n본문\n"], "winter-stop.md", { type: "text/markdown" });
-    await user.upload(screen.getByLabelText("Markdown 파일 불러오기"), file);
-    await vi.waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
-    expect(screen.getByLabelText(/^평점/)).toHaveValue("5.0");
   });
 
   it("본문 미리 보기: 쓴 글을 저장한 뒤의 모습(같은 변환)으로 보여 주고, 아직 올리지 않은 사진은 임시 주소로 보여 준다", async () => {
@@ -308,9 +274,14 @@ describe("ReviewWriter(리뷰 수정)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   const SOURCE = "---\ntitle: 겨울 정류장\nyear: 2024\ndirector: 한서윤\ngenres: [드라마]\nrating: 4.5\noneLiner: 한줄\npublishedAt: 2026-11-08\n---\n\n본문\n";
+  /** 수정 화면(서버)이 원고를 읽어 넘겨주는 값과 같은 모양으로 만들어요. */
+  const parsedOf = (source: string): EditSource => {
+    const result = parseReviewFile(source);
+    return result.ok ? { ok: true, values: result.values } : { ok: false, message: result.message, source };
+  };
 
   it("저장소의 원고로 칸을 채우고, 주소는 바꿀 수 없다", () => {
-    render(<ReviewWriter mode="edit" slug="winter-stop" source={SOURCE} baseSha="base" />);
+    render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsedOf(SOURCE)} baseSha="base" />);
     expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장");
     expect(screen.queryByLabelText(/^주소\(영문\)/)).not.toBeInTheDocument();
     expect(screen.getByText(/수정할 때는 바꿀 수 없습니다/)).toBeInTheDocument();
@@ -318,7 +289,7 @@ describe("ReviewWriter(리뷰 수정)", () => {
 
   it("수정한 내용을 처음 원고 sha와 함께 PUT으로 저장한다(글 쓴 날은 그대로)", async () => {
     const user = userEvent.setup();
-    render(<ReviewWriter mode="edit" slug="winter-stop" source={SOURCE} baseSha="base" />);
+    render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsedOf(SOURCE)} baseSha="base" />);
     await user.clear(screen.getByLabelText(/^한줄평/));
     await user.type(screen.getByLabelText(/^한줄평/), "고친 한줄평");
     await user.click(screen.getByRole("button", { name: "수정한 내용 저장" }));

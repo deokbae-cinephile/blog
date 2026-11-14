@@ -6,7 +6,7 @@
  *   목록은 미리 만든 화면이라 조회수가 들어 있지 않거든요. 받기 전·실패했을 때는 null이고, 목록에는 "조회 –"로 보여요.
  *
  * 누가 쓰나요?
- *   components/review-browser.tsx(목록의 조회수 표시와 조회순 정렬)
+ *   components/review-browser.tsx(목록의 조회수 표시)
  */
 
 import { useEffect, useState } from "react";

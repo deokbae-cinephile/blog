@@ -5,11 +5,17 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { reviewMocks } from "@/test/review-mocks";
 
 import { ReviewListItem } from "./review-list-item";
+
+// IntentLink(intent-link.tsx)가 쓰는 라우터를 흉내 내요. 진짜 라우터는 Next.js 앱 안에서만 있어요. 미리 받기는 아무 일도 하지 않아요.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+}));
 
 // 가짜 리뷰 중 첫 번째(겨울 정류장)와 네 번째(8비트 영웅전)를 써요. 빈칸(, ,)은 건너뛴다는 뜻이에요.
 const [winter, , , legend] = reviewMocks;

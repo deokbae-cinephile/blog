@@ -1,7 +1,7 @@
 /**
  * @file 조회수 API 테스트 (app/api/views/route.ts, app/api/views/[slug]/route.ts)
  *
- * - GET /api/views: 모든 리뷰의 조회수와 총 조회수를 돌려주고, 저장해 두지 않게(no-store) 하는지
+ * - GET /api/views: 모든 리뷰의 조회수를 돌려주고(총 조회수는 없음), 저장해 두지 않게(no-store) 하는지
  * - POST /api/views/<주소>: 로그인하지 않은 사람이면 세고, 글쓴이(세션 쿠키)면 세지 않는지
  * - 같은 사람(접속 주소 + 브라우저)이 곧바로 다시 보면 세지 않고, 다른 사람이면 세는지
  * - 다른 사이트에서 보낸 요청(403)과 틀린 주소(400)를 막는지
@@ -43,11 +43,11 @@ describe("조회수 API", () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("POST: 로그인하지 않은 사람이 보면 세고, 센 뒤의 조회수·총 조회수를 돌려준다", async () => {
+  it("POST: 로그인하지 않은 사람이 보면 세고, 센 뒤의 조회수를 돌려준다", async () => {
     const response = await POST(await countRequest("api-alpha"), ctx("api-alpha"));
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toMatchObject({ count: 1, counted: true });
+    expect(await response.json()).toEqual({ count: 1, counted: true });
   });
 
   it("POST: 같은 사람이 곧바로 다시 보면 세지 않고, 다른 사람이면 센다", async () => {
@@ -84,13 +84,12 @@ describe("조회수 API", () => {
     expect(await (await getOne(request, ctx("api-epsilon"))).json()).toMatchObject({ count: 1 });
   });
 
-  it("GET /api/views: 모든 리뷰의 조회수와 총 조회수를 저장해 두지 않게(no-store) 돌려준다", async () => {
+  it("GET /api/views: 모든 리뷰의 조회수를 저장해 두지 않게(no-store) 돌려주고, 총 조회수는 없다", async () => {
     await POST(await countRequest("api-zeta"), ctx("api-zeta"));
     const response = await getAll();
     expect(response.headers.get("cache-control")).toBe("no-store");
-    const body = (await response.json()) as { counts: Record<string, number>; total: number };
+    const body = (await response.json()) as { counts: Record<string, number> };
     expect(body.counts["api-zeta"]).toBe(1);
-    // 총 조회수는 리뷰마다의 조회수를 모두 더한 것과 같아요(이 서버에서 센 것만 있으니까요).
-    expect(body.total).toBe(Object.values(body.counts).reduce((sum, count) => sum + count, 0));
+    expect(Object.keys(body)).toEqual(["counts"]);
   });
 });

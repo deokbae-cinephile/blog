@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { imageRefProblems, reviewFrontmatterSchema, safeDecode, SLUG } from "./review-schema";
+import { checkFrontmatter, imageRefProblems, isRating, safeDecode, SLUG } from "./review-schema";
 
 /** 모든 항목이 올바르게 들어 있는 원고 정보. 테스트마다 여기서 한 곳만 바꿔 틀린 원고를 만들어요. */
 const valid = {
@@ -29,32 +29,39 @@ const valid = {
 
 /** 검사해 보고 실패하면 오류 문구 목록을, 통과하면 빈 목록을 돌려주는 도우미 */
 const messages = (input: unknown) => {
-  const result = reviewFrontmatterSchema.safeParse(input);
-  return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  const result = checkFrontmatter(input);
+  return result.ok ? [] : result.issues.map((issue) => issue.message);
 };
 
-describe("reviewFrontmatterSchema", () => {
+/** 통과해야 하는 원고를 검사해 정리된 정보를 돌려주는 도우미(틀리면 문구와 함께 시험을 멈춰요) */
+const parse = (input: unknown) => {
+  const result = checkFrontmatter(input);
+  if (!result.ok) throw new Error(result.issues.map((issue) => issue.message).join("\n"));
+  return result.value;
+};
+
+describe("checkFrontmatter", () => {
   it("올바른 원고를 그대로 읽는다", () => {
-    expect(reviewFrontmatterSchema.parse(valid)).toEqual(valid);
+    expect(parse(valid)).toEqual(valid);
   });
 
   it("선택 항목(원제·국가·상영 시간)은 없어도 된다", () => {
     // 구조 분해로 선택 항목을 빼고 나머지(required)만 남겨요. void [...]는 "안 쓰는 변수" 경고를 피하는 표시예요.
     const { originalTitle, country, runtime, ...required } = valid;
     void [originalTitle, country, runtime];
-    expect(reviewFrontmatterSchema.safeParse(required).success).toBe(true);
+    expect(checkFrontmatter(required).ok).toBe(true);
   });
 
   it("장르가 하나면 괄호 없이 적어도 받는다", () => {
-    expect(reviewFrontmatterSchema.parse({ ...valid, genres: "드라마" }).genres).toEqual(["드라마"]);
+    expect(parse({ ...valid, genres: "드라마" }).genres).toEqual(["드라마"]);
   });
 
   it("공동 감독을 목록으로 적으면 쉼표로 잇는다", () => {
-    expect(reviewFrontmatterSchema.parse({ ...valid, director: ["가", "나"] }).director).toBe("가, 나");
+    expect(parse({ ...valid, director: ["가", "나"] }).director).toBe("가, 나");
   });
 
   it("YAML이 날짜를 Date로 읽어도 YYYY-MM-DD로 맞춘다", () => {
-    const result = reviewFrontmatterSchema.parse({ ...valid, publishedAt: new Date("2026-11-08T00:00:00Z") });
+    const result = parse({ ...valid, publishedAt: new Date("2026-11-08T00:00:00Z") });
     expect(result.publishedAt).toBe("2026-11-08");
   });
 
@@ -112,14 +119,14 @@ describe("reviewFrontmatterSchema", () => {
   });
 
   it("포스터 파일 이름과 설명을 받는다", () => {
-    const result = reviewFrontmatterSchema.parse({ ...valid, poster: "winter-stop.jpg", posterAlt: "눈 내리는 정류장" });
+    const result = parse({ ...valid, poster: "winter-stop.jpg", posterAlt: "눈 내리는 정류장" });
     expect(result.poster).toBe("winter-stop.jpg");
     expect(result.posterAlt).toBe("눈 내리는 정류장");
   });
 
   // 폴더를 거슬러 올라가는 이름(../), 대문자, 이미지가 아닌 확장자는 모두 막아요.
   it("/posters/파일 모양으로 적어도 파일 이름만 남겨 받는다", () => {
-    expect(reviewFrontmatterSchema.parse({ ...valid, poster: "/posters/winter-stop.jpg" }).poster).toBe("winter-stop.jpg");
+    expect(parse({ ...valid, poster: "/posters/winter-stop.jpg" }).poster).toBe("winter-stop.jpg");
   });
 
   it.each(["../secret.jpg", "Winter.JPG", "poster.gif", "posters/a.jpg", "/posters/../a.jpg"])("포스터 파일 이름 %s는 거절한다", (poster) => {
@@ -129,6 +136,56 @@ describe("reviewFrontmatterSchema", () => {
 
   it("공백만 있는 제목은 빈 제목으로 보고 거절한다", () => {
     expect(messages({ ...valid, title: "   " })).toEqual(["title(한국어 제목)을 적어 주세요. 예: title: 겨울 정류장"]);
+  });
+
+  it("앞뒤 공백은 지우고 받는다", () => {
+    expect(parse({ ...valid, title: "  겨울 정류장  ", oneLiner: " 한줄 " })).toMatchObject({ title: "겨울 정류장", oneLiner: "한줄" });
+  });
+
+  it("문제마다 어느 항목인지(path)를 알려 준다(글쓰기 화면이 칸에 문구를 달 때 써요)", () => {
+    const result = checkFrontmatter({ ...valid, year: "2024", rating: 4.3 });
+    expect(result.ok ? [] : result.issues.map((issue) => issue.path)).toEqual(["year", "rating"]);
+  });
+
+  // 숫자 칸에 글자를 적었거나(따옴표 "2024"), 범위 밖이거나, 정수가 아니면 거절해요.
+  it.each([
+    ["year", "2024"],
+    ["year", 1887],
+    ["year", 2024.5],
+    ["runtime", 0],
+    ["runtime", "112"],
+  ])("%s에 %s를 적으면 거절한다", (key, value) => {
+    expect(messages({ ...valid, [key]: value })).toHaveLength(1);
+  });
+
+  it("달력에 없는 날짜(2월 30일)는 거절한다", () => {
+    expect(messages({ ...valid, publishedAt: "2026-02-30" })).toEqual([
+      "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적습니다. 예: publishedAt: 2026-10-05",
+    ]);
+  });
+
+  it("선택 항목을 적어 놓고 값을 비우면(YAML의 빈 값 null) 거절한다", () => {
+    expect(messages({ ...valid, originalTitle: null })).toEqual([
+      "originalTitle(원제)은 글자로 적습니다. 원제가 없으면 그 줄을 지웁니다. 예: originalTitle: Winter Stop",
+    ]);
+  });
+
+  it("정보 영역이 객체가 아니면(비었거나 목록이면) 빠진 항목을 모두 알려 준다", () => {
+    expect(messages(null)).toEqual(messages({}));
+    expect(messages(["title"])).toEqual(messages({}));
+  });
+
+  it("빠진 항목과 알 수 없는 항목이 함께 있으면, 알 수 없는 항목은 맨 끝에 알린다", () => {
+    const list = messages({ ratting: 4 });
+    expect(list[0]).toContain("title(한국어 제목)");
+    expect(list.at(-1)).toContain("알 수 없는 항목입니다: ratting");
+  });
+});
+
+describe("isRating", () => {
+  it("0.5부터 5까지 0.5 단위 숫자만 평점이다", () => {
+    expect([0.5, 1, 2.5, 5].every(isRating)).toBe(true);
+    expect([0, 4.3, 5.5, "4.5", Number.NaN].some(isRating)).toBe(false);
   });
 });
 

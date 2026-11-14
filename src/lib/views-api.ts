@@ -5,7 +5,7 @@
  *   브라우저에서 조회수 API(app/api/views/**)를 부르는 작은 함수들이에요.
  *   실패하면(오프라인, 서버 문제) 오류를 던지지 않고 null을 돌려줘요. 조회수는 없으면 "–"로 보이면 되는 곁들이 정보라서요.
  *
- *     fetchViewCounts()   GET  /api/views         모든 리뷰의 조회수(목록, 조회순 정렬)
+ *     fetchViewCounts()   GET  /api/views         모든 리뷰의 조회수(목록)
  *     fetchViews(slug)    GET  /api/views/<주소>   이 리뷰의 조회수(세지 않음)
  *     countView(slug)     POST /api/views/<주소>   이 리뷰를 한 번 봤다고 세기(로그인한 글쓴이는 서버가 세지 않아요)
  *
@@ -27,7 +27,7 @@ async function readJson<T>(request: Promise<Response>): Promise<T | null> {
   }
 }
 
-/** 모든 리뷰의 조회수와 총 조회수. 실패하면 null */
+/** 모든 리뷰의 조회수. 실패하면 null */
 export function fetchViewCounts(): Promise<ViewSnapshot | null> {
   return readJson(fetch("/api/views", { cache: "no-store" }));
 }

@@ -2,9 +2,8 @@
  * @file 조회수 모두 읽기 API (app/api/views/route.ts → 주소 "/api/views")
  *
  * 이 파일이 하는 일
- *   GET /api/views : 모든 리뷰의 조회수와 총 조회수를 돌려줘요. 처음 화면(목록)이 조회수를 보이고 조회순으로 정렬할 때 써요.
- *     답(JSON): { counts: { "winter-stop": 12, ... }, total: 345 }
- *     총 조회수(total)는 아직 화면에 보이지 않고 데이터로만 둬요.
+ *   GET /api/views : 모든 리뷰의 조회수를 돌려줘요. 처음 화면(목록)이 항목마다 조회수를 보일 때 써요.
+ *     답(JSON): { counts: { "winter-stop": 12, ... } }
  *
  * 목록은 미리 만든 화면이라 조회수가 들어 있지 않아요. 브라우저가 화면을 연 뒤 이 API로 따로 받아 와요.
  * 저장소는 lib/view-store.ts가 골라요(Cloudflare: Durable Object, 내 컴퓨터: 메모리).

@@ -9,9 +9,11 @@
  *     public/icons/icon-192.png       설치 앱 아이콘(192×192)  ┐
  *     public/icons/icon-512.png       설치 앱 아이콘(512×512)  ├ 설치 정보(src/app/manifest.ts)에 적혀 있어요.
  *     public/icons/icon-maskable-512.png 모양 잘림용 아이콘    ┘
+ *     public/og.png                   공유 미리 보기 그림(1200×630). 링크를 카카오톡·메신저·SNS에 붙이면 카드에 보여요.
+ *                                     (src/lib/site.ts의 DEFAULT_SHARE_IMAGE, app/layout.tsx의 openGraph에 적혀 있어요.)
  *
  * 언제 실행하나요?
- *   로고 그림(src/lib/logo.ts)을 고쳤을 때만 실행해요. 만든 파일은 저장소에 함께 올려요.
+ *   로고 그림(src/lib/logo.ts)이나 블로그 이름을 고쳤을 때만 실행해요. 만든 파일은 저장소에 함께 올려요.
  *     pnpm icons
  *
  * 픽셀이 흐려지지 않게 그리는 방법
@@ -26,17 +28,21 @@
  * Node.js 24는 .ts 파일을 바로 불러올 수 있어서(타입만 지우고 실행) src/lib의 로고 데이터를 그대로 써요.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 import { chromium } from "@playwright/test";
 
 import { LOGO_ROWS } from "../src/lib/logo.ts";
 import { GREEN_PHOSPHOR } from "../src/lib/palette.ts";
 import { pixelPath } from "../src/lib/pixel-path.ts";
+import { site } from "../src/lib/site.ts";
 
 /** 화면 바탕색과 형광 초록 (src/lib/palette.ts — globals.css의 --screen, --phosphor와 같아요) */
 const SCREEN = GREEN_PHOSPHOR.screen;
 const GREEN = GREEN_PHOSPHOR.phosphor;
+/** 보조 글자색과 선 색(globals.css의 --phosphor-dim, --phosphor-line) */
+const DIM = GREEN_PHOSPHOR.dim;
+const LINE = GREEN_PHOSPHOR.line;
 
 /** 로고 그림의 가로·세로 칸 수 */
 const logoWidth = Math.max(...LOGO_ROWS.map((row) => row.length));
@@ -86,6 +92,40 @@ for (const [file, size, cell] of pngs) {
   await page.locator("svg").screenshot({ path: file });
   console.log(`${file} (${size}×${size})`);
 }
+
+// 3) 공유 미리 보기 그림: 1200×630. [큰 로고 | DMB / 덕배의 영화 블로그 / deokbae.blog]
+//    글자는 사이트와 같은 Neo둥근모예요. 글꼴 파일을 base64 글자로 바꿔 페이지 안에 넣어(@font-face) 바로 써요.
+//    글자 크기는 16의 배수(픽셀 글꼴이 또렷한 크기)로, 형광 번짐(text-shadow)과 주사선도 사이트처럼 그려요.
+const font = readFileSync("src/app/fonts/neodgm.woff2").toString("base64");
+const ogLogoCell = 24;
+const ogHtml = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+@font-face { font-family: "neodgm"; src: url(data:font/woff2;base64,${font}) format("woff2"); }
+html, body { margin: 0; }
+body {
+  width: 1200px; height: 630px; box-sizing: border-box; padding: 40px;
+  background: repeating-linear-gradient(to bottom, transparent 0 3px, rgb(0 0 0 / 0.35) 3px 4px), ${SCREEN};
+  font-family: "neodgm", monospace; color: ${GREEN};
+}
+.frame {
+  box-sizing: border-box; height: 100%; border: 4px solid ${LINE};
+  display: flex; align-items: center; justify-content: center; gap: 72px;
+}
+.text { display: grid; gap: 24px; }
+.name { font-size: 160px; line-height: 1; text-shadow: 0 0 6px ${GREEN}, 0 0 24px rgb(57 255 20 / 0.45); }
+.title { font-size: 64px; line-height: 1; text-shadow: 0 0 4px rgb(57 255 20 / 0.6); }
+.url { font-size: 32px; line-height: 1; color: ${DIM}; }
+svg { filter: drop-shadow(0 0 12px rgb(57 255 20 / 0.45)); }
+</style></head><body><div class="frame">
+<svg xmlns="http://www.w3.org/2000/svg" width="${logoWidth * ogLogoCell}" height="${logoHeight * ogLogoCell}" shape-rendering="crispEdges">
+<path fill="${GREEN}" transform="scale(${ogLogoCell})" d="${pixelPath(LOGO_ROWS, "#")}"/></svg>
+<div class="text"><div class="name">${site.name}</div><div class="title">${site.headerTitle.replace(/^DMB: /, "")}</div><div class="url">deokbae.blog</div></div>
+</div></body></html>`;
+await page.setViewportSize({ width: 1200, height: 630 });
+await page.setContent(ogHtml);
+// 글꼴을 다 받은 뒤에 찍어요(받기 전에 찍으면 다른 글꼴로 찍혀요).
+await page.evaluate(() => document.fonts.ready);
+await page.screenshot({ path: "public/og.png" });
+console.log("public/og.png (1200×630)");
 
 await browser.close();
 console.log("src/app/icon.svg (16×16)");

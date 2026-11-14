@@ -16,10 +16,11 @@
  *   components/review-list-item.tsx(목록), components/review-article.tsx(상세)
  */
 
-// next/link의 Link는 Next.js의 링크예요. 페이지 전체를 새로 받지 않고 필요한 부분만 바꿔 빠르게 이동합니다.
-import Link from "next/link";
 
 import type { Genre } from "@/lib/genres";
+
+// IntentLink: 화면에 보이기만 해서는 미리 받지 않고, 마우스를 올리거나 초점이 갈 때만 미리 받는 링크예요(intent-link.tsx).
+import { IntentLink } from "./intent-link";
 
 /** GenreTags가 받는 값 */
 type Props = {
@@ -59,9 +60,9 @@ export function GenreTags({ genres, linked = false, label, className = "" }: Pro
             {/* 조건 ? A : B — linked가 참이면 링크(A), 아니면 글자(B)를 그려요. */}
             {linked ? (
               // encodeURIComponent: 한글을 주소에 쓸 수 있는 모양(%EB%93%9C...)으로 바꿔요.
-              <Link href={`/?genre=${encodeURIComponent(genre)}`} className="term-link">
+              <IntentLink href={`/?genre=${encodeURIComponent(genre)}`} className="term-link">
                 {face}
-              </Link>
+              </IntentLink>
             ) : (
               face
             )}

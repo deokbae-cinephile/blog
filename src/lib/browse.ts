@@ -22,11 +22,8 @@
 import { GENRES, type Genre, isGenre } from "./genres";
 import { compareLatest, compareRating, type ReviewSummary } from "./review";
 
-/** 정렬 방법: "latest"(최신순), "rating"(평점순), "views"(조회순) 가운데 하나예요. */
-export type SortKey = "latest" | "rating" | "views";
-
-/** 주소의 sort 값으로 받아 주는 정렬 방법. 목록에 없는 값이면 최신순이에요. */
-const SORT_KEYS: readonly SortKey[] = ["latest", "rating", "views"];
+/** 정렬 방법: "latest"(최신순) 또는 "rating"(평점순) 둘 중 하나만 쓸 수 있어요. */
+export type SortKey = "latest" | "rating";
 
 /**
  * 목록 조건 묶음이에요. 주소의 `?q=&genre=&sort=`와 짝을 이룹니다.
@@ -66,8 +63,8 @@ export function parseParams(search: ParamReader): BrowseParams {
     q: search.get("q")?.trim() ?? "",
     // 장르 목록에 있는 이름일 때만 받아들여요. 없는 장르면 null(전체)로 둡니다.
     genre: genre && isGenre(genre) ? genre : null,
-    // 정해 둔 정렬(rating·views)일 때만 받아들이고, 그 밖에는 모두 최신순이에요.
-    sort: SORT_KEYS.find((key) => key === search.get("sort")) ?? "latest",
+    // "rating"일 때만 평점순, 그 밖에는 모두 최신순이에요.
+    sort: search.get("sort") === "rating" ? "rating" : "latest",
   };
 }
 
@@ -204,19 +201,13 @@ export function suggest(reviews: readonly ReviewSummary[], text: string, limit =
  *
  * filter와 sort를 이어 쓰는 "메서드 체이닝"이에요.
  *   1) filter: 장르가 맞고(전체면 통과) 검색어도 맞는 리뷰만 남겨요.
- *   2) sort: 정렬 규칙(lib/review.ts)대로 늘어놓아요. 조회순은 조회수가 많은 것부터, 같으면 최신순이에요.
+ *   2) sort: 정렬 규칙(lib/review.ts)대로 늘어놓아요.
  * filter가 새 배열을 만들어 주기 때문에, sort가 원래 배열을 바꾸지 않아 안전합니다.
- *
- * @param views 리뷰 주소 → 조회수. 조회순에 써요. 아직 받지 못했으면(null) 모두 0으로 보고 최신순이 돼요.
  */
-export function browse(reviews: readonly ReviewSummary[], params: BrowseParams, views: Readonly<Record<string, number>> | null = null): ReviewSummary[] {
-  // 조회순: 조회수가 많은 것부터(b - a). 같으면 최신순으로 한 번 더 비교해요.
-  const viewsOf = (review: ReviewSummary) => views?.[review.slug] ?? 0;
-  const compareViews = (a: ReviewSummary, b: ReviewSummary) => viewsOf(b) - viewsOf(a) || compareLatest(a, b);
-  const compare = params.sort === "rating" ? compareRating : params.sort === "views" ? compareViews : compareLatest;
+export function browse(reviews: readonly ReviewSummary[], params: BrowseParams): ReviewSummary[] {
   return reviews
     .filter((review) => (params.genre === null || review.genres.includes(params.genre)) && matchesQuery(review, params.q))
-    .sort(compare);
+    .sort(params.sort === "rating" ? compareRating : compareLatest);
 }
 
 /**

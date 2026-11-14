@@ -10,7 +10,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EMPTY_VALUES } from "@/lib/review-file";
+import { EMPTY_VALUES } from "@/lib/review-values";
 import { deleteReview, ReviewStoreError, saveReview } from "@/lib/review-store";
 import { createSessionToken } from "@/lib/session";
 

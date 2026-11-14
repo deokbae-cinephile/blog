@@ -23,13 +23,12 @@
 
 import "server-only";
 
-import { z } from "zod";
-
 import { commitChanges, createBlob, type FileChange, getSnapshot, readTextBlob, readTextFiles } from "./github";
 import { type BodyImage, findImages } from "./markdown";
-import { EMPTY_VALUES, parseReviewFile, type ReviewFormValues, serializeReviewFile } from "./review-file";
+import { parseReviewFile, serializeReviewFile } from "./review-file";
 import { type FieldErrors, validateReviewForm } from "./review-form";
 import { imageRefProblems, safeDecode, SLUG } from "./review-schema";
+import { EMPTY_VALUES, type ReviewFormValues } from "./review-values";
 
 /** 저장하지 못한 이유. status는 API가 돌려줄 HTTP 상태 번호, errors는 칸별 오류(있을 때만)예요. */
 export class ReviewStoreError extends Error {
@@ -46,34 +45,77 @@ export class ReviewStoreError extends Error {
 /** 사진 올리기 API(app/api/images)가 돌려준 "올린 파일": 저장소 안 경로와 내용 번호(sha) */
 export type Upload = { path: string; sha: string };
 
-/** 저장 API가 받는 내용의 검사 규칙(화면이 보낸 JSON이 이 모양인지 확인해요). */
-export const savePayloadSchema = z.object({
-  // 칸 값은 모두 글자예요(장르만 글자 목록). 알맞은 값인지는 validateReviewForm이 따로 검사해요.
-  values: z.object({
-    slug: z.string(),
-    title: z.string(),
-    originalTitle: z.string(),
-    year: z.string(),
-    country: z.string(),
-    director: z.string(),
-    runtime: z.string(),
-    genres: z.array(z.string()).max(20),
-    rating: z.string(),
-    oneLiner: z.string(),
-    poster: z.string(),
-    posterAlt: z.string(),
-    publishedAt: z.string(),
-    // 본문은 넉넉히 20만 글자까지 받아요(아주 긴 글도 충분해요).
-    body: z.string().max(200_000),
-  }),
-  // 이번에 올린 사진 목록. 한 번에 50장까지 받아요.
-  uploads: z.array(z.object({ path: z.string(), sha: z.string() })).max(50),
-  // 수정 화면이 처음 불러온 원고의 sha. 그사이 바뀌었는지 확인하는 데 써요(새 글이면 없어요).
-  baseSha: z.string().optional(),
-});
+/** 저장 API가 받는 내용(화면이 보낸 JSON). 칸 값은 모두 글자예요(장르만 글자 목록). 알맞은 값인지는 validateReviewForm이 따로 검사해요. */
+export type SavePayload = {
+  values: Omit<ReviewFormValues, "genres"> & { genres: string[] };
+  /** 이번에 올린 사진 목록 */
+  uploads: Upload[];
+  /** 수정 화면이 처음 불러온 원고의 sha. 그사이 바뀌었는지 확인하는 데 써요(새 글이면 없어요). */
+  baseSha?: string;
+};
 
-/** 저장 API가 받는 내용의 타입 */
-export type SavePayload = z.infer<typeof savePayloadSchema>;
+/** 칸 값 가운데 글자 하나인 칸들(장르와 본문은 따로 봐요) */
+const TEXT_FIELDS = [
+  "slug",
+  "title",
+  "originalTitle",
+  "year",
+  "country",
+  "director",
+  "runtime",
+  "rating",
+  "oneLiner",
+  "poster",
+  "posterAlt",
+  "publishedAt",
+] as const satisfies readonly (keyof ReviewFormValues)[];
+
+/** 본문은 넉넉히 20만 글자까지 받아요(아주 긴 글도 충분해요). */
+const MAX_BODY = 200_000;
+/** 장르는 20개까지(장르 목록이 10개라 넉넉해요). */
+const MAX_GENRES = 20;
+/** 이번에 올린 사진은 한 번에 50장까지 */
+const MAX_UPLOADS = 50;
+
+/** 배열이 아닌 객체인지 */
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * 화면이 보낸 JSON이 약속한 모양(SavePayload)인지 확인하고, 약속한 항목만 골라 돌려줘요. 모양이 틀리면 null이에요.
+ * (값이 알맞은지 — 평점 범위, 날짜 모양 등 — 는 여기서 보지 않고 saveReview의 validateReviewForm이 봐요.)
+ *
+ * @param input request.json()으로 읽은 값
+ * @returns 약속한 모양이면 그 값(모르는 항목은 뺀 새 객체), 아니면 null
+ */
+export function readSavePayload(input: unknown): SavePayload | null {
+  if (!isRecord(input) || !isRecord(input.values)) return null;
+  const raw = input.values;
+
+  const values: Partial<SavePayload["values"]> = {};
+  for (const field of TEXT_FIELDS) {
+    const value = raw[field];
+    if (typeof value !== "string") return null;
+    values[field] = value;
+  }
+  if (typeof raw.body !== "string" || raw.body.length > MAX_BODY) return null;
+  values.body = raw.body;
+  if (!Array.isArray(raw.genres) || raw.genres.length > MAX_GENRES || !raw.genres.every((genre) => typeof genre === "string")) return null;
+  values.genres = [...(raw.genres as string[])];
+
+  if (!Array.isArray(input.uploads) || input.uploads.length > MAX_UPLOADS) return null;
+  const uploads: Upload[] = [];
+  for (const upload of input.uploads) {
+    if (!isRecord(upload) || typeof upload.path !== "string" || typeof upload.sha !== "string") return null;
+    uploads.push({ path: upload.path, sha: upload.sha });
+  }
+
+  if (input.baseSha !== undefined && typeof input.baseSha !== "string") return null;
+  return {
+    values: values as SavePayload["values"],
+    uploads,
+    ...(typeof input.baseSha === "string" ? { baseSha: input.baseSha } : {}),
+  };
+}
 
 /** 파일 내용 번호(sha)의 모양: 0-9a-f 40글자 */
 const SHA = /^[0-9a-f]{40}$/;
