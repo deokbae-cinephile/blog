@@ -61,7 +61,8 @@ const MESSAGE = {
   genresDuplicate: "genres(장르)에 같은 장르를 두 번 적었습니다. 하나만 남겨 주세요.",
   rating: "rating(평점)은 0.5부터 5까지 0.5 단위 숫자로 적습니다(0점은 없습니다). 예: rating: 4.5",
   oneLiner: "oneLiner(한줄평)를 적어 주세요. 예: oneLiner: 눈이 그친 뒤에야 들리는 이야기",
-  publishedAt: "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적습니다. 예: publishedAt: 2026-10-05",
+  publishedAt:
+    "publishedAt(글 쓴 날)은 YYYY-MM-DD 형식으로 적고, 시각까지 적으려면 YYYY-MM-DDTHH:mm:ss+09:00 형식으로 적습니다. 예: publishedAt: 2026-10-05 또는 publishedAt: 2026-10-05T21:30:00+09:00",
   poster:
     "poster(포스터)에는 public/posters 폴더에 넣은 파일 이름을 적습니다(앞에 /posters/를 붙여도 됩니다). 영어 소문자·숫자·하이픈과 확장자(jpg, jpeg, png, webp, avif)만 씁니다. 예: poster: winter-stop.jpg",
   posterAlt: "posterAlt(포스터 설명)는 글자로 적습니다. 없으면 그 줄을 지웁니다. 예: posterAlt: 눈 내리는 정류장에 앉은 두 사람",
@@ -133,16 +134,26 @@ export function isRating(value: unknown): value is number {
 }
 
 /**
- * "YYYY-MM-DD" 모양의 실제 날짜 글자면 그 글자, 아니면 null(2026-02-30처럼 없는 날도 null).
+ * 글 쓴 날의 모양: 날짜만(YYYY-MM-DD) 또는 시각과 시간대까지(YYYY-MM-DDTHH:mm:ss+09:00, 초는 생략 가능, 시간대는 Z도 돼요).
+ * 시각은 같은 날 쓴 리뷰끼리 "최신순"을 가를 때 써요(lib/review.ts의 compareLatest). 시간대가 있어야 어디서 읽어도 같은 순간이에요.
+ */
+const PUBLISHED_AT = /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/;
+
+/**
+ * 글 쓴 날이 실제로 있는 날짜(와 시각) 글자면 그 글자, 아니면 null(2026-02-30처럼 없는 날, 25시도 null).
+ *   - "2026-11-14": 날짜만(예전 원고, 손으로 쓴 원고)
+ *   - "2026-11-14T19:35:48+09:00": 시각까지(2.0.0 핫픽스부터 글쓰기 화면이 새 리뷰에 넣어요, lib/review-form.ts의 nowInSeoul)
  * YAML이 날짜를 Date 객체로 읽어 오는 경우가 있어서, Date면 "YYYY-MM-DD"로 맞춰 줘요(toISOString의 앞 10글자).
  */
 function isoDate(value: unknown): string | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const match = typeof value === "string" ? PUBLISHED_AT.exec(value) : null;
+  if (!match) return null;
   // 년·월·일로 날짜를 만들어 다시 읽었을 때 같은 날이면 실제로 있는 날짜예요(2월 30일은 3월 2일로 바뀌어 달라져요).
-  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
   const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? value : null;
+  // match[0]: 맞춰 본 글자 전체(= 받은 글자 그대로)
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? match[0] : null;
 }
 
 /** 글자·숫자가 아닌 객체(배열 아님)인지. 원고 정보 영역은 "항목: 값"이 모인 객체여야 해요. */

@@ -429,20 +429,14 @@ test.describe("방문자 수(글쓴이만 봄)", () => {
   });
 });
 
-test.describe("조회수(화면에서 뺌)", () => {
-  test("목록·상세에는 조회수가 보이지 않고, 화면이 조회수 API를 부르지 않는다", async ({ page }) => {
-    // 화면이 보내는 조회수 요청(/api/views)을 모아요.
-    const viewRequests: string[] = [];
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname.startsWith("/api/views")) viewRequests.push(`${request.method()} ${request.url()}`);
-    });
-    await page.goto("/");
-    await expect(page.getByRole("region", { name: "영화 목록" })).toBeVisible();
+test.describe("조회수(모두 지움)", () => {
+  test("목록·상세에 조회수가 없고, 조회수 API도 더는 없다(404)", async ({ page, request }) => {
     await page.goto("/reviews/theta-court");
     await expect(page.locator("article > header")).toContainText("감독 시험감독3");
-    await page.waitForLoadState("networkidle");
     await expect(page.locator("main")).not.toContainText("조회");
-    expect(viewRequests).toEqual([]);
+    // 2.0.0 핫픽스에서 서버의 조회수 API와 저장소까지 지웠어요.
+    expect((await request.get("/api/views")).status()).toBe(404);
+    expect((await request.post("/api/views/theta-court")).status()).toBe(404);
   });
 });
 

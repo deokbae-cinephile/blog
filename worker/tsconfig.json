@@ -13,5 +13,5 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["./**/*.ts", "../src/lib/view-rules.ts"]
+  "include": ["./**/*.ts", "../src/lib/visit-rules.ts"]
 }

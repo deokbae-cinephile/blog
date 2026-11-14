@@ -87,6 +87,36 @@ describe("renderMarkdown", () => {
       expect(html).not.toContain("figcaption");
     });
 
+    it("빌드할 때 만든 작은 사본이 있으면 srcset(사본 + 원본)과 sizes를 달고, 원본 주소(src)는 그대로 둔다", async () => {
+      const imageSizes = new Map([["/images/booth.jpg", { width: 1600, height: 900 }]]);
+      const imageVariants = new Map([
+        [
+          "/images/booth.jpg",
+          [
+            { width: 480, url: "/_resized/480/images/booth.jpg.webp" },
+            { width: 800, url: "/_resized/800/images/booth.jpg.webp" },
+          ],
+        ],
+      ]);
+      const html = await renderMarkdown("![영사실의 빛](/images/booth.jpg)", { imageSizes, imageVariants });
+      expect(html).toContain('src="/images/booth.jpg"');
+      expect(html).toContain('srcset="/_resized/480/images/booth.jpg.webp 480w, /_resized/800/images/booth.jpg.webp 800w, /images/booth.jpg 1600w"');
+      expect(html).toContain('sizes="(min-width: 1024px) min(calc(100vw - 27rem), 1600px, calc(80vh * 1.7778)), ');
+    });
+
+    it("나란히 놓인 사진은 칸을 나눠 쓰는 sizes로 바꾸고, 사본이 없는 사진에는 srcset을 달지 않는다", async () => {
+      const imageSizes = new Map([
+        ["/images/seats.jpg", { width: 1200, height: 800 }],
+        ["/images/queue.jpg", { width: 1200, height: 800 }],
+      ]);
+      const imageVariants = new Map([["/images/seats.jpg", [{ width: 480, url: "/_resized/480/images/seats.jpg.webp" }]]]);
+      const html = await renderMarkdown("![객석](/images/seats.jpg)\n![줄](/images/queue.jpg)", { imageSizes, imageVariants });
+      expect(html).toContain('sizes="(min-width: 1024px) min(calc((100vw - 28.5rem) / 2), 1200px, calc(80vh * 1.5000)), ');
+      // queue.jpg는 사본이 없어서 srcset·sizes가 없어요(원본 하나뿐).
+      expect(html.match(/srcset=/g)).toHaveLength(1);
+      expect(html.match(/sizes=/g)).toHaveLength(1);
+    });
+
     it("한 문단에 붙여 쓴 사진들은 나란히 놓는 상자로 묶고, 빈 줄로 띄운 사진은 따로 놓는다", async () => {
       const html = await renderMarkdown("![객석](/images/seats.jpg)\n![줄](/images/queue.jpg)\n\n![영사실](/images/booth.jpg)");
       expect(html).toMatch(/^<div class="photo-row"><figure class="photo">.*<\/figure><figure class="photo">.*<\/figure><\/div>\n<figure class="photo">/);

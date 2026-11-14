@@ -13,6 +13,9 @@ next-env.d.ts
 .open-next
 .wrangler
 
+# 본문 사진의 작은 사본(빌드할 때 scripts/resize-photos.mjs가 만들어요. 저장소에는 원본만 올려요)
+/public/_resized/
+
 # 테스트 결과
 coverage
 test-results

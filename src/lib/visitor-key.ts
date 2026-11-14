@@ -2,7 +2,7 @@
  * @file 방문자 구별·로봇 거르기·오늘 날짜 (visitor-key.ts)
  *
  * 이 파일이 하는 일
- *   조회수·방문자 API가 함께 쓰는 작은 도구들이에요(서버에서만 써요).
+ *   방문자 API가 쓰는 작은 도구들이에요(서버에서만 써요).
  *
  *     visitorKey(request)  사람을 구별하는 값: 접속 주소 + 브라우저 정보를 SHA-256으로 줄인 16글자
  *     isBot(userAgent)     검색엔진 로봇·링크 미리 보기 수집기인지(방문자로 세지 않아요)
@@ -10,10 +10,10 @@
  *
  * 사람을 어떻게 구별하나요?
  *   접속 주소(Cloudflare가 알려 주는 cf-connecting-ip)와 브라우저 정보(user-agent)를 섞어 SHA-256으로 줄인 값을 써요.
- *   원래 주소는 저장하지 않아요. 방문자 저장소는 이 값도 어제·오늘 것만 두고 그보다 오래된 것은 지워요(worker/view-counter.ts).
+ *   원래 주소는 저장하지 않아요. 방문자 저장소는 이 값도 어제·오늘 것만 두고 그보다 오래된 것은 지워요(worker/visit-counter.ts).
  *
  * 누가 쓰나요?
- *   app/api/visits/route.ts(방문자), app/api/views/[slug]/route.ts(조회수)
+ *   app/api/visits/route.ts(방문자)
  */
 
 import "server-only";

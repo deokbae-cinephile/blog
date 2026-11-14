@@ -126,8 +126,8 @@ describe("saveReview(추가)", () => {
       { path: "content/reviews/winter-stop.md", sha: "blob-1" },
       { path: "public/posters/winter-stop.jpg", sha: SHA },
     ]);
-    // 원고에는 오늘 날짜(한국 시간)가 글 쓴 날로 들어가요.
-    expect(repo.texts.get("blob-1")).toMatch(/^---\ntitle: 겨울 정류장\n[\s\S]*publishedAt: \d{4}-\d{2}-\d{2}\nposter: winter-stop.jpg\n---\n\n본문\n$/);
+    // 원고에는 지금 날짜와 시각(한국 시간)이 글 쓴 날로 들어가요(같은 날 쓴 글끼리도 최신순이 맞게).
+    expect(repo.texts.get("blob-1")).toMatch(/^---\ntitle: 겨울 정류장\n[\s\S]*publishedAt: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+09:00\nposter: winter-stop.jpg\n---\n\n본문\n$/);
   });
 
   it("칸이 틀리면 커밋하지 않고 칸별 문구와 함께 422로 알린다", async () => {
