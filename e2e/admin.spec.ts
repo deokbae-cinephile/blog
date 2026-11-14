@@ -187,7 +187,10 @@ test.describe("글쓴이 기능", () => {
     await page.getByLabel("장면 사진 넣기").setInputFiles(PICTURE);
     await expect(body).toHaveValue("쓰던 문단\n\n![](/images/e2e-draft/scene-1.png)\n\n");
     await page.getByRole("button", { name: "임시 저장" }).click();
+    // 저장하는 동안 단추 아래에 로딩 UI가 보이고(적어도 0.4초), 끝나면 결과 글자로 바뀌어요.
+    await expect(page.getByText("임시 저장하는 중")).toBeVisible();
     await expect(page.getByText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/)).toBeVisible();
+    await expect(page.getByText("임시 저장하는 중")).toHaveCount(0);
     await expect(page.getByRole("group", { name: /고칠 곳/ })).toHaveCount(0);
 
     // 새로 고쳐도(임시 저장한 뒤라 떠날지 묻지 않아요) 목록에 남아 있어요. 불러오면 칸과 사진이 그대로예요.
@@ -208,8 +211,15 @@ test.describe("글쓴이 기능", () => {
     await page.getByRole("checkbox", { name: "드라마" }).check();
     await page.getByLabel(/^한줄평/).fill("임시 저장에서 이어 쓴 한줄평");
     await body.fill("쓰던 문단\n\n![화면 조정 무늬](/images/e2e-draft/scene-1.png)\n");
-    await page.getByRole("button", { name: "리뷰 저장" }).click();
-    await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused();
+    // 저장소(가짜 GitHub)의 답을 늦춰, 저장하는 동안 단추 아래에 로딩 UI가 보이는지 확인해요.
+    await request.post(`${GITHUB}/__delay?ms=700`);
+    try {
+      await page.getByRole("button", { name: "리뷰 저장" }).click();
+      await expect(page.getByText(/^사진을 올리는 중\(\d\/2\)$|^리뷰를 저장하는 중$/)).toBeVisible();
+      await expect(page.getByRole("heading", { name: "저장했습니다" })).toBeFocused({ timeout: 15_000 });
+    } finally {
+      await request.post(`${GITHUB}/__delay?ms=0`);
+    }
     const commits = (await (await request.get(`${GITHUB}/__commits`)).json()) as Commit[];
     const commit = commits.find((item) => item.message === "리뷰 추가: 임시 저장 시험")!;
     expect(commit.added.sort()).toEqual(["content/reviews/e2e-draft.md", "public/images/e2e-draft/scene-1.png", "public/posters/e2e-draft.png"]);

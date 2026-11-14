@@ -36,6 +36,11 @@
  *   새 글 화면에는 새 글의 임시 저장본만, 수정 화면에는 그 리뷰의 임시 저장본만 보여요.
  *   리뷰를 저장하면 불러왔던 임시 저장본은 지워요(다 쓴 글이니까요).
  *
+ * 저장 로딩
+ *   [리뷰 저장]·[임시 저장]을 누르면 단추 바로 아래에 로딩 UI(깜빡이는 커서 + 16칸 막대, loading-status.tsx)를 보여요.
+ *     리뷰 저장: "사진을 올리는 중(1/2)" → "리뷰를 저장하는 중"   임시 저장: "임시 저장하는 중"(최소 0.4초)
+ *   안내 영역(role="status")은 처음부터 두고 내용만 바꿔서, 화면 낭독기가 단계마다 읽어 줘요.
+ *
  * 두 번 누름 막기
  *   [저장]을 빠르게 두 번 눌러도 저장은 한 번만 해요. useState는 다음 그리기에야 바뀌어서 useRef 잠금을 함께 써요.
  *   저장에 성공하면 폼을 떠나므로(저장 완료 안내로 바뀌어요) 잠금을 풀지 않고, 실패했을 때만 풀어요.
@@ -63,6 +68,7 @@ import { EMPTY_VALUES, type ReviewFormValues } from "@/lib/review-values";
 import { extensionOf, POSTER_ACCEPT, SCENE_ACCEPT, uploadProblem } from "@/lib/upload-rules";
 
 import { Choice, ChoiceGroup } from "./choice-chips";
+import { LoadingStatus } from "./loading-status";
 import { MarkdownPreview } from "./markdown-preview";
 import { PixelArt } from "./pixel-art";
 import { type PaneView, WritePreviewPanes } from "./write-preview-panes";
@@ -101,6 +107,9 @@ type Props =
 
 /** 평점 고르기 칸의 값: 0.5, 1.0, ... 5.0 (0점은 없어요) */
 const RATINGS = Array.from({ length: 10 }, (_, index) => ((index + 1) / 2).toFixed(1));
+
+/** 저장 로딩 UI를 보이는 가장 짧은 시간(ms). 순식간에 끝나는 임시 저장도 로딩이 번쩍이지 않고 보이게 해요. */
+const MIN_BUSY_MS = 400;
 
 /** 평점 칸의 처음 값. "고르세요" 대신 가장 높은 점수를 골라 둬요. */
 const DEFAULT_RATING = "5.0";
@@ -176,8 +185,10 @@ export function ReviewWriter(props: Props) {
   // 임시 저장: 지금 쓰는 글의 임시 저장 번호(불러왔거나 한 번 저장했으면 있어요)와, 이 화면에 보일 임시 저장한 글 목록
   const [draftId, setDraftId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
-  // [임시 저장] 단추 옆의 결과 안내(role="status")
+  // [임시 저장] 단추 아래의 결과 안내(role="status")
   const [draftNotice, setDraftNotice] = useState("");
+  // 단추 아래 로딩 UI의 글자(저장·임시 저장하는 동안만, 예: "리뷰를 저장하는 중"). 비어 있으면 로딩 UI를 보이지 않아요.
+  const [busyLabel, setBusyLabel] = useState("");
   // [임시 저장] 두 번 누름 막기: 잠금(useRef)과 단추 막기(useState)를 함께 써요(저장과 같은 까닭).
   const draftLockRef = useRef(false);
   const [draftBusy, setDraftBusy] = useState(false);
@@ -488,6 +499,7 @@ export function ReviewWriter(props: Props) {
     lockRef.current = false;
     setPhase("editing");
     setNotice("");
+    setBusyLabel("");
     if (result.errors && Object.keys(result.errors).length > 0) {
       showErrors(result.errors);
     } else {
@@ -512,6 +524,8 @@ export function ReviewWriter(props: Props) {
     setPhase("saving");
     setFailure("");
     setErrors({});
+    setDraftNotice("");
+    setBusyLabel("리뷰를 저장하는 중");
 
     // 2) 새로 고른 사진 올리기. 본문에 남아 있는 장면 사진과 새 포스터만 올려요.
     const files: [string, File][] = [];
@@ -520,14 +534,14 @@ export function ReviewWriter(props: Props) {
 
     const uploads: { path: string; sha: string }[] = [];
     for (const [index, [path, file]] of files.entries()) {
-      setNotice(`사진을 올리는 중입니다(${index + 1}/${files.length}).`);
+      setBusyLabel(`사진을 올리는 중(${index + 1}/${files.length})`);
       const result = await uploadImage(file, path);
       if (!result.ok) return fail(result);
       uploads.push(result.data);
     }
 
     // 3) 리뷰 저장
-    setNotice("리뷰를 저장하는 중입니다.");
+    setBusyLabel("리뷰를 저장하는 중");
     const request = { values, uploads, baseSha: props.mode === "edit" ? props.baseSha : undefined };
     const result = props.mode === "edit" ? await updateReview(props.slug, request) : await createReview(request);
     if (!result.ok) return fail(result);
@@ -536,6 +550,7 @@ export function ReviewWriter(props: Props) {
     //    불러왔던 임시 저장본은 다 쓴 글이라 지워요(지우지 못해도 저장은 끝났으니 알리지 않아요).
     if (draftId) void deleteDraft(draftId).catch(() => undefined);
     setNotice("");
+    setBusyLabel("");
     setSavedSlug(result.data.slug);
     setPhase("saved");
   }
@@ -572,6 +587,10 @@ export function ReviewWriter(props: Props) {
     draftLockRef.current = true;
     setDraftBusy(true);
     setFailure("");
+    setDraftNotice("");
+    setBusyLabel("임시 저장하는 중");
+    // 브라우저 저장은 순식간이라 로딩 UI가 번쩍이고 사라지지 않게, 적어도 0.4초는 보여요(첫 화면 로딩 레이어와 같은 길이).
+    const shownAt = Date.now();
     // 처음 저장하면 새 번호를, 불러왔거나 저장한 적이 있으면 같은 번호를 써서 그 글을 새 내용으로 바꿔요.
     const draft: Draft = {
       id: draftId ?? crypto.randomUUID(),
@@ -582,11 +601,13 @@ export function ReviewWriter(props: Props) {
       ...(props.mode === "edit" ? { baseSha: props.baseSha } : {}),
       values,
       poster: poster ? { file: poster.file, extension: poster.extension } : null,
-      scenes: [...scenes],
+      // 본문에 남아 있는 장면 사진만 담아요. 본문에서 지운 사진 파일은 저장 공간만 차지해요([리뷰 저장]도 이렇게 올려요).
+      scenes: [...scenes].filter(([path]) => values.body.includes(path)),
       imagesSlug,
     };
     try {
       await saveDraft(draft);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, MIN_BUSY_MS - (Date.now() - shownAt))));
       setDraftId(draft.id);
       setSavedState({ values, poster: posterFile, scenes });
       setDraftNotice(`${formatDraftTime(draft.savedAt)}에 임시 저장했습니다. 이 브라우저에 저장했고, 위의 ‘임시 저장한 글’에서 다시 불러올 수 있습니다.`);
@@ -596,6 +617,7 @@ export function ReviewWriter(props: Props) {
     } finally {
       draftLockRef.current = false;
       setDraftBusy(false);
+      setBusyLabel("");
     }
   }
 
@@ -1065,9 +1087,11 @@ export function ReviewWriter(props: Props) {
             취소
           </Link>
         </div>
-        <p role="status" className="text-crt-dim empty:sr-only">
-          {draftNotice}
-        </p>
+        {/* 저장 로딩·임시 저장 결과. 이 안내 영역은 늘 두고 안의 내용만 바꿔요(화면 낭독기가 바뀔 때마다 읽어 줘요).
+            저장하는 동안은 로딩 UI(커서 + 막대, live={false}: 안내 영역은 바깥이 맡아요), 끝나면 결과 글자예요. */}
+        <div role="status" className="empty:sr-only">
+          {busyLabel ? <LoadingStatus label={busyLabel} live={false} /> : draftNotice ? <p className="text-crt-dim">{draftNotice}</p> : null}
+        </div>
       </div>
     </form>
   );

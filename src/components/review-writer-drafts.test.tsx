@@ -14,7 +14,7 @@
  * 확인해요. 브라우저 저장소(IndexedDB, lib/drafts.ts)는 가짜로 바꿔요. 진짜 저장소는 E2E(e2e/admin.spec.ts)에서 확인해요.
  */
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -112,7 +112,8 @@ describe("ReviewWriter 임시 저장", () => {
     await user.click(screen.getByRole("button", { name: "임시 저장" }));
 
     // 틀린 칸(주소 등)이 있어도 "고칠 곳" 목록 없이 저장해요.
-    expect(await screen.findByText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/)).toHaveAttribute("role", "status");
+    // 결과 글자는 단추 아래의 늘 있는 안내 영역(role="status") 안에 보여요.
+    expect((await screen.findByText(/에 임시 저장했습니다\. 이 브라우저에 저장했고/)).closest("[role='status']")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: /고칠 곳/ })).not.toBeInTheDocument();
     const saved = [...store.drafts.values()] as Draft[];
     expect(saved).toHaveLength(1);
@@ -338,5 +339,44 @@ describe("ReviewWriter 임시 저장", () => {
     expect(within(list).getByRole("button", { name: "불러오기" })).toBeDisabled();
     job.resolve({ file: new File(["png"], "scene.png", { type: "image/png" }), shrunk: false });
     await waitFor(() => expect(within(list).getByRole("button", { name: "불러오기" })).toBeEnabled());
+  });
+
+  it("[임시 저장]하는 동안 단추 아래에 '임시 저장하는 중' 로딩 UI를 보이고, 끝나면 결과 글자로 바뀐다", async () => {
+    const user = userEvent.setup();
+    const { saveDraft } = await import("@/lib/drafts");
+    const writing = deferred<void>();
+    vi.mocked(saveDraft).mockImplementationOnce(async (draft: Draft) => {
+      await writing.promise;
+      store.drafts.set(draft.id, draft);
+    });
+    render(<ReviewWriter mode="create" />);
+    await user.type(screen.getByLabelText(/^제목/), "로딩 시험");
+    await user.click(screen.getByRole("button", { name: "임시 저장" }));
+
+    const loading = await screen.findByText("임시 저장하는 중");
+    expect(loading.closest("[role='status']")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "임시 저장" })).toBeDisabled();
+    writing.resolve();
+    // 적어도 0.4초는 보인 뒤 결과 글자로 바뀌어요.
+    expect(await screen.findByText(/에 임시 저장했습니다/, undefined, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.queryByText("임시 저장하는 중")).not.toBeInTheDocument();
+  });
+
+  it("임시 저장본에는 본문에 남아 있는 장면 사진만 담는다(본문에서 지운 사진 파일은 담지 않는다)", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWriter mode="create" />);
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+    await user.upload(screen.getByLabelText("장면 사진 넣기"), [
+      new File(["a"], "a.png", { type: "image/png" }),
+      new File(["b"], "b.png", { type: "image/png" }),
+    ]);
+    const body = screen.getByRole("textbox", { name: "본문(Markdown)" });
+    await waitFor(() => expect(body).toHaveValue("![](/images/winter-stop/scene-1.png)\n\n![](/images/winter-stop/scene-2.png)\n\n"));
+    // 둘째 사진 줄을 지워요(글자 [ 는 user.type이 키 이름으로 읽어서 값을 바로 넣어요).
+    fireEvent.change(body, { target: { value: "![첫 사진](/images/winter-stop/scene-1.png)" } });
+    await user.click(screen.getByRole("button", { name: "임시 저장" }));
+    await screen.findByText(/에 임시 저장했습니다/, undefined, { timeout: 2000 });
+    const saved = [...store.drafts.values()][0] as Draft;
+    expect(saved.scenes.map(([path]) => path)).toEqual(["/images/winter-stop/scene-1.png"]);
   });
 });
