@@ -2,11 +2,10 @@
  * @file 바닥글 (site-footer.tsx)
  *
  * 이 파일이 하는 일
- *   모든 화면 맨 아래에 앱 설치 안내와, 글쓴이로 로그인했을 때의 [로그아웃]을 보여 줍니다.
- *   (로그인 링크는 두지 않아요. 글쓴이는 /login 주소로 직접 가요. session-controls.tsx 참고)
- *   화면 아래쪽에 떠 있는 단추들도 여기에 둬요.
- *     - 왼쪽 아래: 키보드 조작 안내(keyboard-help.tsx)
+ *   모든 화면 맨 아래에 앱 설치 안내를 보여 주고, 화면 아래쪽에 떠 있는 단추들을 둬요.
+ *     - 왼쪽 아래: 키보드 조작 안내(keyboard-help.tsx)와, 로그인했을 때 그 오른쪽의 [로그아웃](session-controls.tsx)
  *     - 오른쪽 아래: 맨 위로(back-to-top.tsx)와, 로그인했을 때 그 오른쪽의 리뷰 추가(+) 단추(floating-buttons.tsx)
+ *   (로그인 링크는 두지 않아요. 글쓴이는 /login 주소로 직접 가요.)
  *   떠 있는 단추는 화면 어디에 보이든 코드에서는 바닥글의 마지막이라, Tab으로 옮겨 다닐 때도 맨 끝에 와요.
  *
  * <footer> 태그
@@ -21,7 +20,6 @@ import { FloatingButtons } from "./floating-buttons";
 import { InstallPrompt } from "./install-prompt";
 import { KeyboardHelp } from "./keyboard-help";
 import { SessionControls } from "./session-controls";
-import { VisitorCount } from "./visitor-count";
 
 /** 모든 화면 맨 아래의 바닥글 */
 export function SiteFooter() {
@@ -31,15 +29,14 @@ export function SiteFooter() {
     <footer className="grid w-full gap-6 px-4 pt-16 pb-24 text-crt-dim sm:px-8 lg:px-12">
       {/* 앱 설치 안내. 브라우저에 따라 단추·안내 글이 보이거나, 아무것도 보이지 않아요(install-prompt.tsx). */}
       <InstallPrompt />
-      {/* 로그인했을 때만: 점선 아래 [로그아웃] */}
-      <SessionControls />
       {/* 화면 아래쪽에 떠 있는 것들(position: fixed). 바닥글 안에 있어도 화면 위치는 아래쪽에 고정돼요.
-          왼쪽 아래 줄: [키보드 조작] [방문자 n명(로그인한 글쓴이만)], 오른쪽 아래: [맨 위로] [+]
-          items-end: 키보드 안내를 펼치면 안내 창은 단추 위로 떠서, 옆의 방문자 수는 움직이지 않아요.
+          왼쪽 아래 줄: [키보드 조작] [로그아웃(로그인했을 때만)], 오른쪽 아래: [맨 위로] [+]
+          휴대폰(640px 미만)과 글쓰기 화면에서는 [키보드 조작]이 없어서 [로그아웃]이 왼쪽 끝에 와요.
+          items-end: 키보드 안내를 펼치면 안내 창은 단추 위로 떠서, 옆의 [로그아웃]은 움직이지 않아요.
           z-[52]: CRT 화면 효과 막(z-index 50, 51)보다 위라서 또렷해요. */}
       <div className="fixed bottom-4 left-4 z-[52] flex items-end gap-2 print:hidden">
         <KeyboardHelp />
-        <VisitorCount />
+        <SessionControls />
       </div>
       <FloatingButtons />
     </footer>

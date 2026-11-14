@@ -20,7 +20,7 @@
 import type { Metadata } from "next";
 
 import { ReviewBrowser } from "@/components/review-browser";
-import { getReviewSummaries } from "@/lib/load-reviews";
+import { getReviewSummaries } from "@/lib/review-data";
 import { site } from "@/lib/site";
 import { toJsonLd, websiteJsonLd } from "@/lib/structured-data";
 

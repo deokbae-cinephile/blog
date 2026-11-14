@@ -28,21 +28,21 @@ describe("ReviewKeys", () => {
     push.mockClear();
   });
 
-  it("◀는 이전 리뷰, ▶는 다음 리뷰, Esc는 목록으로 간다", async () => {
+  it("◀는 이전 리뷰(목록에서 바로 위), ▶는 다음 리뷰(목록에서 바로 아래), Esc는 목록으로 간다", async () => {
     const user = userEvent.setup();
-    render(<ReviewKeys newerHref="/reviews/newer" olderHref="/reviews/older" />);
+    render(<ReviewKeys previousHref="/reviews/above" nextHref="/reviews/below" />);
 
     await user.keyboard("{ArrowLeft}");
     await user.keyboard("{ArrowRight}");
     await user.keyboard("{Escape}");
 
     // mock.calls: 가짜 함수가 불릴 때마다 받은 값 목록이 쌓여요.
-    expect(push.mock.calls).toEqual([["/reviews/older"], ["/reviews/newer"], ["/"]]);
+    expect(push.mock.calls).toEqual([["/reviews/above"], ["/reviews/below"], ["/"]]);
   });
 
   it("앞뒤 리뷰가 없으면 ◀ ▶는 아무 일도 하지 않는다", async () => {
     const user = userEvent.setup();
-    render(<ReviewKeys newerHref={null} olderHref={null} />);
+    render(<ReviewKeys previousHref={null} nextHref={null} />);
 
     await user.keyboard("{ArrowLeft}{ArrowRight}");
     expect(push).not.toHaveBeenCalled();
@@ -50,7 +50,7 @@ describe("ReviewKeys", () => {
 
   it("Alt + ◀(뒤로 가기)처럼 다른 키와 함께 누르면 가로채지 않는다", async () => {
     const user = userEvent.setup();
-    render(<ReviewKeys newerHref="/reviews/newer" olderHref="/reviews/older" />);
+    render(<ReviewKeys previousHref="/reviews/above" nextHref="/reviews/below" />);
 
     await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     expect(push).not.toHaveBeenCalled();
@@ -61,7 +61,7 @@ describe("ReviewKeys", () => {
     render(
       <>
         <div className="table-scroll" tabIndex={0} role="region" aria-label="표 1" />
-        <ReviewKeys newerHref="/reviews/newer" olderHref="/reviews/older" />
+        <ReviewKeys previousHref="/reviews/above" nextHref="/reviews/below" />
       </>,
     );
 
@@ -75,7 +75,7 @@ describe("ReviewKeys", () => {
     // 캡처 단계(capture: true)에서 먼저 Esc를 받아 처리했다고 표시하는 가짜 "키보드 안내"예요.
     const closeHelp = (event: KeyboardEvent) => event.preventDefault();
     document.addEventListener("keydown", closeHelp, { capture: true });
-    render(<ReviewKeys newerHref={null} olderHref={null} />);
+    render(<ReviewKeys previousHref={null} nextHref={null} />);
 
     await user.keyboard("{Escape}");
     expect(push).not.toHaveBeenCalled();
@@ -84,7 +84,7 @@ describe("ReviewKeys", () => {
 
   it("화면에서 사라지면 키 듣기를 그만둔다", async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<ReviewKeys newerHref="/reviews/newer" olderHref="/reviews/older" />);
+    const { unmount } = render(<ReviewKeys previousHref="/reviews/above" nextHref="/reviews/below" />);
 
     unmount();
     await user.keyboard("{ArrowLeft}");

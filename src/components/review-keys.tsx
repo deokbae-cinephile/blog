@@ -4,8 +4,9 @@
  * 이 파일이 하는 일
  *   리뷰 상세 화면에서 옛 DOS 프로그램처럼 키 하나로 화면을 넘겨요.
  *
- *     ◀(왼쪽 화살표)  : 이전 리뷰(더 예전에 쓴 글)
- *     ▶(오른쪽 화살표): 다음 리뷰(더 최근에 쓴 글)
+ *     ◀(왼쪽 화살표)  : 이전 리뷰(처음 화면 목록에서 바로 위 = 더 최근에 쓴 글)
+ *     ▶(오른쪽 화살표): 다음 리뷰(목록에서 바로 아래 = 더 예전에 쓴 글)
+ *   목록 화면의 ▲ ▼(◀ ▶)와 같은 방향이에요: 위로 가면 이전, 아래로 가면 다음.
  *     Esc             : 목록(처음 화면)으로
  *
  *   화면 아래의 "◀ 이전 리뷰 / 다음 리뷰 ▶" 링크, 위의 "◀ 목록으로" 링크와 같은 곳으로 가요.
@@ -35,14 +36,14 @@ import { isPlainKeyPress, keepsOwnKeys } from "@/lib/keyboard";
 
 /** ReviewKeys가 받는 값 */
 type Props = {
-  /** 다음 리뷰(더 최근에 쓴 글) 주소. 없으면 null이고, ▶를 눌러도 아무 일도 없어요. */
-  newerHref: string | null;
-  /** 이전 리뷰(더 예전에 쓴 글) 주소. 없으면 null */
-  olderHref: string | null;
+  /** 이전 리뷰(목록에서 바로 위) 주소. 없으면 null이고, ◀를 눌러도 아무 일도 없어요. */
+  previousHref: string | null;
+  /** 다음 리뷰(목록에서 바로 아래) 주소. 없으면 null */
+  nextHref: string | null;
 };
 
 /** 상세 화면의 키보드 조작(◀ ▶ Esc). 화면에는 아무것도 그리지 않아요. */
-export function ReviewKeys({ newerHref, olderHref }: Props) {
+export function ReviewKeys({ previousHref, nextHref }: Props) {
   const router = useRouter();
 
   // 왜 useEffect가 아니라 useLayoutEffect일까요?
@@ -56,7 +57,7 @@ export function ReviewKeys({ newerHref, olderHref }: Props) {
       if (!isPlainKeyPress(event) || keepsOwnKeys(event.target)) return;
 
       // 누른 키(event.key)에 따라 갈 곳을 정해요. 해당하지 않는 키면 null이에요.
-      const href = event.key === "ArrowLeft" ? olderHref : event.key === "ArrowRight" ? newerHref : event.key === "Escape" ? "/" : null;
+      const href = event.key === "ArrowLeft" ? previousHref : event.key === "ArrowRight" ? nextHref : event.key === "Escape" ? "/" : null;
       if (href === null) return;
 
       // 브라우저의 원래 동작(가로 스크롤 등)을 막고, 우리가 처리했다고 표시해요.
@@ -69,7 +70,7 @@ export function ReviewKeys({ newerHref, olderHref }: Props) {
     // 정리 함수: 다른 화면으로 가서 이 컴포넌트가 사라지면 키 듣기를 떼어 내요. 안 떼면 다른 화면에서도 ◀ ▶가 동작해 버려요.
     return () => document.removeEventListener("keydown", handleKeyDown);
     // [ ] 안의 값이 바뀌면(다른 리뷰로 넘어가면) 정리한 뒤 새 주소로 다시 걸어요.
-  }, [router, newerHref, olderHref]);
+  }, [router, previousHref, nextHref]);
 
   return null;
 }

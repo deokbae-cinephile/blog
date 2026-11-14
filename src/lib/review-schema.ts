@@ -23,7 +23,7 @@
  *     규칙이 한 곳에 있어서, 화면에서 통과한 글은 빌드에서도 통과해요.
  */
 
-import { GENRES, type Genre } from "./genres";
+import { GENRES, type Genre } from "./genres.ts";
 
 /**
  * 원고 맨 위에 쓸 수 있는 항목 이름들.

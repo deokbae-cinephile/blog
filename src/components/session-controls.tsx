@@ -2,7 +2,8 @@
  * @file 글쓴이 로그아웃 (session-controls.tsx)
  *
  * 이 파일이 하는 일
- *   글쓴이로 로그인했을 때만 바닥글에 [로그아웃] 단추를 보여 줘요(위쪽에 점선을 그어 본문과 나눠요).
+ *   글쓴이로 로그인했을 때만 화면 왼쪽 아래에 떠 있는 [로그아웃] 단추를 보여 줘요([키보드 조작] 오른쪽, 옆 단추와 같은 모양).
+ *   어느 화면에서든 같은 자리에 있어서, 길게 내려 읽다가도 바로 로그아웃할 수 있어요.
  *     - 로그인 전: 아무것도 보이지 않아요. 방문자에게 로그인 링크를 보이지 않으려고요.
  *       글쓴이는 로그인 화면 주소(/login)로 직접 가거나, 글쓰기 화면(/write)에 가면 로그인 화면으로 보내져요(proxy.ts).
  *     - 로그인 뒤: [로그아웃] 단추 → 로그인 쿠키를 지우고 처음 화면으로
@@ -10,7 +11,7 @@
  * 로그아웃을 두 번 빠르게 눌러도 요청은 한 번만 가요(useRef 잠금).
  *
  * 누가 쓰나요?
- *   components/site-footer.tsx(바닥글)
+ *   components/site-footer.tsx(바닥글의 왼쪽 아래 고정 줄)
  */
 
 "use client";
@@ -53,13 +54,24 @@ export function SessionControls() {
   if (!isAdmin) return null;
 
   return (
-    // border-t-2 border-dotted: 위쪽에 2px 점선을 그어 본문과 나눠요.
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t-2 border-dotted border-crt-line pt-4">
-      <button type="button" onClick={handleLogout} className="term-link cursor-pointer">
+    // relative: 실패 안내(absolute)를 단추 위에 띄우는 기준이에요. 안내가 떠도 단추 줄은 움직이지 않아요.
+    <div className="relative">
+      {/* btn-float: 옆의 [키보드 조작]과 같은 떠 있는 단추 모양(누르는 높이 44px) */}
+      <button type="button" onClick={handleLogout} className="btn-float">
         로그아웃
       </button>
-      {/* role="alert": 로그아웃에 실패하면 바로 읽어 줘요. 영역은 단추와 함께 늘 두고 글자만 바꿔요. */}
-      <p role="alert">{error}</p>
+      {/* role="alert": 로그아웃에 실패하면 바로 읽어 줘요. 영역은 단추와 함께 늘 두고 글자만 바꿔요.
+          글이 있을 때만 단추 위에 상자로 보여요(비어 있으면 상자 모양도 없어서 보이지 않아요). */}
+      <p
+        role="alert"
+        className={
+          error
+            ? "absolute bottom-full left-0 mb-2 w-max max-w-[calc(100vw-2rem)] border-2 border-crt-fg bg-crt-bg px-3 py-2 shadow-[0_0_1rem_rgb(var(--glow-rgb)/0.3)]"
+            : "absolute bottom-full left-0"
+        }
+      >
+        {error}
+      </p>
     </div>
   );
 }

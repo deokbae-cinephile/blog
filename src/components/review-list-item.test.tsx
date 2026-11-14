@@ -4,7 +4,7 @@
  * <li>는 목록(<ul>, <ol>) 안에서만 쓸 수 있는 태그라, 테스트에서도 <ul>로 감싸 그려요(HTML 규칙 지키기).
  */
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { reviewMocks } from "@/test/review-mocks";
@@ -74,5 +74,15 @@ describe("ReviewListItem", () => {
     expect(container.querySelector("article")?.firstElementChild).toHaveClass("poster-frame");
     // 한줄평은 mt-auto로 글 칸(세로로 쌓는 flex) 맨 아래에 붙어요.
     expect(screen.getByText(/버스는 오지 않아도/).closest("p")).toHaveClass("mt-auto");
+  });
+
+  it("장르 태그는 제목 바로 옆(첫째 줄)에 글자로만 두고, 둘째 줄에는 원제·연도·감독만 둔다", () => {
+    renderItem();
+    const heading = screen.getByRole("heading", { level: 3 });
+    const genres = screen.getByRole("list", { name: "장르" });
+    // 제목 바로 다음 칸이 장르 목록이에요(같은 줄).
+    expect(heading.nextElementSibling).toBe(genres);
+    // 목록 한 편 전체가 상세로 가는 링크라, 장르에는 링크가 없어요(링크 안에 링크를 두지 않아요).
+    expect(within(genres).queryByRole("link")).not.toBeInTheDocument();
   });
 });

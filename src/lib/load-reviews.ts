@@ -7,28 +7,31 @@
  * 맡은 기능
  *   1. 폴더 안의 원고 파일 목록 읽기 (이름이 _로 시작하는 파일은 건너뜀. 예: 쓰다 만 _draft.md)
  *   2. 원고 맨 위 정보 영역(frontmatter) 읽기 → lib/review-schema.ts 규칙으로 검사
- *   3. 포스터를 적었다면 public/posters에 그 파일이 정말 있는지 확인하기
+ *   3. 포스터를 적었다면 public/posters에 그 파일이 정말 있는지 확인하기(크기도 재요: 공유 미리 보기용)
  *   4. 본문 사진마다 설명(대체 텍스트)을 적었는지, 파일이 public 폴더에 정말 있는지 확인하고 크기 재기
  *   5. 본문(Markdown)을 HTML로 바꾸기 → lib/markdown.ts
  *   6. 고칠 곳이 있으면 빌드를 멈추고, 파일 이름과 고치는 방법을 한꺼번에 알려 주기
- *   7. 화면이 쓰기 편한 함수 제공: 전체 목록, 한 편 찾기, 앞뒤 리뷰 찾기
+ *   7. 다 읽은 리뷰 데이터를 파일(.generated/reviews.json)로 쓰기(writeReviewsData)
  *
  * 이 코드는 언제, 어디서 돌아가나요?
- *   "빌드할 때 서버(내 컴퓨터, CI, 호스팅의 빌드 서버)"에서만 돌아갑니다.
- *   목록·상세 화면은 빌드할 때 미리 만들어 두기 때문에, 방문자가 올 때는 이 코드가 다시 돌지 않아요.
- *   (글쓴이가 새 리뷰를 저장하면 저장소에 원고가 올라가고, 호스팅이 다시 빌드하면서 이 코드가 새 원고를 읽어요.)
+ *   빌드 직전에 scripts/build-reviews.mjs가 이 파일로 원고를 읽어 리뷰 데이터(.generated/reviews.json)를 써 둬요.
+ *   목록·상세 화면(lib/review-data.ts)은 그 데이터만 읽어서, Markdown 변환 도구(unified 등)가 워커에 실리지 않아요(가볍게).
+ *   개발 서버(pnpm dev)에서만 lib/review-data.ts가 이 파일을 바로 불러, 원고를 고치면 새로 고침만으로 보여요.
  *   파일을 읽는 node:fs는 브라우저에는 없어서, 이 파일을 브라우저용 코드에서 가져오면 안 돼요.
  *   맨 위의 `import "server-only"`가 그런 실수를 막아 줍니다(실수로 가져오면 빌드가 오류를 냅니다).
  *
+ * import 끝의 .ts
+ *   빌드 스크립트는 Node.js가 이 파일을 바로 실행해서(type stripping), 우리 파일을 부를 때 확장자까지 적어야 찾을 수 있어요.
+ *
  * 누가 쓰나요?
- *   app/page.tsx(목록), app/reviews/[slug]/page.tsx(상세), app/sitemap.ts
+ *   scripts/build-reviews.mjs(빌드 직전), lib/review-data.ts(개발 서버에서만)
  */
 
 import "server-only";
 
 // node:fs/promises는 Node.js가 주는 "파일 다루기" 도구예요. promises 버전이라 await로 기다릴 수 있습니다.
 // access는 "파일이 있는지(읽을 수 있는지)" 확인할 때 써요. 없으면 오류를 던져요.
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 // node:path는 폴더·파일 경로를 운영체제에 맞게 이어 붙이거나 계산해 주는 도구예요.
 import path from "node:path";
 
@@ -39,11 +42,11 @@ import { VFile } from "vfile";
 // matter는 가상 파일 맨 위의 YAML 정보 영역(---로 감싼 부분)을 읽어 file.data.matter에 넣어 줘요.
 import { matter } from "vfile-matter";
 
-import { findImages, type ImageSize, renderMarkdown } from "./markdown";
-import { type PhotoVariant, RESIZABLE, variantFile, variantUrl, variantWidths } from "./photo-variants";
-import { compareLatest, type Review, type ReviewSummary } from "./review";
+import { findImages, type ImageSize, renderMarkdown } from "./markdown.ts";
+import { type PhotoVariant, RESIZABLE, variantFile, variantUrl, variantWidths } from "./photo-variants.ts";
+import { compareLatest, type Review } from "./review.ts";
 // SLUG: 원고 파일 이름(= 주소) 규칙, imageRefProblems: 사진 설명·주소 규칙. 글쓰기 저장 API(lib/review-form.ts)와 함께 써요.
-import { checkFrontmatter, imageRefProblems, safeDecode, SLUG, WEB_IMAGE_TYPES } from "./review-schema";
+import { checkFrontmatter, imageRefProblems, safeDecode, SLUG, WEB_IMAGE_TYPES } from "./review-schema.ts";
 
 /**
  * 원고에 고칠 곳이 있을 때 던지는 오류예요.
@@ -54,14 +57,14 @@ import { checkFrontmatter, imageRefProblems, safeDecode, SLUG, WEB_IMAGE_TYPES }
  * `class A extends Error`는 "Error의 성질을 물려받은 A라는 새 종류의 오류"를 만든다는 뜻입니다.
  */
 export class ReviewContentError extends Error {
+  /** 고칠 곳 목록. 한 줄에 "파일 경로: 고치는 방법"이 들어 있어요. */
+  readonly problems: readonly string[];
+
   /**
-   * @param problems 고칠 곳 목록. 한 줄에 "파일 경로: 고치는 방법"이 들어 있어요.
+   * @param problems 고칠 곳 목록
    * @param what 무슨 원고인지. 메시지 첫 줄에 써요. 기본 "리뷰 원고"
    */
-  constructor(
-    readonly problems: readonly string[],
-    what = "리뷰 원고",
-  ) {
+  constructor(problems: readonly string[], what = "리뷰 원고") {
     // super(...)는 부모(Error)의 생성자를 부르는 것으로, 넘긴 글자가 오류 메시지(message)가 됩니다.
     super(
       [
@@ -71,6 +74,8 @@ export class ReviewContentError extends Error {
         "원고 틀: content/templates/review.md",
       ].join("\n"), // 줄바꿈(\n)으로 이어 여러 줄 메시지로 만듭니다.
     );
+    // (생성자 매개변수에 readonly를 붙이는 줄임 문법은 Node.js가 타입만 지우고 실행할 수 없어서 풀어 적어요.)
+    this.problems = problems;
     // 오류 이름. 터미널에 "ReviewContentError: ..."처럼 보여요.
     this.name = "ReviewContentError";
   }
@@ -283,79 +288,23 @@ export async function checkImages(markdown: string, publicDir: string) {
  * 환경 변수 REVIEWS_DIR로 시험용 원고 폴더(e2e/fixtures/reviews)를 대신 읽게 합니다.
  * process.cwd()는 명령을 실행한 위치(프로젝트 폴더)예요.
  */
-function reviewsDir(): string {
+export function reviewsDir(): string {
   // turbopackIgnore: 빌드 도구(Turbopack)에게 "이 경로는 따라가 묶지 마"라고 알려요.
   //   원고는 빌드할 때만 읽어서 서버 실행 파일에 넣을 필요가 없어요. 따라가면 프로젝트 전체가 서버 묶음에 들어가 배포가 무거워져요.
   return path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.REVIEWS_DIR ?? "content/reviews");
 }
 
-/** 한 번 읽은 결과를 담아 두는 곳(캐시)이에요. 처음에는 비어 있습니다(undefined). */
-let loaded: Promise<Review[]> | undefined;
-
 /**
- * 모든 리뷰를 돌려줍니다(최신순).
+ * 원고를 모두 읽고 검사해 리뷰 데이터(본문 HTML 포함, 최신순)를 JSON 파일로 써요. 빌드 직전에 scripts/build-reviews.mjs가 불러요.
  *
- * - 빌드할 때(production): 리뷰 페이지가 여러 장 만들어지는데, 그때마다 원고를 다시 읽으면 느리겠죠.
- *   그래서 처음 한 번 읽은 결과를 `loaded`에 담아 두고 계속 다시 씁니다.
- * - 개발 서버(pnpm dev): 원고를 고치면 새로 고침만 해도 바로 보여야 하니 매번 새로 읽어요.
+ * @param outFile 쓸 파일 경로(보통 프로젝트의 .generated/reviews.json, lib/review-data.ts의 REVIEWS_DATA_FILE)
+ * @param dir 원고 폴더. 기본은 reviewsDir()
+ * @returns 쓴 리뷰 수
+ * @throws {ReviewContentError} 고칠 곳이 있으면(파일은 쓰지 않아요)
  */
-export function getAllReviews(): Promise<Review[]> {
-  // NODE_ENV는 Next.js가 정해 주는 값이에요. 빌드하면 "production", 개발 서버면 "development"입니다.
-  if (process.env.NODE_ENV !== "production") return loadReviews(reviewsDir());
-  // `A ??= B`는 "A가 비어 있을 때만 B를 넣는다"는 뜻이에요. 두 번째부터는 담아 둔 결과를 그대로 씁니다.
-  loaded ??= loadReviews(reviewsDir());
-  return loaded;
+export async function writeReviewsData(outFile: string, dir = reviewsDir()): Promise<number> {
+  const reviews = await loadReviews(dir);
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, JSON.stringify(reviews));
+  return reviews.length;
 }
-
-/**
- * 리뷰에서 본문(html)을 뺀 목록용 정보만 남깁니다.
- * 처음 화면은 목록 전체를 브라우저로 보내므로 본문을 빼 가볍게 해요.
- */
-function toSummary(review: Review): ReviewSummary {
-  // 구조 분해: html·포스터 크기(상세 화면에서만 써요)는 따로 꺼내고, 나머지 항목은 모두 summary에 모아요.
-  const { html, posterSize, ...summary } = review;
-  // 둘은 쓰지 않는다고 분명히 해 둡니다. (안 쓰는 변수가 있다는 린트 경고를 피하는 관용 표현이에요.)
-  void html;
-  void posterSize;
-  return summary;
-}
-
-/** 목록 화면용: 모든 리뷰의 목록 정보(본문 제외)를 최신순으로 돌려줘요. */
-export async function getReviewSummaries(): Promise<ReviewSummary[]> {
-  return (await getAllReviews()).map(toSummary);
-}
-
-/**
- * 상세 화면용: 주소(slug)에 맞는 리뷰 한 편을 찾아요.
- *
- * @param slug 원고 파일 이름(확장자 제외)
- * @returns 리뷰. 없으면 null
- */
-export async function getReviewBySlug(slug: string): Promise<Review | null> {
-  // find는 조건에 맞는 첫 항목을, 없으면 undefined를 돌려줘요. `?? null`로 "없음"을 null로 통일합니다.
-  return (await getAllReviews()).find((review) => review.slug === slug) ?? null;
-}
-
-/**
- * 상세 화면 아래의 "이전 리뷰 / 다음 리뷰" 링크용으로, 쓴 날 순서의 바로 앞뒤 리뷰를 찾아요.
- *
- * 목록이 최신순이라 배열에서 한 칸 앞(index - 1)이 "더 최근에 쓴 글(다음)",
- * 한 칸 뒤(index + 1)가 "더 예전에 쓴 글(이전)"이에요.
- *
- * @param slug 지금 보고 있는 리뷰의 주소
- */
-export async function getNeighbors(
-  slug: string,
-): Promise<{ newer: ReviewSummary | null; older: ReviewSummary | null }> {
-  const reviews = await getAllReviews();
-  // findIndex는 조건에 맞는 항목의 위치(0부터)를, 없으면 -1을 돌려줘요.
-  const index = reviews.findIndex((review) => review.slug === slug);
-  if (index === -1) return { newer: null, older: null };
-
-  // 배열 범위를 벗어난 칸(맨 앞의 앞, 맨 뒤의 뒤)은 undefined가 나와요.
-  const newer = reviews[index - 1];
-  const older = reviews[index + 1];
-  // 있으면 목록 정보로 줄이고, 없으면 null을 돌려줍니다.
-  return { newer: newer ? toSummary(newer) : null, older: older ? toSummary(older) : null };
-}
-

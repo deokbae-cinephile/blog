@@ -26,7 +26,7 @@ vi.mock("next/navigation", async (importOriginal) => ({
 const [, mars, reel] = reviewMocks;
 
 /** 앞뒤 리뷰 없이 상세 화면을 그리는 도우미 */
-const renderAlone = (review = reviewDetailMock) => render(<ReviewArticle review={review} newer={null} older={null} />);
+const renderAlone = (review = reviewDetailMock) => render(<ReviewArticle review={review} previous={null} next={null} />);
 
 describe("ReviewArticle", () => {
   afterEach(() => {
@@ -89,17 +89,16 @@ describe("ReviewArticle", () => {
     expect(container.querySelector("[class*='max-w-']")).not.toBeInTheDocument();
   });
 
-  it("이전·다음 리뷰로 가는 링크를 단다(꾸밈 화살표는 이름에서 빠진다)", () => {
-    render(<ReviewArticle review={reviewDetailMock} newer={mars!} older={reel!} />);
+  it("이전 리뷰(목록에서 바로 위)·다음 리뷰(바로 아래)로 가는 링크를 단다(꾸밈 화살표는 이름에서 빠진다)", () => {
+    // 목록(최신순)이 화성 세탁소 → (이 리뷰) → 필름이 끊기기 전에 순서인 상황이에요.
+    render(<ReviewArticle review={reviewDetailMock} previous={mars!} next={reel!} />);
     const nav = screen.getByRole("navigation", { name: "다른 리뷰" });
-    expect(within(nav).getByRole("link", { name: "이전 리뷰 필름이 끊기기 전에" })).toHaveAttribute(
-      "href",
-      "/reviews/before-the-last-reel",
-    );
-    expect(within(nav).getByRole("link", { name: "다음 리뷰 화성 세탁소" })).toHaveAttribute(
-      "href",
-      "/reviews/laundromat-on-mars",
-    );
+    const previous = within(nav).getByRole("link", { name: "이전 리뷰 화성 세탁소" });
+    const next = within(nav).getByRole("link", { name: "다음 리뷰 필름이 끊기기 전에" });
+    expect(previous).toHaveAttribute("href", "/reviews/laundromat-on-mars");
+    expect(previous).toHaveAttribute("rel", "prev");
+    expect(next).toHaveAttribute("href", "/reviews/before-the-last-reel");
+    expect(next).toHaveAttribute("rel", "next");
   });
 
   it("다른 리뷰가 없으면 이동 영역을 두지 않는다", () => {

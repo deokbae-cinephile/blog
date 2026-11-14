@@ -4,8 +4,8 @@
  * 이 파일이 하는 일
  *   처음 화면 목록에서 리뷰 한 편을 한 덩어리로 보여 줍니다.
  *
- *     ┌────┐ 겨울 정류장 ································ 4.5   ← 첫째 줄: 제목 · 평점
- *     │포스│ Winter Stop · 2024 · 감독 한서윤 [드라마] ← 둘째 줄: 원제 · 연도 · 감독 · 장르
+ *     ┌────┐ 겨울 정류장 [드라마] [로맨스] ················ 4.5   ← 첫째 줄: 제목 + 장르 태그 · 평점
+ *     │포스│ Winter Stop · 2024 · 감독 한서윤                  ← 둘째 줄: 원제 · 연도 · 감독
  *     │ 터 │
  *     │2:3 │ “버스는 오지 않아도, 기다림은 끝내 도착한다.”     ← 한줄평: 썸네일 아래 끝에 맞춰요
  *     └────┘
@@ -71,7 +71,7 @@ export function ReviewListItem({ review }: Props) {
         {/* 글자 칸. flex-col: 줄을 위에서 아래로 쌓고, 한줄평은 mt-auto로 맨 아래에 붙여요.
             min-w-0: 긴 제목이 칸을 밀어내지 않고 줄바꿈되게 하는 그리드·플렉스 요령이에요. */}
         <div className="flex min-w-0 flex-col">
-          {/* 첫째 줄: 제목 · 점선 · 평점 */}
+          {/* 첫째 줄: 제목 + 장르 태그 · 점선 · 평점(상세 화면처럼 제목과 장르를 함께 보여요) */}
           <div className="flex flex-wrap items-center gap-x-3">
             <h3 id={titleId} className="glow">
               {/* stretched-link: 누르는 영역을 항목 전체로 넓혀요(마우스를 항목 어디에 올려도 이 링크에 올린 것이에요).
@@ -81,18 +81,17 @@ export function ReviewListItem({ review }: Props) {
                 {title}
               </IntentLink>
             </h3>
+            {/* 장르 태그: 제목 바로 옆. 목록 한 편 전체가 상세로 가는 링크라, 장르는 링크 없이 글자로만 둬요(링크 안에 링크를 둘 수 없어요).
+                text-crt-dim: 제목보다 덜 눈에 띄는 보조 글자색. 좁은 화면에서 자리가 모자라면 다음 줄로 넘어가요(flex-wrap). */}
+            <GenreTags genres={genres} label="장르" className="text-crt-dim" />
             <span aria-hidden="true" className="leader hidden sm:block" />
             {/* ml-auto: 점선이 없는 휴대폰에서도 평점이 오른쪽 끝에 붙어요. */}
             <Rating value={rating} className="ml-auto" />
           </div>
 
-          {/* 둘째 줄: 원제 · 연도 · 감독, 그리고 장르. 없는 값(원제가 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
-              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 감독 …"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요.
-              장르는 목록(<ul>)이라 <p> 안에 넣을 수 없어서, 둘을 <div>로 감싸 한 줄에 이어 놓아요. */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-crt-dim">
-            <p>{joinFacts([originalTitle, year, labeled("감독", director)])}</p>
-            <GenreTags genres={genres} label="장르" />
-          </div>
+          {/* 둘째 줄: 원제 · 연도 · 감독. 없는 값(원제가 없을 때)은 빼고 " · "로 이어요(lib/format.ts의 joinFacts).
+              가운뎃점은 앞 항목에 붙어서, 휴대폰에서 줄이 넘쳐도 "· 감독 …"처럼 가운뎃점으로 시작하는 줄이 생기지 않아요. */}
+          <p className="mt-1 text-crt-dim">{joinFacts([originalTitle, year, labeled("감독", director)])}</p>
 
           {/* 한줄평. mt-auto: 남는 높이를 위에 두어 글자 칸 맨 아래(썸네일 아래 끝)에 붙어요.
               pt-2: 썸네일이 글보다 낮을 때(좁은 화면)에도 둘째 줄과 붙지 않게 조금 띄워요.
