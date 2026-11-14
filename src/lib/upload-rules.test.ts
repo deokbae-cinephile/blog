@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { extensionOf, MAX_IMAGE_BYTES, sniffImageType, UPLOAD_PATH, uploadProblem } from "./upload-rules";
+import { checkImage, extensionOf, MAX_IMAGE_BYTES, sniffImageType, UPLOAD_PATH, uploadProblem } from "./upload-rules";
 
 describe("extensionOf", () => {
   it("확장자를 소문자로 꺼내고, 없으면 빈 글자다", () => {
@@ -71,5 +71,39 @@ describe("sniffImageType(파일 앞부분으로 그림 형식 알아내기)", ()
     ["RIFF지만 WebP가 아닌 파일(WAV)", head("RIFF", [1, 2, 3, 4], "WAVE")],
   ])("%s는 모르는 형식(undefined)", (_name, bytes) => {
     expect(sniffImageType(bytes)).toBeUndefined();
+  });
+});
+
+describe("checkImage(서명과 머리까지 보고 진짜 그림인지 확인)", () => {
+  const head = (...parts: (string | number[])[]) =>
+    new Uint8Array(parts.flatMap((part) => (typeof part === "string" ? part.split("").map((char) => char.charCodeAt(0)) : part)));
+  /** 4바이트 큰 자리부터 */
+  const be32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  /** PNG 머리: 서명 + IHDR 덩어리(길이 13, 가로, 세로, 비트 깊이 등) + CRC */
+  const png = (width: number, height: number) => head(PNG_SIGNATURE, be32(13), "IHDR", be32(width), be32(height), [8, 2, 0, 0, 0], [0, 0, 0, 0]);
+  /** JPEG 머리: 시작(FFD8) + APP0(JFIF, 길이 16) + SOF0(길이 17, 정밀도, 세로, 가로) */
+  const jpeg = (width: number, height: number) =>
+    head([0xff, 0xd8], [0xff, 0xe0, 0, 16], "JFIF", [0, 1, 1, 0, 0, 1, 0, 1, 0, 0], [0xff, 0xc0, 0, 17, 8], [height >> 8, height & 255, width >> 8, width & 255], [3]);
+
+  it.each([
+    ["png", png(200, 300)],
+    ["jpg", jpeg(1600, 1200)],
+    ["gif", head("GIF89a", [200, 0, 44, 1], [0, 0, 0])],
+    ["webp", head("RIFF", [22, 0, 0, 0], "WEBP", "VP8 ", Array(14).fill(0))],
+    ["avif", head([0, 0, 0, 24], "ftyp", "avif", [0, 0, 0, 0], "mif1", "miaf", [0, 0, 0, 20], "ispe", Array(12).fill(1))],
+  ])("머리까지 갖춘 %s는 받는다", (type, bytes) => {
+    expect(checkImage(bytes)).toBe(type);
+  });
+
+  it.each([
+    ["서명 8바이트뿐인 PNG", head(PNG_SIGNATURE)],
+    ["가로가 0인 PNG", png(0, 300)],
+    ["그림 틀(SOF) 없이 끝나는 JPEG", head([0xff, 0xd8], [0xff, 0xe0, 0, 4, 0, 0], [0xff, 0xd9])],
+    ["서명뿐인 GIF", head("GIF89a")],
+    ["VP8 덩어리가 없는 WebP", head("RIFF", [22, 0, 0, 0], "WEBP", "JUNK", Array(14).fill(0))],
+    ["크기 상자(ispe)가 없는 AVIF", head([0, 0, 0, 16], "ftyp", "avif", [0, 0, 0, 0])],
+  ])("%s는 받지 않는다", (_name, bytes) => {
+    expect(checkImage(bytes)).toBeUndefined();
   });
 });

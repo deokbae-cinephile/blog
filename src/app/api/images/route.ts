@@ -26,9 +26,9 @@ import { errorResponse } from "@/lib/api-response";
 import { createBlob } from "@/lib/github";
 // 최대 크기와 저장 경로 모양은 글쓰기 화면과 함께 쓰는 규칙이에요(lib/upload-rules.ts).
 // (route.ts에서는 GET·POST 같은 정해진 이름만 내보낼 수 있어서, 함께 쓰는 값은 lib에 둬요.)
-import { extensionOf, MAX_IMAGE_BYTES, sniffImageType, UPLOAD_PATH } from "@/lib/upload-rules";
+import { checkImage, extensionOf, MAX_IMAGE_BYTES, UPLOAD_PATH } from "@/lib/upload-rules";
 
-/** 경로의 확장자가 실제 그림 형식(sniffImageType이 알려 준 이름)과 맞는지. jpeg는 jpg로 봐요. */
+/** 경로의 확장자가 실제 그림 형식(checkImage가 알려 준 이름)과 맞는지. jpeg는 jpg로 봐요. */
 function extensionMatches(path: string, type: string): boolean {
   return extensionOf(path).replace("jpeg", "jpg") === type;
 }
@@ -54,9 +54,9 @@ export async function POST(request: NextRequest) {
   }
 
   // 3) 진짜 그림인지 확인해요. 확장자는 바꿔 붙일 수 있어서, 파일 앞부분을 읽어 실제 형식을 알아내요.
-  //    sniffImageType은 JPG·PNG·GIF·WebP·AVIF만 알아봐요(모르는 형식이면 undefined). lib/upload-rules.ts
+  //    checkImage는 JPG·PNG·GIF·WebP·AVIF의 서명과 머리(가로·세로 등)를 봐요. 아니면 undefined예요. lib/upload-rules.ts
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const type = sniffImageType(bytes);
+  const type = checkImage(bytes);
   if (!type || !extensionMatches(path, type)) {
     return Response.json(
       { message: "JPG·PNG·WebP·AVIF 그림만 넣을 수 있습니다(장면 사진은 GIF도 됩니다). 아이폰 사진(HEIC)은 JPG로 바꿔 넣어 주세요." },

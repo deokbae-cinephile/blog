@@ -181,6 +181,12 @@ export function ReviewWriter(props: Props) {
   // [임시 저장] 두 번 누름 막기: 잠금(useRef)과 단추 막기(useState)를 함께 써요(저장과 같은 까닭).
   const draftLockRef = useRef(false);
   const [draftBusy, setDraftBusy] = useState(false);
+  // 사진을 줄이는 중인 작업 수. 그동안은 [리뷰 저장]·[임시 저장]을 막아요(줄인 사진이 빠진 채 저장되지 않게).
+  // 잠금은 useRef(바로 바뀜), 단추 막기는 useState(다시 그리기)로 함께 둬요.
+  const photoJobsRef = useRef(0);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  // 포스터 고르기 작업 번호. 줄이는 사이 다른 포스터를 고르거나 [포스터 빼기]를 누르면 번호가 바뀌어, 늦게 끝난 예전 결과를 버려요.
+  const posterJobRef = useRef(0);
   // 마지막으로 임시 저장했거나 불러온 상태. 떠날 때 "저장하지 않은 내용"이 있는지 이것과 견줘요.
   const [savedState, setSavedState] = useState<SavedState>(() => ({ values: initial.values, poster: null, scenes: new Map() }));
   // 수정 화면이면 그 리뷰 주소(그 리뷰의 임시 저장본만 보여요), 새 글이면 null
@@ -196,11 +202,27 @@ export function ReviewWriter(props: Props) {
   const selectionRef = useRef<[number, number] | null>(null);
   // 본문 칸에서 Esc를 누른 바로 다음 Tab은 들여쓰지 않고 원래대로 다음 칸으로 넘어가요(글상자에서 빠져나갈 길).
   const tabLeavesRef = useRef(false);
-  // 늘 최신 칸 값과 장면 사진을 담아 두는 손잡이. 사진을 줄이는 동안(기다리는 사이) 바뀐 값을 놓치지 않으려고 써요.
-  const latestRef = useRef({ values, scenes });
+  // 늘 최신 칸 값·장면 사진·포스터를 담아 두는 손잡이. 기다리는 사이(사진 줄이기, 임시 저장 읽기) 바뀐 값을 알아채려고 써요.
+  const latestRef = useRef({ values, scenes, poster });
   useLayoutEffect(() => {
-    latestRef.current = { values, scenes };
+    latestRef.current = { values, scenes, poster };
   });
+
+  /**
+   * 사진을 줄이는 일을 하는 동안 "사진 처리 중"으로 표시해요(저장 단추를 막아요). 끝나면(실패해도) 풀어요.
+   * @param work 사진을 줄이는 일
+   */
+  async function processPhotos<T>(work: () => Promise<T>): Promise<T> {
+    photoJobsRef.current += 1;
+    setPhotoBusy(true);
+    setNotice("사진을 준비하는 중입니다.");
+    try {
+      return await work();
+    } finally {
+      photoJobsRef.current -= 1;
+      if (photoJobsRef.current === 0) setPhotoBusy(false);
+    }
+  }
 
   // 칸 id들의 앞부분. useId로 겹치지 않게 만들어요.
   const baseId = useId();
@@ -266,10 +288,14 @@ export function ReviewWriter(props: Props) {
       return;
     }
     // 포스터는 공유 미리 보기(카카오톡 등)에서도 보이게 JPG로 줄여요.
-    const { file, shrunk } = await shrinkImage(picked, "poster");
+    const job = ++posterJobRef.current;
+    const { file, shrunk } = await processPhotos(() => shrinkImage(picked, "poster"));
+    // 줄이는 사이 다른 포스터를 골랐거나 [포스터 빼기]·[불러오기]를 했으면, 이 결과는 버려요(나중 선택이 이겨요).
+    if (job !== posterJobRef.current) return;
     const problem = uploadProblem(file, "poster");
     if (problem) {
       setErrors((current) => ({ ...current, poster: problem }));
+      setNotice("");
       return;
     }
     // 확장자는 jpeg도 jpg로 맞춰 파일 이름을 <주소>.jpg처럼 정해요.
@@ -305,8 +331,9 @@ export function ReviewWriter(props: Props) {
   // 화면을 떠나면 아직 기다리는 안내 타이머를 치워요.
   useEffect(() => () => window.clearTimeout(quietTimerRef.current), []);
 
-  /** [포스터 빼기]: 포스터 없이 저장해요(화면에는 기본 포스터가 보여요). */
+  /** [포스터 빼기]: 포스터 없이 저장해요(화면에는 기본 포스터가 보여요). 줄이던 포스터가 있으면 그 결과도 버려요. */
   function handlePosterRemove() {
+    posterJobRef.current += 1;
     setPoster(null);
     setField("poster", "");
     setNotice("포스터를 뺐습니다. 저장하면 기본 포스터가 보입니다.");
@@ -331,11 +358,14 @@ export function ReviewWriter(props: Props) {
     const typeOk = picked.filter((file) => uploadProblem({ name: file.name, size: 0 }, "scene") === null);
     const files: File[] = [];
     let shrunkCount = 0;
-    for (const file of typeOk) {
-      const result = await shrinkImage(file, "scene");
-      files.push(result.file);
-      if (result.shrunk) shrunkCount += 1;
-    }
+    await processPhotos(async () => {
+      for (const file of typeOk) {
+        const result = await shrinkImage(file, "scene");
+        files.push(result.file);
+        if (result.shrunk) shrunkCount += 1;
+      }
+    });
+    setNotice("");
     // 줄이는 동안 바뀐 본문·사진도 반영하려고 최신 값으로 이어 가요.
     const { values, scenes } = latestRef.current;
 
@@ -462,7 +492,8 @@ export function ReviewWriter(props: Props) {
   /** [저장]을 누르면 실행돼요. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (lockRef.current) return;
+    // 저장 중이거나 사진을 줄이는 중이면 누르지 못해요(단추도 막혀 있어요).
+    if (lockRef.current || photoJobsRef.current > 0) return;
 
     // 1) 칸 검사(화면에서 먼저)
     const check = validateReviewForm(values, { checkSlug: mode === "create" });
@@ -531,7 +562,7 @@ export function ReviewWriter(props: Props) {
 
   /** [임시 저장]: 지금 칸 값과 고른 사진을 이 브라우저에 저장해요. 검사하지 않아요(쓰다 만 글도 저장돼요). */
   async function handleDraftSave() {
-    if (draftLockRef.current || lockRef.current) return;
+    if (draftLockRef.current || lockRef.current || photoJobsRef.current > 0) return;
     draftLockRef.current = true;
     setDraftBusy(true);
     setFailure("");
@@ -541,6 +572,8 @@ export function ReviewWriter(props: Props) {
       mode,
       reviewSlug: editSlug ?? "",
       savedAt: Date.now(),
+      // 수정: 이 화면을 연 때의 원고 번호. 나중에 불러올 때 그사이 리뷰가 바뀌었는지 알아보려고 적어 둬요.
+      ...(props.mode === "edit" ? { baseSha: props.baseSha } : {}),
       values,
       poster: poster ? { file: poster.file, extension: poster.extension } : null,
       scenes: [...scenes],
@@ -560,20 +593,45 @@ export function ReviewWriter(props: Props) {
     }
   }
 
-  /** [불러오기]: 임시 저장한 글로 칸과 사진을 채워요. 지금 쓰던 내용이 있으면 먼저 물어요. */
+  /**
+   * [불러오기]: 임시 저장한 글로 칸과 사진을 채워요. 지금 쓰던 내용이 있으면 먼저 물어요.
+   * 수정 화면에서는, 임시 저장본을 쓴 뒤에 리뷰가 다른 곳에서 바뀌었으면(원고 번호가 다름) 덮어쓴다는 것을 알리고 물어요.
+   * 불러오기로 고르면 지금 원고 번호로 저장해요(알고 고른 덮어쓰기). 예전 번호로 저장하면 늘 "그사이 바뀜"으로 막혀서요.
+   */
   async function handleDraftLoad(id: string) {
     if (dirty && !window.confirm("지금 쓰던 내용을 지우고 임시 저장한 글을 불러올까요?")) return;
+    // 읽는 동안 입력이 바뀌었는지 알아보려고, 읽기 전의 값을 기억해요.
+    const before = latestRef.current;
+    setDraftBusy(true);
     let draft: Draft | undefined;
     try {
       draft = await loadDraft(id);
     } catch {
       draft = undefined;
+    } finally {
+      setDraftBusy(false);
     }
     if (!draft) {
       setFailure("임시 저장한 글을 찾지 못했습니다. 목록을 다시 읽었습니다.");
       await refreshDrafts();
       return;
     }
+    // 읽는 사이 칸이나 사진을 고쳤으면, 그 내용을 지우지 않게 멈춰요.
+    const now = latestRef.current;
+    if (now.values !== before.values || now.scenes !== before.scenes || now.poster !== before.poster) {
+      setNotice("임시 저장한 글을 읽는 동안 글이 바뀌어서 불러오지 않았습니다. 다시 눌러 주세요.");
+      return;
+    }
+    if (
+      props.mode === "edit" &&
+      draft.baseSha &&
+      draft.baseSha !== props.baseSha &&
+      !window.confirm("이 임시 저장본을 쓴 뒤에 리뷰가 다른 곳에서 바뀌었습니다. 불러와서 저장하면 그사이 바뀐 내용은 사라집니다. 그래도 불러올까요?")
+    ) {
+      return;
+    }
+    // 줄이던 포스터가 있으면 그 결과는 버려요(불러온 포스터가 이겨요).
+    posterJobRef.current += 1;
     // 수정 화면은 주소를 바꾸지 않아요(그 리뷰를 고치는 화면이니까요).
     const nextValues = editSlug === null ? draft.values : { ...draft.values, slug: editSlug };
     const nextScenes = new Map(draft.scenes);
@@ -600,8 +658,12 @@ export function ReviewWriter(props: Props) {
       setFailure("임시 저장한 글을 지우지 못했습니다. 다시 시도해 주세요.");
       return;
     }
-    // 지금 쓰는 글의 임시 저장본을 지웠으면, 다음 [임시 저장]은 새 글로 저장해요.
-    if (draft.id === draftId) setDraftId(null);
+    // 지금 쓰는 글의 임시 저장본을 지웠으면: 다음 [임시 저장]은 새 글로 저장하고,
+    // 화면의 내용은 이제 어디에도 저장되지 않았으니 떠날 때 다시 묻도록 처음 상태와 견줘요.
+    if (draft.id === draftId) {
+      setDraftId(null);
+      setSavedState({ values: initial.values, poster: null, scenes: new Map() });
+    }
     await refreshDrafts();
     setNotice(`임시 저장한 글 ‘${name}’을(를) 지웠습니다.`);
     // 누른 [삭제] 단추가 사라져 초점을 잃지 않게, 목록 제목(남아 있으면)이나 [임시 저장] 단추로 옮겨요.
@@ -667,7 +729,7 @@ export function ReviewWriter(props: Props) {
 
   return (
     // noValidate: 브라우저 기본 오류 말풍선 대신 우리 문구를 보여 줘요.
-    <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving}>
+    <form onSubmit={handleSubmit} noValidate className="grid gap-10" aria-busy={saving || photoBusy}>
       {/* 결과 안내(포스터 고름·올리는 중). role="status": 끼어들지 않고 차례대로 읽어 줘요.
           영역은 처음부터 두고 글자만 바꿔야 읽어 줘요. 비어 있을 때는 empty:sr-only로 화면에서만 숨겨 빈 간격이 생기지 않게 해요. */}
       <p role="status" className="empty:sr-only">
@@ -979,10 +1041,16 @@ export function ReviewWriter(props: Props) {
       {/* 저장·임시 저장·취소. 임시 저장 결과는 단추 바로 아래에 알려요(role="status": 끼어들지 않고 읽어 줘요). */}
       <div className="grid gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={saving} className="btn-inverse">
+          <button type="submit" disabled={saving || photoBusy} className="btn-inverse">
             {saving ? "저장하는 중…" : mode === "edit" ? "수정한 내용 저장" : "리뷰 저장"}
           </button>
-          <button type="button" ref={draftButtonRef} onClick={() => void handleDraftSave()} disabled={saving || draftBusy} className="btn-line">
+          <button
+            type="button"
+            ref={draftButtonRef}
+            onClick={() => void handleDraftSave()}
+            disabled={saving || draftBusy || photoBusy}
+            className="btn-line"
+          >
             임시 저장
           </button>
           <Link href={mode === "edit" ? `/reviews/${values.slug}` : "/"} className="btn-line">

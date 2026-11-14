@@ -7,6 +7,10 @@
  *   - [불러오기]로 칸과 사진을 채우고, 쓰던 내용이 있으면 먼저 묻는지
  *   - [삭제]는 확인한 뒤 지우고, 초점을 잃지 않게 옮기는지
  *   - 리뷰를 저장하면 불러온 임시 저장본을 지우는지
+ *   - 수정 화면: 임시 저장본을 쓴 뒤 리뷰가 바뀌었으면(원고 번호가 다름) 불러오기 전에 묻는지
+ *   - 지금 쓰는 글의 임시 저장본을 지우면 다시 "저장하지 않은 내용"이 되는지(떠날 때 물음)
+ *   - 임시 저장본을 읽는 동안 고친 내용을 덮어쓰지 않는지
+ *   - 사진을 줄이는 동안에는 저장 단추를 막고, 늦게 끝난 예전 포스터가 나중 선택을 덮어쓰지 않는지
  * 확인해요. 브라우저 저장소(IndexedDB, lib/drafts.ts)는 가짜로 바꿔요. 진짜 저장소는 E2E(e2e/admin.spec.ts)에서 확인해요.
  */
 
@@ -18,6 +22,27 @@ import type { Draft, DraftSummary } from "@/lib/drafts";
 import { EMPTY_VALUES } from "@/lib/review-values";
 
 import { ReviewWriter } from "./review-writer";
+
+/** 사진 줄이기를 흉내 내요. 기본은 고른 파일 그대로(바로 끝남), 시험마다 늦게 끝나게 바꿀 수 있어요. */
+const shrink = vi.hoisted(() => ({ fn: null as null | ((file: File) => Promise<{ file: File; shrunk: boolean }>) }));
+vi.mock("@/lib/shrink-image", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/shrink-image")>()),
+  shrinkImage: (file: File) => (shrink.fn ? shrink.fn(file) : Promise.resolve({ file, shrunk: false })),
+}));
+
+/** 나중에 풀 수 있는 약속(Promise)을 만들어요. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+/** 떠날 때 묻는지: beforeunload 이벤트를 보내 막혔는지(preventDefault) 봐요. */
+function asksBeforeLeaving() {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
 
 /** 가짜 임시 저장소: 저장한 글을 메모리에 들고 있어요. */
 const store = vi.hoisted(() => ({ drafts: new Map<string, unknown>() }));
@@ -77,6 +102,7 @@ describe("ReviewWriter 임시 저장", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    shrink.fn = null;
   });
 
   it("[임시 저장]은 검사 없이 쓰다 만 글을 저장하고, 저장한 시각을 단추 아래에 알리고, 목록에 보인다", async () => {
@@ -196,5 +222,92 @@ describe("ReviewWriter 임시 저장", () => {
     await user.click(screen.getByRole("button", { name: "리뷰 저장" }));
     await screen.findByRole("heading", { name: "저장했습니다" });
     await waitFor(() => expect(store.drafts.size).toBe(0));
+  });
+
+  it("수정 화면: 임시 저장할 때 원고 번호를 적고, 그사이 리뷰가 바뀌었으면 불러오기 전에 덮어쓴다고 묻는다", async () => {
+    const user = userEvent.setup();
+    const parsed = { ok: true as const, values: { ...EMPTY_VALUES, title: "겨울 정류장", rating: "4.5" } };
+    const { unmount } = render(<ReviewWriter mode="edit" slug="winter-stop" parsed={parsed} baseSha="sha-a" />);
+    await user.click(screen.getByRole("button", { name: "임시 저장" }));
+    await waitFor(() => expect(store.drafts.size).toBe(1));
+    expect(([...store.drafts.values()][0] as Draft).baseSha).toBe("sha-a");
+    unmount();
+
+    // 그사이 리뷰가 바뀌어(원고 번호 sha-b) 수정 화면을 다시 열었어요.
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ReviewWriter mode="edit" slug="winter-stop" parsed={{ ...parsed, values: { ...parsed.values, title: "바뀐 제목" } }} baseSha="sha-b" />);
+    const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
+    await user.click(within(list).getByRole("button", { name: "불러오기" }));
+    expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("리뷰가 다른 곳에서 바뀌었습니다"));
+    expect(screen.getByLabelText(/^제목/)).toHaveValue("바뀐 제목");
+
+    // 알고 불러오면 임시 저장본 내용으로 바뀌어요.
+    confirm.mockReturnValue(true);
+    await user.click(within(list).getByRole("button", { name: "불러오기" }));
+    await waitFor(() => expect(screen.getByLabelText(/^제목/)).toHaveValue("겨울 정류장"));
+  });
+
+  it("지금 쓰는 글의 임시 저장본을 지우면, 다시 저장하지 않은 내용이 되어 떠날 때 묻는다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ReviewWriter mode="create" />);
+    await user.type(screen.getByLabelText(/^제목/), "쓰던 글");
+    expect(asksBeforeLeaving()).toBe(true);
+    await user.click(screen.getByRole("button", { name: "임시 저장" }));
+    await screen.findByText(/에 임시 저장했습니다/);
+    // 임시 저장했으니 떠나도 잃는 것이 없어요.
+    expect(asksBeforeLeaving()).toBe(false);
+
+    const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
+    await user.click(within(list).getByRole("button", { name: "삭제" }));
+    await waitFor(() => expect(store.drafts.size).toBe(0));
+    // 하나뿐인 저장본을 지웠으니, 화면의 글은 다시 어디에도 저장되지 않았어요.
+    await waitFor(() => expect(asksBeforeLeaving()).toBe(true));
+  });
+
+  it("임시 저장본을 읽는 동안 글을 고치면, 고친 내용을 덮어쓰지 않고 불러오기를 멈춘다", async () => {
+    const user = userEvent.setup();
+    putDraft({ id: "d1", values: { ...EMPTY_VALUES, title: "임시 저장본" } });
+    const { loadDraft } = await import("@/lib/drafts");
+    const reading = deferred<Draft | undefined>();
+    vi.mocked(loadDraft).mockImplementationOnce(() => reading.promise);
+    render(<ReviewWriter mode="create" />);
+    const list = await screen.findByRole("region", { name: "임시 저장한 글 (1)" });
+
+    await user.click(within(list).getByRole("button", { name: "불러오기" }));
+    // 읽는 동안 제목을 적어요.
+    await user.type(screen.getByLabelText(/^제목/), "새로 쓴 제목");
+    reading.resolve(store.drafts.get("d1") as Draft);
+    expect(await screen.findByText("임시 저장한 글을 읽는 동안 글이 바뀌어서 불러오지 않았습니다. 다시 눌러 주세요.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^제목/)).toHaveValue("새로 쓴 제목");
+  });
+
+  it("사진을 줄이는 동안에는 저장 단추를 막고, 늦게 끝난 예전 포스터가 나중에 고른 포스터를 덮어쓰지 않는다", async () => {
+    const user = userEvent.setup();
+    const jobs = new Map<string, ReturnType<typeof deferred<{ file: File; shrunk: boolean }>>>();
+    shrink.fn = (file) => {
+      const job = deferred<{ file: File; shrunk: boolean }>();
+      jobs.set(file.name, job);
+      return job.promise;
+    };
+    const first = new File(["a"], "first.png", { type: "image/png" });
+    const second = new File(["b"], "second.png", { type: "image/png" });
+    render(<ReviewWriter mode="create" />);
+    await user.type(screen.getByLabelText(/^주소\(영문\)/), "winter-stop");
+
+    await user.upload(screen.getByLabelText("포스터 고르기"), first);
+    // 줄이는 동안: 두 저장 단추가 막혀요.
+    expect(screen.getByRole("button", { name: "리뷰 저장" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "임시 저장" })).toBeDisabled();
+    await user.upload(screen.getByLabelText("포스터 고르기"), second);
+
+    // 나중에 고른 포스터가 먼저 끝나고, 먼저 고른 포스터가 늦게 끝나요.
+    jobs.get("second.png")!.resolve({ file: second, shrunk: false });
+    expect(await screen.findByText(/포스터로 second\.png을\(를\) 골랐습니다/)).toBeInTheDocument();
+    jobs.get("first.png")!.resolve({ file: first, shrunk: false });
+    await waitFor(() => expect(screen.getByRole("button", { name: "리뷰 저장" })).toBeEnabled());
+    // 마지막 선택(second)이 그대로예요.
+    expect(screen.queryByText(/포스터로 first\.png을\(를\) 골랐습니다/)).not.toBeInTheDocument();
+    expect(URL.createObjectURL).toHaveBeenLastCalledWith(second);
   });
 });

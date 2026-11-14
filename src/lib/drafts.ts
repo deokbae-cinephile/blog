@@ -32,10 +32,10 @@ export type Draft = {
   reviewSlug: string;
   /** 저장한 때(ms) */
   savedAt: number;
+  /** 수정: 이 글을 쓰던 화면을 연 때의 원고 번호(sha). 불러올 때 그사이 리뷰가 바뀌었는지 알아봐요. 새 글이면 없어요. */
+  baseSha?: string;
   /** 칸 값 전체 */
   values: ReviewFormValues;
-  /** 수정: 처음 불러온 원고의 번호(sha). 이어서 저장할 때 그사이 다른 곳에서 고쳤는지 비교해요. */
-  baseSha?: string;
   /** 새로 고른 포스터(없으면 null) */
   poster: { file: File; extension: string } | null;
   /** 본문에 넣은 장면 사진: [사이트 주소, 파일] 목록 */

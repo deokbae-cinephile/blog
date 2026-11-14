@@ -96,3 +96,70 @@ export function sniffImageType(bytes: Uint8Array): ImageType | undefined {
   }
   return undefined;
 }
+
+/** 큰 자리부터 읽는 2바이트·4바이트 수(PNG·JPEG 머리) */
+const u16be = (bytes: Uint8Array, at: number) => ((bytes[at] ?? 0) << 8) | (bytes[at + 1] ?? 0);
+const u32be = (bytes: Uint8Array, at: number) => ((u16be(bytes, at) << 16) | u16be(bytes, at + 2)) >>> 0;
+/** 작은 자리부터 읽는 2바이트 수(GIF 머리) */
+const u16le = (bytes: Uint8Array, at: number) => (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8);
+
+/**
+ * JPEG 안에 그림 틀(SOF: 가로·세로를 적는 덩어리)이 있는지 봐요. 덩어리(마커 FF xx + 길이)를 차례로 건너뛰며 찾아요.
+ * 그림 데이터(SOS)나 끝(EOI)이 먼저 나오거나, 모양이 틀어지면 false예요.
+ */
+function jpegHasFrame(bytes: Uint8Array): boolean {
+  let at = 2; // FF D8(시작) 다음부터
+  while (at + 4 <= bytes.length) {
+    if (bytes[at] !== 0xff) return false;
+    const marker = bytes[at + 1]!;
+    // 채움 바이트(FF FF …)와 길이 없는 표시(RSTn D0~D7, TEM 01)는 2바이트만 건너뛰어요.
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+      at += 2;
+      continue;
+    }
+    if (marker === 0xd9 || marker === 0xda) return false;
+    // SOF0~SOF15(C0~CF) 가운데 C4(DHT)·C8(JPG)·CC(DAC)는 그림 틀이 아니에요.
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return at + 9 <= bytes.length && u16be(bytes, at + 5) > 0 && u16be(bytes, at + 7) > 0;
+    }
+    const length = u16be(bytes, at + 2);
+    if (length < 2) return false;
+    at += 2 + length;
+  }
+  return false;
+}
+
+/** 글자(4글자)가 파일 앞부분(처음 limit바이트) 어딘가에 있는지 */
+function containsAscii(bytes: Uint8Array, text: string, limit = 64 * 1024): boolean {
+  const end = Math.min(bytes.length, limit) - text.length;
+  for (let at = 0; at <= end; at += 1) if (ascii(bytes, at, text)) return true;
+  return false;
+}
+
+/**
+ * 진짜 그림인지 확인해요: 서명으로 형식을 알아낸 뒤(sniffImageType), 그 형식의 머리(헤더)가 제대로 있는지도 봐요.
+ * 서명만 맞고 내용이 없는 파일(예: PNG 서명 8바이트뿐인 파일)은 화면에 보이지 않으니 받지 않아요.
+ *
+ *   PNG  : 첫 덩어리가 IHDR이고 가로·세로가 0보다 커요.
+ *   GIF  : 서명 뒤 가로·세로가 0보다 커요.
+ *   WebP : RIFF 머리 뒤 첫 덩어리가 VP8·VP8L·VP8X예요.
+ *   JPEG : 그림 틀(SOF)이 있고 가로·세로가 0보다 커요.
+ *   AVIF : 그림 크기 상자(ispe)가 있어요.
+ *
+ * @param bytes 파일 내용 전체
+ * @returns 진짜 그림이면 형식, 아니면 undefined
+ */
+export function checkImage(bytes: Uint8Array): ImageType | undefined {
+  const type = sniffImageType(bytes);
+  let ok = false;
+  if (type === "png") ok = bytes.length >= 33 && ascii(bytes, 12, "IHDR") && u32be(bytes, 16) > 0 && u32be(bytes, 20) > 0;
+  else if (type === "gif") ok = bytes.length >= 13 && u16le(bytes, 6) > 0 && u16le(bytes, 8) > 0;
+  else if (type === "webp") ok = bytes.length >= 30 && ["VP8 ", "VP8L", "VP8X"].some((chunk) => ascii(bytes, 12, chunk));
+  else if (type === "jpg") ok = jpegHasFrame(bytes);
+  else if (type === "avif") ok = containsAscii(bytes, "ispe");
+  return ok ? type : undefined;
+}
