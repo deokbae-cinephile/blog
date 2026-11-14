@@ -152,4 +152,27 @@ describe("ServiceWorker", () => {
     expect(assets).not.toContain("https://deokbae.blog/a.css");
     spy.mockRestore();
   });
+
+  it("먼저 받기 시작해 늦게 끝난 파일이 기록 중간에 끼어들어도 빠뜨리지 않고, 보낸 파일은 다시 보내지 않는다", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { postMessage } = installFakeServiceWorker();
+    // 성능 기록은 "받기 시작한 순서"로 쌓여서, 늦게 끝난 파일이 나중에 앞쪽에 끼어들 수 있어요(개수로 자르면 빠뜨려요).
+    const entries = [{ name: "https://deokbae.blog/e.css" }, { name: "https://deokbae.blog/f.js" }];
+    const spy = vi.spyOn(performance, "getEntriesByType").mockImplementation(() => entries as unknown as PerformanceEntryList);
+
+    const { rerender } = render(<ServiceWorker />);
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1));
+
+    // f.js보다 먼저 받기 시작했지만 늦게 끝난 큰 사진(g.jpg)은 중간에, 새로 받은 사진(h.jpg)은 끝에 들어왔어요.
+    entries.splice(1, 0, { name: "https://deokbae.blog/scenes/g.jpg" });
+    entries.push({ name: "https://deokbae.blog/scenes/h.jpg" });
+    pathname.current = "/reviews/g";
+    rerender(<ServiceWorker />);
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    const assets = postMessage.mock.calls[1]![0].assets as string[];
+    expect(assets).toEqual(expect.arrayContaining(["https://deokbae.blog/scenes/g.jpg", "https://deokbae.blog/scenes/h.jpg"]));
+    expect(assets).not.toContain("https://deokbae.blog/e.css");
+    expect(assets).not.toContain("https://deokbae.blog/f.js");
+    spy.mockRestore();
+  });
 });

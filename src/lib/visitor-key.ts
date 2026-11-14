@@ -10,7 +10,7 @@
  *
  * 사람을 어떻게 구별하나요?
  *   접속 주소(Cloudflare가 알려 주는 cf-connecting-ip)와 브라우저 정보(user-agent)를 섞어 SHA-256으로 줄인 값을 써요.
- *   원래 주소는 저장하지 않아요. 방문자 저장소는 이 값도 "오늘 것"만 두고 지난 날 것은 지워요(worker/view-counter.ts).
+ *   원래 주소는 저장하지 않아요. 방문자 저장소는 이 값도 어제·오늘 것만 두고 그보다 오래된 것은 지워요(worker/view-counter.ts).
  *
  * 누가 쓰나요?
  *   app/api/visits/route.ts(방문자), app/api/views/[slug]/route.ts(조회수)

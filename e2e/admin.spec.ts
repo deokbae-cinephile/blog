@@ -392,6 +392,8 @@ test.describe("방문자 수(글쓴이만 봄)", () => {
     });
     await page.goto("/");
     await expect.poll(() => visitRequests).toEqual(["POST"]);
+    // 첫 세기 요청의 답을 받아 날짜를 기억할 때까지 기다린 뒤 새로 고쳐요(답보다 새로 고침이 먼저면 다시 보내요).
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("dmb:visit-day"))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // 같은 날 다시 열면 보내지 않아요(이 브라우저가 날짜를 기억해요).
     await page.reload();
     await page.waitForLoadState("networkidle");

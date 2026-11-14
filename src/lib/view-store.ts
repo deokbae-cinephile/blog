@@ -77,8 +77,8 @@ const memoryResult = (slug: string, counted: boolean): ViewResult => ({ count: m
 
 /** 날짜 → 그날 센 방문 수 */
 const memoryVisitDays = new Map<string, number>();
-/** 오늘 이미 센 사람들(날짜가 바뀌면 비워요. 지난 날의 사람 값은 남기지 않아요) */
-const memoryVisitorsToday = { day: "", visitors: new Set<string>() };
+/** 그날 이미 센 사람들: "날짜|사람" 모음. 요청 날짜의 어제보다 오래된 것은 지워요(Durable Object와 같은 규칙). */
+const memorySeen = new Set<string>();
 
 const memoryStore: ViewStore = {
   async count(slug, visitor) {
@@ -93,12 +93,14 @@ const memoryStore: ViewStore = {
     return { counts: Object.fromEntries(memoryCounts) };
   },
   async visit(visitor, day) {
-    if (memoryVisitorsToday.day !== day) {
-      memoryVisitorsToday.day = day;
-      memoryVisitorsToday.visitors.clear();
-    }
-    if (memoryVisitorsToday.visitors.has(visitor)) return false;
-    memoryVisitorsToday.visitors.add(visitor);
+    // 어제보다 오래된 사람 값은 지워요(늦게 도착한 어제 요청이 오늘 기록을 지우지 않게, 이틀 치는 남겨요).
+    const yesterday = new Date(`${day}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const keepFrom = yesterday.toISOString().slice(0, 10);
+    for (const key of memorySeen) if (key.slice(0, 10) < keepFrom) memorySeen.delete(key);
+    const key = `${day}|${visitor}`;
+    if (memorySeen.has(key)) return false;
+    memorySeen.add(key);
     memoryVisitDays.set(day, (memoryVisitDays.get(day) ?? 0) + 1);
     return true;
   },

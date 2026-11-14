@@ -104,7 +104,7 @@ content/reviews/*.md ──빌드──> lib/load-reviews.ts(검사·HTML) ─�
 
 ```
 방문자 브라우저 ─(그날 처음 열 때 한 번) POST /api/visits ─> Durable Object "ViewCounter"
-                                                        ├ visitors_today: 오늘 이미 센 사람(지난 날 것은 지워요)
+                                                        ├ visitors_recent: 그날 이미 센 사람(어제·오늘 것만 남겨요)
                                                         └ visit_days: 날마다 센 방문 수(더하면 누적)
 글쓴이 화면     ─ GET /api/visits(로그인 확인) ─> { total } ─> 왼쪽 아래 [키보드 조작] 오른쪽 "방문자 n명"
 ```
